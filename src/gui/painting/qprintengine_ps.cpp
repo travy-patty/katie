@@ -149,12 +149,6 @@ QPSPrintEnginePrivate::QPSPrintEnginePrivate()
     postscript = true;
 
     firstPage = true;
-<<<<<<< HEAD
-=======
-
-    QSettings settings(QString::fromLatin1("Katie"), QSettings::NativeFormat);
-    embedFonts = settings.value(QLatin1String("Qt/embedFonts"), true).toBool();
->>>>>>> parent of 1c185797e (rework QSettings to use QString instead of QVariant)
 }
 
 QPSPrintEnginePrivate::~QPSPrintEnginePrivate()
