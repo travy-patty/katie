@@ -13,7 +13,7 @@ license=('LGPL' 'BSD')
 depends=('libsm' 'libxcursor' 'libxinerama' 'icu' 'libcups' 'libxrandr' 'fontconfig'
          'xdg-utils' 'jansson')
 makedepends=('cmake' 'git' 'unifdef')
-source=("git+https://github.com/fluxer/katie")
+source=("git+https://github.com/travy-patty/katie")
 sha1sums=('SKIP')
 conflicts=('katie')
 # options=('debug')
