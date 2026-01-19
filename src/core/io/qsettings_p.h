@@ -39,23 +39,29 @@
 
 QT_BEGIN_NAMESPACE
 
-typedef QMap<QString,QString> QSettingsMap;
+typedef bool (*QSettingsReadFunc)(QIODevice &device, QSettings::SettingsMap &map);
+typedef bool (*QSettingsWriteFunc)(QIODevice &device, const QSettings::SettingsMap &map);
 
 class QSettingsPrivate
 {
 public:
-    QSettingsPrivate();
-    QSettingsPrivate(const QString &fileName);
+    QSettingsPrivate(QSettings::Format format);
+    QSettingsPrivate(const QString &fileName, QSettings::Format format);
+    ~QSettingsPrivate();
 
     void read();
     void write();
 
     QString toGroupKey(const QString &key) const;
 
+    QSettings::Format format;
     QSettings::SettingsStatus status;
     QString filename;
-    QMap<QString,QString> map;
+    QSettings::SettingsMap map;
     QString group;
+
+    QSettingsReadFunc readFunc;
+    QSettingsWriteFunc writeFunc;
     bool shouldwrite;
 
 private:
