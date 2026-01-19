@@ -33,6 +33,7 @@ QT_BEGIN_NAMESPACE
 
 class QWaitConditionPrivate;
 class QMutex;
+class QReadWriteLock;
 
 class Q_CORE_EXPORT QWaitCondition
 {
@@ -41,6 +42,7 @@ public:
     ~QWaitCondition();
 
     bool wait(QMutex *mutex, unsigned long time = ULONG_MAX);
+    bool wait(QReadWriteLock *readWriteLock, unsigned long time = ULONG_MAX);
 
     void wakeOne();
     void wakeAll();
@@ -54,6 +56,7 @@ private:
 #else
 
 class QMutex;
+class QReadWriteLock;
 
 class Q_CORE_EXPORT QWaitCondition
 {
@@ -64,6 +67,13 @@ public:
     bool wait(QMutex *mutex, unsigned long time = ULONG_MAX)
     {
         Q_UNUSED(mutex);
+        Q_UNUSED(time);
+        return true;
+    }
+
+    bool wait(QReadWriteLock *readWriteLock, unsigned long time = ULONG_MAX)
+    {
+        Q_UNUSED(readWriteLock);
         Q_UNUSED(time);
         return true;
     }

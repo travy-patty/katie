@@ -98,7 +98,7 @@ void QDeclarativeViewPrivate::execute()
         if (!component->isLoading()) {
             q->continueExecute();
         } else {
-            QObject::connect(component, SIGNAL(statusChanged(QDeclarativeComponent::ComponentStatus)), q, SLOT(continueExecute()));
+            QObject::connect(component, SIGNAL(statusChanged(QDeclarativeComponent::Status)), q, SLOT(continueExecute()));
         }
     }
 }
@@ -168,7 +168,7 @@ void QDeclarativeViewPrivate::itemGeometryChanged(QDeclarativeItem *resizeItem, 
   This signal is emitted when the view is resized to \a size.
 */
 
-/*! \fn void QDeclarativeView::statusChanged(QDeclarativeView::ViewStatus status)
+/*! \fn void QDeclarativeView::statusChanged(QDeclarativeView::Status status)
     This signal is emitted when the component's current \a status changes.
 */
 
@@ -288,7 +288,7 @@ QDeclarativeContext* QDeclarativeView::rootContext() const
 }
 
 /*!
-    \enum QDeclarativeView::ViewStatus
+    \enum QDeclarativeView::Status
     Specifies the loading status of the QDeclarativeView.
 
     \value Null This QDeclarativeView has no source set.
@@ -308,16 +308,16 @@ QDeclarativeContext* QDeclarativeView::rootContext() const
 
 /*!
     \property QDeclarativeView::status
-    The component's current \l{QDeclarativeView::ViewStatus} {status}.
+    The component's current \l{QDeclarativeView::Status} {status}.
 */
 
-QDeclarativeView::ViewStatus QDeclarativeView::status() const
+QDeclarativeView::Status QDeclarativeView::status() const
 {
     Q_D(const QDeclarativeView);
     if (!d->component)
         return QDeclarativeView::Null;
 
-    return QDeclarativeView::ViewStatus(d->component->status());
+    return QDeclarativeView::Status(d->component->status());
 }
 
 /*!
@@ -452,7 +452,7 @@ QDeclarativeView::ResizeMode QDeclarativeView::resizeMode() const
 void QDeclarativeView::continueExecute()
 {
     Q_D(QDeclarativeView);
-    disconnect(d->component, SIGNAL(statusChanged(QDeclarativeComponent::ComponentStatus)), this, SLOT(continueExecute()));
+    disconnect(d->component, SIGNAL(statusChanged(QDeclarativeComponent::Status)), this, SLOT(continueExecute()));
 
     if (d->component->isError()) {
         QList<QDeclarativeError> errorList = d->component->errors();
@@ -493,12 +493,12 @@ void QDeclarativeView::setRootObject(QObject *obj)
     } else if (QGraphicsObject *graphicsObject = qobject_cast<QGraphicsObject *>(obj)) {
         scene()->addItem(graphicsObject);
         d->root = graphicsObject;
-        if (Q_LIKELY(graphicsObject->isWidget())) {
+        if (graphicsObject->isWidget()) {
             d->graphicsWidgetRoot = static_cast<QGraphicsWidget*>(graphicsObject);
         } else {
             qWarning() << "QDeclarativeView::resizeMode is not honored for components of type QGraphicsObject";
         }
-    } else if (Q_UNLIKELY(obj)) {
+    } else if (obj) {
         qWarning() << "QDeclarativeView only supports loading of root objects that derive from QGraphicsObject";
         if (QWidget* widget  = qobject_cast<QWidget *>(obj)) {
             window()->setAttribute(Qt::WA_OpaquePaintEvent, false);

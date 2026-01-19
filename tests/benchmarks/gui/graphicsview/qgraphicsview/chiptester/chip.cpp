@@ -21,7 +21,7 @@
 
 #include "chip.h"
 
-#include <QVector>
+#include "QtCore/qvarlengtharray.h"
 #include <QtGui>
 
 Chip::Chip(const QColor &color, int x, int y)
@@ -91,7 +91,7 @@ void Chip::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWid
     // Draw text
     if (option->levelOfDetail >= 2) {
         QFont font("Times", 10);
-        font.setHintingPreference(QFont::PreferFullHinting);
+        font.setStyleStrategy(QFont::ForceOutline);
         painter->setFont(font);
         painter->save();
         painter->scale(0.1, 0.1);
@@ -102,7 +102,7 @@ void Chip::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWid
     }
 
     // Draw lines
-    QVector<QLineF> lines;
+    QVarLengthArray<QLineF, 36> lines;
     if (option->levelOfDetail >= 0.5) {
         for (int i = 0; i <= 10; i += (option->levelOfDetail > 0.5 ? 1 : 2)) {
             lines.append(QLineF(18 + 7 * i, 13, 18 + 7 * i, 5));

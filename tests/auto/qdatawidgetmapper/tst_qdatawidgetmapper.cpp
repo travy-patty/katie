@@ -22,8 +22,6 @@
 #include <QtGui/QtGui>
 #include <QtTest/QtTest>
 
-#ifndef QT_NO_DATAWIDGETMAPPER
-
 class tst_QDataWidgetMapper: public QObject
 {
     Q_OBJECT
@@ -392,9 +390,3 @@ void tst_QDataWidgetMapper::mappedWidgetAt()
 QTEST_MAIN(tst_QDataWidgetMapper)
 
 #include "moc_tst_qdatawidgetmapper.cpp"
-
-#else // QT_NO_DATAWIDGETMAPPER
-
-QTEST_NOOP_MAIN
-
-#endif // QT_NO_DATAWIDGETMAPPER

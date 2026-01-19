@@ -28,6 +28,7 @@
 #include <QtGui/QLabel>
 #include <QtGui/QBoxLayout>
 #include <QtGui/QGridLayout>
+
 #include <QtCore/QVariant>
 #include <QtCore/qdebug.h>
 #include <QtCore/QTextStream>
@@ -35,6 +36,10 @@
 #include <QtCore/QCoreApplication>
 
 QT_BEGIN_NAMESPACE
+
+#ifdef QFORMINTERNAL_NAMESPACE
+namespace QFormInternal {
+#endif
 
 void uiLibWarning(const QString &message) {
     qWarning("Designer: %s", qPrintable(message));
@@ -51,6 +56,10 @@ QFormBuilderExtra::CustomWidgetData::CustomWidgetData(const DomCustomWidget *dcw
     baseClass(dcw->elementExtends()),
     isContainer(dcw->hasElementContainer() && dcw->elementContainer() != 0)
 {
+#ifndef QT_FORMBUILDER_NO_SCRIPT
+    if (const DomScript *domScript = dcw->elementScript())
+        script = domScript->text();
+#endif
 }
 
 QFormBuilderExtra::QFormBuilderExtra() :
@@ -71,6 +80,9 @@ void QFormBuilderExtra::clear()
     m_buddies.clear();
     m_parentWidget = 0;
     m_parentWidgetIsSet = false;
+#ifndef QT_FORMBUILDER_NO_SCRIPT
+    m_FormScriptRunner.clearErrors();
+#endif
     m_customWidgetDataHash.clear();
     m_buttonGroups.clear();
 }
@@ -132,6 +144,22 @@ void QFormBuilderExtra::setParentWidget(const QPointer<QWidget> &w)
     m_parentWidget = w;
     m_parentWidgetIsSet = true;
 }
+
+#ifndef QT_FORMBUILDER_NO_SCRIPT
+QFormScriptRunner &QFormBuilderExtra::formScriptRunner()
+{
+    return m_FormScriptRunner;
+}
+
+QString QFormBuilderExtra::customWidgetScript(const QString &className) const
+{
+    const QHash<QString, CustomWidgetData>::const_iterator it = m_customWidgetDataHash.constFind(className);
+    if (it != m_customWidgetDataHash.constEnd())
+        return it.value().script;
+    return QString();
+}
+
+#endif
 
 void QFormBuilderExtra::storeCustomWidgetData(const QString &className, const DomCustomWidget *d)
 {
@@ -492,5 +520,9 @@ const QFormBuilderStrings &QFormBuilderStrings::instance()
     static const QFormBuilderStrings rc;
     return rc;
 }
+
+#ifdef QFORMINTERNAL_NAMESPACE
+} // namespace QFormInternal
+#endif
 
 QT_END_NAMESPACE

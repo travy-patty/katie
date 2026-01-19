@@ -30,8 +30,6 @@
 //TESTED_CLASS=
 //TESTED_FILES=
 
-#ifndef QT_NO_FILESYSTEMWATCHER
-
 class tst_QFileSystemWatcher : public QObject
 {
     Q_OBJECT
@@ -446,11 +444,11 @@ void tst_QFileSystemWatcher::nonExistingFileAndDirectory()
 {
     // Don't crash and watch for its creation
     const QStringList nonexistingfiles = QStringList()
-        << "foo/bar.txt"
-        << "file_that_does_not_exist.txt";
+        << "file_that_does_not_exist.txt"
+        << "foo/bar.txt";
     const QStringList nonexistingdirs = QStringList()
-        << "dir_foo/dir_bar/"
-        << "dir_that_does_not_exist/";
+        << "dir_that_does_not_exist/"
+        << "dir_foo/dir_bar/";
     QFileSystemWatcher watcher;
     watcher.addPaths(nonexistingfiles);
     watcher.addPaths(nonexistingdirs);
@@ -545,9 +543,3 @@ void tst_QFileSystemWatcher::QTBUG15255_deadlock()
 QTEST_MAIN(tst_QFileSystemWatcher)
 
 #include "moc_tst_qfilesystemwatcher.cpp"
-
-#else // QT_NO_FILESYSTEMWATCHER
-
-QTEST_NOOP_MAIN
-
-#endif // QT_NO_FILESYSTEMWATCHER

@@ -23,6 +23,7 @@
 #include <QString>
 #include <qtest.h>
 #include "qplatformdefs.h"
+#include "qfilesystemiterator.h"
 
 QT_USE_NAMESPACE
 
@@ -34,6 +35,8 @@ private slots:
     void posix_data() { data(); }
     void diriterator();
     void diriterator_data() { data(); }
+    void fsiterator();
+    void fsiterator_data() { data(); }
     void data();
 };
 
@@ -110,6 +113,38 @@ void tst_qdiriterator::diriterator()
                 //qPrintable(dir.fileInfo().absoluteFilePath()),
                 //qPrintable(dir.path()),
                 qPrintable(dir.filePath()));
+            ++c;
+        }
+        count = c;
+    }
+    qDebug() << count;
+}
+
+void tst_qdiriterator::fsiterator()
+{
+    QFETCH(QString, dirpath);
+
+    int count = 0;
+    int dump = 0;
+
+    QBENCHMARK {
+        int c = 0;
+
+        dump && printf("\n\n\n\n");
+        QFileSystemIterator dir(dirpath,
+            //QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot,
+            //QDir::AllEntries | QDir::Hidden,
+            //QDir::Files | QDir::NoDotAndDotDot,
+            QDir::Files,
+            QFileSystemIterator::Subdirectories);
+
+        for (; !dir.atEnd(); dir.next()) {
+            dump && printf("%d %s\n",
+                dir.fileInfo().isDir(),
+                //qPrintable(dir.fileInfo().absoluteFilePath()),
+                //qPrintable(dir.path()),
+                qPrintable(dir.filePath())
+            );
             ++c;
         }
         count = c;

@@ -28,13 +28,17 @@
 
 QT_BEGIN_NAMESPACE
 
+
 class QDir;
 class QDateTime;
+class QDirIteratorPrivate;
+class QFSFileEngineIterator;
 class QFileInfoPrivate;
 
 class Q_CORE_EXPORT QFileInfo
 {
     friend class QDirIteratorPrivate;
+    friend class QFSFileEngineIterator;
 public:
     QFileInfo();
     QFileInfo(const QString &file);
@@ -44,8 +48,10 @@ public:
     ~QFileInfo();
 
     QFileInfo &operator=(const QFileInfo &fileinfo);
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QFileInfo&operator=(QFileInfo &&other)
     { qSwap(d_ptr, other.d_ptr); return *this; }
+#endif
     bool operator==(const QFileInfo &fileinfo) const;
     inline bool operator!=(const QFileInfo &fileinfo) const { return !(operator==(fileinfo)); }
 

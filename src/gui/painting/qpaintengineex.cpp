@@ -23,8 +23,12 @@
 #include "qpainter_p.h"
 #include "qstroker_p.h"
 #include "qpainterpath_p.h"
+#include "qfontengine_p.h"
+#include "qstatictext_p.h"
+#include "qvarlengtharray.h"
 #include "qdebug.h"
 #include "qcorecommon_p.h"
+
 
 QT_BEGIN_NAMESPACE
 
@@ -79,7 +83,7 @@ QDebug Q_GUI_EXPORT &operator<<(QDebug &s, const QVectorPath &path)
 {
     QRectF rf = path.controlPointRect();
     s << "QVectorPath(size:" << path.elementCount()
-      << " hints:" << QByteArray::number(path.hints(), 16)
+      << " hints:" << hex << path.hints()
       << rf << ')';
     return s;
 }
@@ -256,7 +260,7 @@ QPaintEngineEx::QPaintEngineEx(QPaintEngineExPrivate &data)
 QPainterState *QPaintEngineEx::createState(QPainterState *orig) const
 {
     if (!orig)
-        return new QPainterState();
+        return new QPainterState;
     return new QPainterState(orig);
 }
 
@@ -630,20 +634,20 @@ void QPaintEngineEx::drawRoundedRect(const QRectF &rect, qreal xRadius, qreal yR
     qreal pts[] = {
         x1 + xRadius, y1,                   // MoveTo
         x2 - xRadius, y1,                   // LineTo
-        x2 - (1 - QT_PATH_KAPPA) * xRadius, y1,     // CurveTo
-        x2, y1 + (1 - QT_PATH_KAPPA) * yRadius,
+        x2 - (1 - KAPPA) * xRadius, y1,     // CurveTo
+        x2, y1 + (1 - KAPPA) * yRadius,
         x2, y1 + yRadius,
         x2, y2 - yRadius,                   // LineTo
-        x2, y2 - (1 - QT_PATH_KAPPA) * yRadius,     // CurveTo
-        x2 - (1 - QT_PATH_KAPPA) * xRadius, y2,
+        x2, y2 - (1 - KAPPA) * yRadius,     // CurveTo
+        x2 - (1 - KAPPA) * xRadius, y2,
         x2 - xRadius, y2,
         x1 + xRadius, y2,                   // LineTo
-        x1 + (1 - QT_PATH_KAPPA) * xRadius, y2,           // CurveTo
-        x1, y2 - (1 - QT_PATH_KAPPA) * yRadius,
+        x1 + (1 - KAPPA) * xRadius, y2,           // CurveTo
+        x1, y2 - (1 - KAPPA) * yRadius,
         x1, y2 - yRadius,
         x1, y1 + yRadius,                   // LineTo
-        x1, y1 + (1 - QT_PATH_KAPPA) * yRadius,           // CurveTo
-        x1 + (1 - QT_PATH_KAPPA) * xRadius, y1,
+        x1, y1 + (1 - KAPPA) * yRadius,           // CurveTo
+        x1 + (1 - KAPPA) * xRadius, y1,
         x1 + xRadius, y1
     };
 
@@ -777,6 +781,58 @@ void QPaintEngineEx::drawPoints(const QPoint *points, int pointCount)
     }
 }
 
+
+void QPaintEngineEx::drawPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode)
+{
+    QVectorPath path((qreal *) points, pointCount, 0, QVectorPath::polygonFlags(mode));
+
+    if (mode == PolylineMode)
+        stroke(path, state()->pen);
+    else
+        draw(path);
+}
+
+void QPaintEngineEx::drawPolygon(const QPoint *points, int pointCount, PolygonDrawMode mode)
+{
+    const int count = pointCount<<1;
+    QVarLengthArray<qreal> pts(count);
+    for (int i=0; i<count; ++i)
+        pts[i] = ((int *) points)[i];
+
+    QVectorPath path(pts.data(), pointCount, 0, QVectorPath::polygonFlags(mode));
+
+    if (mode == PolylineMode)
+        stroke(path, state()->pen);
+    else
+        draw(path);
+
+}
+
+void QPaintEngineEx::drawPixmap(const QPointF &pos, const QPixmap &pm)
+{
+    drawPixmap(QRectF(pos, pm.size()), pm, pm.rect());
+}
+
+void QPaintEngineEx::drawImage(const QPointF &pos, const QImage &image)
+{
+    drawImage(QRectF(pos, image.size()), image, image.rect());
+}
+
+void QPaintEngineEx::drawTiledPixmap(const QRectF &r, const QPixmap &pixmap, const QPointF &s)
+{
+    QBrush brush(state()->pen.color(), pixmap);
+    QTransform xform = QTransform::fromTranslate(r.x() - s.x(), r.y() - s.y());
+    brush.setTransform(xform);
+
+    qreal pts[] = { r.x(), r.y(),
+                    r.x() + r.width(), r.y(),
+                    r.x() + r.width(), r.y() + r.height(),
+                    r.x(), r.y() + r.height() };
+
+    QVectorPath path(pts, 4, 0, QVectorPath::RectangleHint);
+    fill(path, brush);
+}
+
 void QPaintEngineEx::setState(QPainterState *s)
 {
     QPaintEngine::state = s;
@@ -786,6 +842,45 @@ void QPaintEngineEx::setState(QPainterState *s)
 void QPaintEngineEx::updateState(const QPaintEngineState &)
 {
     // do nothing...
+}
+
+void QPaintEngineEx::drawStaticTextItem(QStaticTextItem *staticTextItem)
+{
+    QPainterPath path;
+    path.setFillRule(Qt::WindingFill);
+
+    if (staticTextItem->numGlyphs == 0)
+        return;
+
+    QFontEngine *fontEngine = staticTextItem->fontEngine();
+    fontEngine->addGlyphsToPath(staticTextItem->glyphs, staticTextItem->glyphPositions,
+                                staticTextItem->numGlyphs, &path, 0);
+    if (!path.isEmpty()) {
+        QPainterState *s = state();
+        QPainter::RenderHints oldHints = s->renderHints;
+        bool changedHints = false;
+        if (bool(oldHints & QPainter::TextAntialiasing)
+            && !bool(fontEngine->fontDef.styleStrategy & QFont::NoAntialias)
+            && !bool(oldHints & QPainter::Antialiasing)) {
+            s->renderHints |= QPainter::Antialiasing;
+            renderHintsChanged();
+            changedHints = true;
+        }
+
+        fill(qtVectorPathForPath(path), s->pen.color());
+
+        if (changedHints) {
+            s->renderHints = oldHints;
+            renderHintsChanged();
+        }
+    }
+}
+
+bool QPaintEngineEx::supportsTransformations(const qreal pixelSize, const QTransform &m) const
+{
+    Q_UNUSED(pixelSize);
+
+    return !m.isAffine();
 }
 
 QT_END_NAMESPACE

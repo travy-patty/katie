@@ -49,64 +49,81 @@ public:
         // Must match QPixmap::Type
         PixmapType, BitmapType
     };
+    enum ClassId { RasterClass, X11Class };
 
-    QPixmapData(PixelType pixelType);
-    QPixmapData(int w, int h, PixelType type);
-    ~QPixmapData();
+    QPixmapData(PixelType pixelType, ClassId classId);
+    virtual ~QPixmapData();
 
-    void fromImage(const QImage &image,
-                   Qt::ImageConversionFlags flags);
-    void fromImageReader(QImageReader *imageReader,
-                         Qt::ImageConversionFlags flags);
+    virtual QPixmapData *createCompatiblePixmapData() const;
 
-    bool fromFile(const QString &filename, const char *format,
-                  Qt::ImageConversionFlags flags);
-    bool fromData(const uchar *buffer, uint len, const char *format,
-                  Qt::ImageConversionFlags flags);
+    virtual void resize(int width, int height) = 0;
+    virtual void fromImage(const QImage &image,
+                           Qt::ImageConversionFlags flags) = 0;
+    virtual void fromImageReader(QImageReader *imageReader,
+                                 Qt::ImageConversionFlags flags);
 
-    void copy(const QPixmapData *data, const QRect &rect);
-    void scroll(int dx, int dy, const QRect &rect);
+    virtual bool fromFile(const QString &filename, const char *format,
+                          Qt::ImageConversionFlags flags);
+    virtual bool fromData(const uchar *buffer, uint len, const char *format,
+                          Qt::ImageConversionFlags flags);
 
-    int metric(QPaintDevice::PaintDeviceMetric metric) const;
-    void fill(const QColor &color);
-    QBitmap mask() const;
-    void setMask(const QBitmap &mask);
-    bool hasAlphaChannel() const;
-    void setAlphaChannel(const QPixmap &alphaChannel);
-    QPixmap transformed(const QTransform &matrix,
-                        Qt::TransformationMode mode) const;
-    QPixmap alphaChannel() const;
-    QImage toImage() const;
-    QImage toImage(const QRect &rect) const;
-    QPaintEngine* paintEngine() const;
+    virtual void copy(const QPixmapData *data, const QRect &rect);
+    virtual bool scroll(int dx, int dy, const QRect &rect);
+
+    virtual int metric(QPaintDevice::PaintDeviceMetric metric) const = 0;
+    virtual void fill(const QColor &color) = 0;
+    virtual QBitmap mask() const;
+    virtual void setMask(const QBitmap &mask);
+    virtual bool hasAlphaChannel() const = 0;
+    virtual QPixmap transformed(const QTransform &matrix,
+                                Qt::TransformationMode mode) const;
+    virtual void setAlphaChannel(const QPixmap &alphaChannel);
+    virtual QPixmap alphaChannel() const;
+    virtual QImage toImage() const = 0;
+    virtual QImage toImage(const QRect &rect) const;
+    virtual QPaintEngine* paintEngine() const = 0;
 
     inline PixelType pixelType() const { return type; }
+    inline ClassId classId() const { return id; }
 
-    QImage* buffer();
+    virtual QImage* buffer();
 
-    inline int width() const { return image.width(); }
-    inline int height() const { return image.height(); }
-    inline int depth() const { return image.depth(); }
-    inline bool isNull() const { return image.isNull(); }
+    inline int width() const { return w; }
+    inline int height() const { return h; }
+    inline int depth() const { return d; }
+    inline bool isNull() const { return is_null; }
     inline qint64 cacheKey() const {
-        return ((static_cast<qint64>(ser_no) << 32)
+        return ((static_cast<qint64>(id) << 56)
+                | (static_cast<qint64>(ser_no) << 32)
                 | (static_cast<qint64>(detach_no)));
     }
 
+
+    static QPixmapData *create(int w, int h, PixelType type);
+
 protected:
     void setSerialNumber(int serNo);
+    int w;
+    int h;
+    int d;
+    bool is_null;
 
 private:
     friend class QPixmap;
-    friend class QRasterPaintEngine;
+    friend class QX11PixmapData;
     friend class QExplicitlySharedDataPointer<QPixmapData>;
 
     QAtomicInt ref;
-    QImage image;
     int detach_no;
-    int ser_no;
+
     PixelType type;
+    ClassId id;
+    int ser_no;
 };
+
+#define QT_XFORM_TYPE_MSBFIRST 0
+#define QT_XFORM_TYPE_LSBFIRST 1
+extern bool qt_xForm_helper(const QTransform&, int, int, int, uchar*, int, int, int, const uchar*, int, int, int);
 
 QT_END_NAMESPACE
 

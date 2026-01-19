@@ -206,8 +206,7 @@ private:
     const QTextHtmlParserNode *currentNode;
 };
 
-#endif // QT_NO_TEXTHTMLPARSER
-
 QT_END_NAMESPACE
+#endif // QT_NO_TEXTHTMLPARSER
 
 #endif // QTEXTDOCUMENTFRAGMENT_P_H

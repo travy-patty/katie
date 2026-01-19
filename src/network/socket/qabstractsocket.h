@@ -24,16 +24,20 @@
 
 #include <QtCore/qiodevice.h>
 #include <QtCore/qobject.h>
-#include <QtCore/qmetatype.h>
-
 #ifndef QT_NO_DEBUG_STREAM
 #include <QtCore/qdebug.h>
 #endif
 
+
 QT_BEGIN_NAMESPACE
 
+
 class QHostAddress;
+#ifndef QT_NO_NETWORKPROXY
+class QNetworkProxy;
+#endif
 class QAbstractSocketPrivate;
+class QAuthenticator;
 
 class Q_NETWORK_EXPORT QAbstractSocket : public QIODevice
 {
@@ -63,6 +67,13 @@ public:
         SocketAddressNotAvailableError,
         UnsupportedSocketOperationError,        /* 10 */
         UnfinishedSocketOperationError,
+        ProxyAuthenticationRequiredError,
+        SslHandshakeFailedError,
+        ProxyConnectionRefusedError,
+        ProxyConnectionClosedError,             /* 15 */
+        ProxyConnectionTimeoutError,
+        ProxyNotFoundError,
+        ProxyProtocolError,
 
         UnknownSocketError = -1
     };
@@ -130,15 +141,24 @@ public:
     bool waitForBytesWritten(int msecs = 30000);
     virtual bool waitForDisconnected(int msecs = 30000);
 
+#ifndef QT_NO_NETWORKPROXY
+    void setProxy(const QNetworkProxy &networkProxy);
+    QNetworkProxy proxy() const;
+#endif
+
 Q_SIGNALS:
     void hostFound();
     void connected();
     void disconnected();
     void stateChanged(QAbstractSocket::SocketState);
     void error(QAbstractSocket::SocketError);
+#ifndef QT_NO_NETWORKPROXY
+    void proxyAuthenticationRequired(const QNetworkProxy &proxy, QAuthenticator *authenticator);
+#endif
 
 protected:
     qint64 readData(char *data, qint64 maxlen);
+    qint64 readLineData(char *data, qint64 maxlen);
     qint64 writeData(const char *data, qint64 len);
 
     void setSocketState(SocketState state);
@@ -172,7 +192,5 @@ Q_NETWORK_EXPORT QDebug operator<<(QDebug, QAbstractSocket::SocketState);
 
 QT_END_NAMESPACE
 
-Q_DECLARE_METATYPE(QAbstractSocket::SocketError);
-Q_DECLARE_METATYPE(QAbstractSocket::SocketState);
 
 #endif // QABSTRACTSOCKET_H

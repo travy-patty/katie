@@ -1,33 +1,15 @@
-katie (4.14.0) unstable; urgency=medium
+katie (4.11.1) unstable; urgency=medium
 
-  * Ninth package update
-
- -- Ivailo Monev <xakepa10@gmail.com>  Wed, 9 Aug 2023 09:36:46 +0200
-
-katie (4.13.0) stable; urgency=medium
-
-  * Eight package update
-
- -- Ivailo Monev <xakepa10@gmail.com>  Thu, 1 Dec 2022 09:36:46 +0200
-
-katie (4.12.0) unstable; urgency=medium
-
-  * Seventh package update
-
- -- Ivailo Monev <xakepa10@gmail.com>  Tue, 14 Dec 2021 09:36:46 +0200
-
-katie (4.11.1) stable; urgency=medium
-
-  * Sixth package update
+  * Sixed package update
 
  -- Ivailo Monev <xakepa10@gmail.com>  Tue, 23 Nov 2021 12:49:58 +0200
-
+ 
 katie (4.11.0) stable; urgency=medium
 
   * Fifth package update
 
  -- Ivailo Monev <xakepa10@gmail.com>  Fri, 13 Aug 2021 07:32:58 +0200
-
+ 
 katie (4.10.0) stable; urgency=medium
 
   * Fourth package update

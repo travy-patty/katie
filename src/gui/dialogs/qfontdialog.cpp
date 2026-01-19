@@ -44,7 +44,7 @@
 #include "qvalidator.h"
 #include "qdialog_p.h"
 #include "qfont_p.h"
-#include "qfontdatabase_p.h"
+
 
 QT_BEGIN_NAMESPACE
 
@@ -111,7 +111,7 @@ static const Qt::WindowFlags DefaultFontWindowFlags =
 
   \image plastique-fontdialog.png A font dialog in the Plastique widget style.
 
-  \sa QFont, QFontMetrics, QColorDialog, QFileDialog, QPrintDialog,
+  \sa QFont, QFontInfo, QFontMetrics, QColorDialog, QFileDialog, QPrintDialog,
       {Standard Dialogs Example}
 */
 
@@ -433,12 +433,12 @@ void QFontDialogPrivate::updateFamilies()
     QFont f;
 
     // ##### do the right thing for a list of family names in the font.
-    QFontDatabasePrivate::parseFontName(family, foundryName1, familyName1);
+    QFontDatabase::parseFontName(family, foundryName1, familyName1);
 
     QStringList::const_iterator it = familyNames.constBegin();
     int i = 0;
     for(; it != familyNames.constEnd(); ++it, ++i) {
-        QFontDatabasePrivate::parseFontName(*it, foundryName2, familyName2);
+        QFontDatabase::parseFontName(*it, foundryName2, familyName2);
 
         //try to match...
         if (familyName1 == familyName2) {
@@ -524,7 +524,7 @@ void QFontDialogPrivate::updateStyles()
                 && styleList->hasFocus())
             styleEdit->selectAll();
 
-        smoothScalable = fdb.isScalable(familyList->currentText(), styleList->currentText());
+        smoothScalable = fdb.isSmoothlyScalable(familyList->currentText(), styleList->currentText());
     }
 
     updateSizes();
@@ -720,8 +720,8 @@ void QFontDialog::setCurrentFont(const QFont &font)
     d->style = d->fdb.styleString(font);
     d->size = font.pointSize();
     if (d->size == -1) {
-        QFont sf = d->fdb.font(font.family(), font.styleName(), font.pointSize());
-        d->size = sf.pointSize();
+        QFontInfo fi(font);
+        d->size = fi.pointSize();
     }
     d->strikeout->setChecked(font.strikeOut());
     d->underline->setChecked(font.underline());

@@ -42,7 +42,8 @@ class QUrl;
 class QScriptEngine;
 class QScriptContext;
 class QDeclarativeImageProvider;
-
+class QNetworkAccessManager;
+class QDeclarativeNetworkAccessManagerFactory;
 class Q_DECLARATIVE_EXPORT QDeclarativeEngine : public QObject
 {
     Q_OBJECT
@@ -63,6 +64,11 @@ public:
     void addPluginPath(const QString& dir);
 
     bool importPlugin(const QString &filePath, const QString &uri, QString *errorString);
+
+    void setNetworkAccessManagerFactory(QDeclarativeNetworkAccessManagerFactory *);
+    QDeclarativeNetworkAccessManagerFactory *networkAccessManagerFactory() const;
+
+    QNetworkAccessManager *networkAccessManager() const;
 
     void addImageProvider(const QString &id, QDeclarativeImageProvider *);
     QDeclarativeImageProvider *imageProvider(const QString &id) const;

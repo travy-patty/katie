@@ -23,19 +23,34 @@
 #define QSTYLEPLUGIN_H
 
 #include <QtCore/qplugin.h>
+#include <QtCore/qfactoryinterface.h>
 
 
 QT_BEGIN_NAMESPACE
 
 class QStyle;
 
-class Q_GUI_EXPORT QStylePlugin : public QObject
+struct Q_GUI_EXPORT QStyleFactoryInterface : public QFactoryInterface
+{
+    virtual QStyle *create(const QString &key) = 0;
+};
+
+QT_END_NAMESPACE
+
+#define QStyleFactoryInterface_iid "Katie.QStyleFactoryInterface"
+Q_DECLARE_INTERFACE(QStyleFactoryInterface, QStyleFactoryInterface_iid)
+
+QT_BEGIN_NAMESPACE
+
+class Q_GUI_EXPORT QStylePlugin : public QObject, public QStyleFactoryInterface
 {
     Q_OBJECT
+    Q_INTERFACES(QStyleFactoryInterface:QFactoryInterface)
 public:
     explicit QStylePlugin(QObject *parent = nullptr);
     ~QStylePlugin();
 
+    virtual QStringList keys() const = 0;
     virtual QStyle *create(const QString &key) = 0;
 };
 

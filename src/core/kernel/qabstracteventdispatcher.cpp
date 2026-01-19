@@ -35,20 +35,14 @@ QT_BEGIN_NAMESPACE
 // digit. could implement fallback to int-sized set if limit is reached
 enum { QTimerMax = 2048 };
 
-class QTimersSet : private std::bitset<QTimerMax>
+class QTimersSet : public std::bitset<QTimerMax>
 {
 public:
-    bool isSet(const int bit) const;
     void unsetBit(const int bit);
-    int getBit();
+    int freeBit();
 private:
     std::mutex m_mutex;
 };
-
-bool QTimersSet::isSet(const int bit) const
-{
-    return this->test(bit);
-}
 
 void QTimersSet::unsetBit(const int bit)
 {
@@ -56,7 +50,7 @@ void QTimersSet::unsetBit(const int bit)
     this->set(bit, false);
 }
 
-int QTimersSet::getBit()
+int QTimersSet::freeBit()
 {
     std::lock_guard<std::mutex> locker(m_mutex);
     // 0 is invalid timer ID
@@ -84,7 +78,7 @@ void QAbstractEventDispatcherPrivate::init()
 // Timer IDs are implemented using a free-list
 int QAbstractEventDispatcherPrivate::allocateTimerId()
 {
-    const int id = timerIds.getBit();
+    const int id = timerIds.freeBit();
     if (Q_UNLIKELY(id == 0)) {
         qFatal("QAbstractEventDispatcher: no free timer ID");
     }
@@ -94,7 +88,7 @@ int QAbstractEventDispatcherPrivate::allocateTimerId()
 // Releasing a timer ID requires only a bit flip to mark it as unused
 void QAbstractEventDispatcherPrivate::releaseTimerId(int timerId)
 {
-    Q_ASSERT_X(timerIds.isSet(timerId), "QAbstractEventDispatcher::releaseTimerId",
+    Q_ASSERT_X(timerIds.test(timerId), "QAbstractEventDispatcher::releaseTimerId",
                "Internal error: timer ID not found");
     timerIds.unsetBit(timerId);
 }

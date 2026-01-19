@@ -28,7 +28,6 @@
 #include "qlocale_tools_p.h"
 #include "qscopedpointer.h"
 #include "qdatastream.h"
-#include "qplatformdefs.h"
 #include "qcorecommon_p.h"
 
 #include <ctype.h>
@@ -37,7 +36,8 @@
 #include <stdlib.h>
 
 #ifndef QT_NO_COMPRESS
-#include <libdeflate.h>
+#include <zstd.h>
+#include <zstd_errors.h>
 #endif // QT_NO_COMPRESS
 
 #define IS_RAW_DATA(d) ((d)->data != (d)->array)
@@ -224,67 +224,72 @@ char* qstrncpy(char *dst, const char *src, uint len)
     \sa qstrcmp(), qstrncmp(), qstricmp(), {8-bit Character Comparisons}
 */
 
-/*!
-    \relates QByteArray
-
-    Returns the CRC-32 checksum of the first \a len bytes of \a data.
-*/
-quint32 qChecksum(const char *data, uint len)
+// the CRC table below is created by the following piece of code
+#if 0
+static void createCRC16Table()                        // build CRC16 lookup table
 {
-#ifndef QT_NO_COMPRESS
-    return libdeflate_crc32(0, data, len);
-#else
-    Q_ASSERT_X(false, "qChecksum", "internal error");
-    return 0;
-#endif
-}
-
-/*!
-    \relates QByteArray
-
-    Returns pseudo-randomly generated UUID.
-*/
-QByteArray qRandomUuid()
-{
-    static const ushort randiterratio = (sizeof(int) / sizeof(char));
-    Q_ASSERT(randiterratio > 1);
-    QSTACKARRAY(char, randombuf, 16);
-    int *randombufiter = reinterpret_cast<int*>(randombuf);
-    for (ushort i = 0; i < (16 / randiterratio); i++) {
-        *randombufiter = qrand();
-        randombufiter++;
+    unsigned int i;
+    unsigned int j;
+    unsigned short crc_tbl[16];
+    unsigned int v0, v1, v2, v3;
+    for (i = 0; i < 16; i++) {
+        v0 = i & 1;
+        v1 = (i >> 1) & 1;
+        v2 = (i >> 2) & 1;
+        v3 = (i >> 3) & 1;
+        j = 0;
+#undef SET_BIT
+#define SET_BIT(x, b, v) (x) |= (v) << (b)
+        SET_BIT(j,  0, v0);
+        SET_BIT(j,  7, v0);
+        SET_BIT(j, 12, v0);
+        SET_BIT(j,  1, v1);
+        SET_BIT(j,  8, v1);
+        SET_BIT(j, 13, v1);
+        SET_BIT(j,  2, v2);
+        SET_BIT(j,  9, v2);
+        SET_BIT(j, 14, v2);
+        SET_BIT(j,  3, v3);
+        SET_BIT(j, 10, v3);
+        SET_BIT(j, 15, v3);
+        crc_tbl[i] = j;
     }
+    printf("static const quint16 crc_tbl[16] = {\n");
+    for (int i = 0; i < 16; i +=4)
+        printf("    0x%04x, 0x%04x, 0x%04x, 0x%04x,\n", crc_tbl[i], crc_tbl[i+1], crc_tbl[i+2], crc_tbl[i+3]);
+    printf("};\n");
+}
+#endif
 
-#define UUID_TOHEX(bufi, randi) \
-    uuidbuf[bufi] = tohex[(randombuf[randi] >> 4) & 0xf]; \
-    uuidbuf[bufi + 1] = tohex[randombuf[randi] & 0xf];
+static const quint16 crc_tbl[16] = {
+    0x0000, 0x1081, 0x2102, 0x3183,
+    0x4204, 0x5285, 0x6306, 0x7387,
+    0x8408, 0x9489, 0xa50a, 0xb58b,
+    0xc60c, 0xd68d, 0xe70e, 0xf78f
+};
 
-    static const char tohex[] = "0123456789abcdef";
-    QSTACKARRAY(char, uuidbuf, 36);
-    UUID_TOHEX(0, 0);
-    UUID_TOHEX(2, 1);
-    UUID_TOHEX(4, 2);
-    UUID_TOHEX(6, 3);
-    uuidbuf[8] = '-';
-    UUID_TOHEX(9, 4);
-    UUID_TOHEX(11, 5);
-    uuidbuf[13] = '-';
-    UUID_TOHEX(14, 6);
-    UUID_TOHEX(16, 7);
-    uuidbuf[18] = '-';
-    UUID_TOHEX(19, 8);
-    UUID_TOHEX(21, 9);
-    uuidbuf[23] = '-';
-    UUID_TOHEX(24, 10);
-    UUID_TOHEX(26, 11);
-    UUID_TOHEX(28, 12);
-    UUID_TOHEX(30, 13);
-    UUID_TOHEX(32, 14);
-    UUID_TOHEX(34, 15);
+/*!
+    \relates QByteArray
 
-#undef UUID_TOHEX
+    Returns the CRC-16 checksum of the first \a len bytes of \a data.
 
-    return QByteArray(uuidbuf, sizeof(uuidbuf));
+    The checksum is independent of the byte order (endianness).
+
+    \note This function is a 16-bit cache conserving (16 entry table)
+    implementation of the CRC-16-CCITT algorithm.
+*/
+quint16 qChecksum(const char *data, uint len)
+{
+    quint16 crc = 0xffff;
+    uchar c;
+    const uchar *p = reinterpret_cast<const uchar *>(data);
+    while (len--) {
+        c = *p++;
+        crc = ((crc >> 4) & 0x0fff) ^ crc_tbl[((crc ^ c) & 15)];
+        c >>= 4;
+        crc = ((crc >> 4) & 0x0fff) ^ crc_tbl[((crc ^ c) & 15)];
+    }
+    return ~crc & 0xffff;
 }
 
 #ifndef QT_NO_COMPRESS
@@ -325,30 +330,20 @@ QByteArray qCompress(const char* data, int nbytes, int compressionLevel)
         return QByteArray();
     }
 
-    struct libdeflate_compressor* comp = libdeflate_alloc_compressor(compressionLevel);
-    if (Q_UNLIKELY(!comp)) {
-        qWarning("qCompress: Could not allocate compressor");
-        return QByteArray();
-    }
-
-    const size_t boundresult = libdeflate_gzip_compress_bound(comp, nbytes);
-    if (Q_UNLIKELY(boundresult <= 0)) {
+    const size_t bndresult = ZSTD_compressBound(nbytes);
+    if (Q_UNLIKELY(bndresult <= 0)) {
         qWarning("qCompress: Compression boundary is negative or zero");
-        libdeflate_free_compressor(comp);
         return QByteArray();
     }
 
-    QByteArray result(boundresult, Qt::Uninitialized);
-    const size_t compresult = libdeflate_gzip_compress(comp, data, nbytes, result.data(), result.size());
-    libdeflate_free_compressor(comp);
-
-    if (Q_UNLIKELY(compresult <= 0)) {
-        qWarning("qCompress: Could not compress data");
+    QSTACKARRAY(char, cmpbuffer, bndresult);
+    const size_t cmpresult = ZSTD_compress(cmpbuffer, bndresult, data, nbytes, compressionLevel);
+    if (Q_UNLIKELY(ZSTD_isError(cmpresult))) {
+        qWarning("qCompress: Could not compress data (%s)", ZSTD_getErrorString(ZSTD_getErrorCode(cmpresult)));
         return QByteArray();
     }
 
-    result.resize(compresult);
-    return result;
+    return QByteArray(cmpbuffer, cmpresult);
 }
 
 /*!
@@ -383,46 +378,20 @@ QByteArray qUncompress(const char* data, int nbytes)
         return QByteArray();
     }
 
-    struct libdeflate_decompressor* decomp = libdeflate_alloc_decompressor();
-    if (Q_UNLIKELY(!decomp)) {
-        qWarning("qUncompress: Could not allocate decompressor");
+    const unsigned long long uncompressedsize = ZSTD_getDecompressedSize(data, nbytes);
+    if (Q_UNLIKELY(uncompressedsize <= 0)) {
+        qWarning("qUncompress: Uncompressed size is negative or zero");
         return QByteArray();
     }
 
-    size_t speculativesize = (nbytes * 2);
-    QByteArray result(speculativesize, Qt::Uninitialized);
-    libdeflate_result decompresult = LIBDEFLATE_INSUFFICIENT_SPACE;
-    while (decompresult == LIBDEFLATE_INSUFFICIENT_SPACE) {
-        decompresult = libdeflate_gzip_decompress(
-            decomp,
-            data, nbytes,
-            result.data(), result.size(),
-            &speculativesize
-        );
-
-        if (decompresult == LIBDEFLATE_INSUFFICIENT_SPACE) {
-            speculativesize = (speculativesize + QT_BUFFSIZE);
-            result.resize(speculativesize);
-        }
-
-        if (speculativesize >= QBYTEARRAY_MAX) {
-            break;
-        }
+    QSTACKARRAY(char, decbuffer, uncompressedsize);
+    const size_t decresult = ZSTD_decompress(decbuffer, uncompressedsize, data, nbytes);
+    if (Q_UNLIKELY(ZSTD_isError(decresult))) {
+        qWarning("qUncompress: Could not uncompress data (%s)", ZSTD_getErrorString(ZSTD_getErrorCode(decresult)));
+        return QByteArray();
     }
-    libdeflate_free_decompressor(decomp);
 
-    switch (decompresult) {
-        case LIBDEFLATE_SUCCESS: {
-            result.resize(speculativesize);
-            break;
-        }
-        default: {
-            qWarning("qUncompress: Could not decompress data");
-            result.clear();
-            break;
-        }
-    }
-    return result;
+    return QByteArray(decbuffer, uncompressedsize);
 }
 #endif // QT_NO_COMPRESS
 
@@ -1192,7 +1161,7 @@ QByteArray::QByteArray(int size, char ch)
     if (size <= 0) {
         d = &shared_null;
     } else {
-        d = static_cast<Data *>(::malloc(sizeof(Data) + size));
+        d = static_cast<Data *>(::malloc(sizeof(Data)+size));
         Q_CHECK_PTR(d);
         d->ref = 0;
         d->alloc = d->size = size;
@@ -1505,6 +1474,30 @@ QByteArray& QByteArray::append(char ch)
 }
 
 /*!
+  \internal
+  Inserts \a len bytes from the array \a arr at position \a pos and returns a
+  reference the modified byte array.
+*/
+static inline QByteArray &qbytearray_insert(QByteArray *ba,
+                                            int pos, const char *arr, int len)
+{
+    Q_ASSERT(pos >= 0);
+
+    if (pos < 0 || len <= 0 || arr == 0)
+        return *ba;
+
+    int oldsize = ba->size();
+    ba->resize(qMax(pos, oldsize) + len);
+    char *dst = ba->data();
+    if (pos > oldsize)
+        ::memset(dst + oldsize, 0x20, pos - oldsize);
+    else
+        ::memmove(dst + pos + len, dst + pos, oldsize - pos);
+    memcpy(dst + pos, arr, len);
+    return *ba;
+}
+
+/*!
     Inserts the byte array \a ba at index position \a i and returns a
     reference to this byte array.
 
@@ -1516,7 +1509,7 @@ QByteArray& QByteArray::append(char ch)
 
 QByteArray &QByteArray::insert(int i, const QByteArray &ba)
 {
-    return insert(i, ba.d->data, ba.d->size);
+    return qbytearray_insert(this, i, ba.d->data, ba.d->size);
 }
 
 /*!
@@ -1550,7 +1543,7 @@ QByteArray &QByteArray::insert(int i, const QByteArray &ba)
 
 QByteArray &QByteArray::insert(int i, const char *str)
 {
-    return insert(i, str, qstrlen(str));
+    return qbytearray_insert(this, i, str, qstrlen(str));
 }
 
 /*!
@@ -1566,20 +1559,7 @@ QByteArray &QByteArray::insert(int i, const char *str)
 
 QByteArray &QByteArray::insert(int i, const char *str, int len)
 {
-    Q_ASSERT(i >= 0);
-    if (i < 0 || len <= 0 || !str) {
-        return *this;
-    }
-    int oldsize = d->size;
-    resize(qMax(i, oldsize) + len);
-    char *dst = this->data();
-    if (i > oldsize) {
-        ::memset(dst + oldsize, 0x20, i - oldsize);
-    } else {
-        ::memmove(dst + i + len, dst + i, oldsize - i);
-    }
-    ::memcpy(dst + i, str, len);
-    return *this;
+    return qbytearray_insert(this, i, str, len);
 }
 
 /*!
@@ -1592,7 +1572,7 @@ QByteArray &QByteArray::insert(int i, const char *str, int len)
 
 QByteArray &QByteArray::insert(int i, char ch)
 {
-    return insert(i, &ch, 1);
+    return qbytearray_insert(this, i, &ch, 1);
 }
 
 /*!
@@ -1635,7 +1615,15 @@ QByteArray &QByteArray::remove(int pos, int len)
 
 QByteArray &QByteArray::replace(int pos, int len, const QByteArray &after)
 {
-    return replace(pos, len, after.constData(), after.size());
+    if (len == after.d->size && (pos + len <= d->size)) {
+        detach();
+        memmove(d->data + pos, after.d->data, len*sizeof(char));
+        return *this;
+    } else {
+        // ### optimize me
+        remove(pos, len);
+        return insert(pos, after);
+    }
 }
 
 /*! \fn QByteArray &QByteArray::replace(int pos, int len, const char *after)
@@ -1667,10 +1655,14 @@ QByteArray &QByteArray::replace(int pos, int len, const char *after, int alen)
         detach();
         memcpy(d->data + pos, after, len*sizeof(char));
         return *this;
+    } else {
+        remove(pos, len);
+        return qbytearray_insert(this, pos, after, alen);
     }
-    remove(pos, len);
-    return insert(pos, after, alen);
 }
+
+// ### optimize all other replace method, by offering
+// QByteArray::replace(const char *before, int blen, const char *after, int alen)
 
 /*!
     \overload
@@ -1684,9 +1676,9 @@ QByteArray &QByteArray::replace(int pos, int len, const char *after, int alen)
 
 QByteArray &QByteArray::replace(const QByteArray &before, const QByteArray &after)
 {
-    if (isNull() || before.d == after.d) {
+    if (isNull() || before.d == after.d)
         return *this;
-    }
+
     return replace(before.constData(), before.size(), after.constData(), after.size());
 }
 
@@ -1761,7 +1753,7 @@ QByteArray &QByteArray::replace(const char *before, int bsize, const char *after
         // the most complex case. We don't want to lose performance by doing repeated
         // copies and reallocs of the string.
         while (index != -1) {
-            QSTACKARRAY(uint, indices, 4096);
+            uint indices[4096];
             uint pos = 0;
             while(pos < 4095) {
                 index = matcher.indexIn(*this, index);
@@ -1938,19 +1930,33 @@ QList<QByteArray> QByteArray::split(char sep) const
 */
 QByteArray QByteArray::repeated(const int times) const
 {
-    if (d->size == 0 || times == 1) {
+    if (d->size == 0 || times == 1)
         return *this;
-    }
+
     if (times < 1) {
         return QByteArray();
     }
 
-    const int resultsize = (times * d->size);
-    QByteArray result(resultsize, Qt::Uninitialized);
-    for (int i = 0; i < times; i++) {
-        ::memcpy(result.d->data + (i * d->size), d->data, d->size);
+    const int resultSize = times * d->size;
+
+    QByteArray result(resultSize, Qt::Uninitialized);
+    if (result.d->alloc != resultSize)
+        return QByteArray(); // not enough memory
+
+    memcpy(result.d->data, d->data, d->size);
+
+    int sizeSoFar = d->size;
+    char *end = result.d->data + sizeSoFar;
+
+    const int halfResultSize = resultSize >> 1;
+    while (sizeSoFar <= halfResultSize) {
+        memcpy(end, result.d->data, sizeSoFar);
+        end += sizeSoFar;
+        sizeSoFar <<= 1;
     }
-    result.d->data[resultsize] = '\0';
+    memcpy(end, result.d->data, resultSize - sizeSoFar);
+    result.d->data[resultSize] = '\0';
+    result.d->size = resultSize;
     return result;
 }
 
@@ -2417,9 +2423,9 @@ QByteArray QByteArray::mid(int pos, int len) const
 QByteArray QByteArray::toLower() const
 {
     QByteArray s(*this);
-    char *p = s.data();
+    uchar *p = reinterpret_cast<uchar *>(s.data());
     while (*p) {
-        *p = qToLower(*p);
+        *p = QChar::toLower((ushort)*p);
         p++;
     }
     return s;
@@ -2438,9 +2444,9 @@ QByteArray QByteArray::toLower() const
 QByteArray QByteArray::toUpper() const
 {
     QByteArray s(*this);
-    char *p = s.data();
+    uchar *p = reinterpret_cast<uchar *>(s.data());
     while (*p) {
-        *p = qToUpper(*p);
+        *p = QChar::toUpper((ushort)*p);
         p++;
     }
     return s;
@@ -2477,9 +2483,7 @@ QDataStream &operator<<(QDataStream &out, const QByteArray &ba)
         out << (quint32)0xffffffff;
         return out;
     }
-    out << (quint32)ba.size();
-    out.writeRawData(ba.constData(), ba.size());
-    return out;
+    return out.writeBytes(ba.constData(), ba.size());
 }
 
 /*! \relates QByteArray
@@ -2492,12 +2496,11 @@ QDataStream &operator<<(QDataStream &out, const QByteArray &ba)
 
 QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 {
+    ba.clear();
     quint32 len;
     in >> len;
-    if (len == 0xffffffff) {
-        ba.clear();
+    if (len == 0xffffffff)
         return in;
-    }
 
     ba.resize(len);
     const quint32 readlen = in.readRawData(ba.data(), len);
@@ -3836,9 +3839,10 @@ void q_fromPercentEncoding(QByteArray *ba)
 */
 QByteArray QByteArray::fromPercentEncoding(const QByteArray &input, char percent)
 {
-    if (input.isEmpty()) {
-        return input;
-    }
+    if (input.isNull())
+        return QByteArray();       // preserve null
+    if (input.isEmpty())
+        return QByteArray(input.data(), 0);
 
     QByteArray tmp = input;
     q_fromPercentEncoding(&tmp, percent);
@@ -3946,9 +3950,10 @@ void q_normalizePercentEncoding(QByteArray *ba, const char *exclude)
 QByteArray QByteArray::toPercentEncoding(const QByteArray &exclude, const QByteArray &include,
                                          char percent) const
 {
-    if (isEmpty()) {
-        return QByteArray();
-    }
+    if (isNull())
+        return QByteArray();    // preserve null
+    if (isEmpty())
+        return QByteArray(data(), 0);
 
     QByteArray include2 = include;
     if (percent != '%')                        // the default

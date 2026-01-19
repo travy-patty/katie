@@ -24,9 +24,11 @@
 
 #include <QtGui/qdialog.h>
 
-#ifndef QT_NO_WIZARD
 
 QT_BEGIN_NAMESPACE
+
+
+#ifndef QT_NO_WIZARD
 
 class QAbstractButton;
 class QWizardPage;
@@ -234,6 +236,7 @@ private:
 };
 
 QT_END_NAMESPACE
+
 
 #endif // QT_NO_WIZARD
 

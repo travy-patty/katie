@@ -34,6 +34,9 @@
 //
 
 #include "QtXml/qxmlstream.h"
+
+#ifndef QT_NO_SVG
+
 #include "QtCore/qhash.h"
 #include "QtCore/qstack.h"
 #include "qsvgstyle_p.h"
@@ -68,6 +71,7 @@ public:
         LT_OTHER
     };
 
+    QSvgHandler(QIODevice *device);
     QSvgHandler(const QByteArray &data);
     QSvgHandler(QXmlStreamReader *const data);
     ~QSvgHandler();
@@ -90,6 +94,9 @@ public:
     bool inStyle() const;
 
     QSvgStyleSelector *selector() const;
+
+    void setAnimPeriod(int start, int end);
+    int animationDuration() const;
 
     void parseCSStoXMLAttrs(const QString &css, QVector<QSvgCssAttribute> *attributes);
 
@@ -127,6 +134,8 @@ private:
 
     QSvgStyleSelector *m_selector;
 
+    int m_animEnd;
+
     QXmlStreamReader *const xml;
     QCss::Parser m_cssParser;
     void resolveGradients(QSvgNode *node) const;
@@ -140,4 +149,5 @@ private:
 
 QT_END_NAMESPACE
 
+#endif // QT_NO_SVG
 #endif // QSVGHANDLER_P_H

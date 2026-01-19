@@ -29,7 +29,6 @@
 #include "qstyle_p.h"
 #include "qpen.h"
 #include "qdebug.h"
-#include "qguiimages_p.h"
 
 #ifdef Q_WS_X11
 #include "qx11info_x11.h"
@@ -66,11 +65,12 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
 
     \ingroup appearance
 
-    Katie contains a set of QStyle subclasses that emulate the styles of
-    the different platforms supported by Katie (QWindowsStyle, etc.).
-    By default, these styles are built into the QtGui library.
+    Qt contains a set of QStyle subclasses that emulate the styles of
+    the different platforms supported by Qt (QWindowsStyle,
+    QMotifStyle, etc.). By default, these styles are built into the
+    QtGui library. Styles can also be made available as plugins.
 
-    Katie's built-in widgets use QStyle to perform nearly all of their
+    Qt's built-in widgets use QStyle to perform nearly all of their
     drawing, ensuring that they look exactly like the equivalent
     native widgets. The diagram below shows a QComboBox in eight
     different styles.
@@ -437,7 +437,7 @@ QRect QStyle::itemTextRect(const QFontMetrics &metrics, const QRect &rect, int a
                        const QString &text) const
 {
     if (!text.isEmpty()) {
-        QRect result = metrics.boundingRect(rect, alignment, text);
+        QRect result = metrics.boundingRect(rect.x(), rect.y(), rect.width(), rect.height(), alignment, text);
         if (!enabled && proxy()->styleHint(SH_EtchDisabledText)) {
             result.setWidth(result.width()+1);
             result.setHeight(result.height()+1);
@@ -1038,9 +1038,12 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value CC_ScrollBar         A scroll bar, like QScrollBar.
     \value CC_Slider            A slider, like QSlider.
     \value CC_ToolButton        A tool button, like QToolButton.
-    \value CC_TitleBar          A Title bar, obsolete.
+    \value CC_TitleBar          A Title bar, like those used in QMdiSubWindow.
     \value CC_GroupBox          A group box, like QGroupBox.
     \value CC_Dial              A dial, like QDial.
+    \value CC_MdiControls       The minimize, close, and normal
+                                button in the menu bar for a
+                                maximized MDI subwindow.
 
     \value CC_CustomBase Base value for custom complex controls. Custom
     values must be greater than this value.
@@ -1105,6 +1108,13 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value SC_GroupBoxLabel The title of a group box.
     \value SC_GroupBoxCheckBox The optional check box of a group box.
     \value SC_GroupBoxContents The group box contents.
+
+    \value SC_MdiNormalButton The normal button for a MDI
+                              subwindow in the menu bar.
+    \value SC_MdiMinButton The minimize button for a MDI
+                           subwindow in the menu bar.
+    \value SC_MdiCloseButton The close button for a MDI subwindow
+                             in the menu bar.
 
     \value SC_All  Special value that matches all sub-controls.
     \omitvalue SC_CustomBase
@@ -1240,6 +1250,11 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value PM_DefaultFrameWidth  Default frame width (usually 2).
     \value PM_SpinBoxFrameWidth  Frame width of a spin box, defaults to PM_DefaultFrameWidth.
     \value PM_ComboBoxFrameWidth Frame width of a combo box, defaults to PM_DefaultFrameWidth.
+
+    \value PM_MDIFrameWidth  Obsolete. Use PM_MdiSubWindowFrameWidth instead.
+    \value PM_MdiSubWindowFrameWidth  Frame width of an MDI window.
+    \value PM_MDIMinimizedWidth  Obsolete. Use PM_MdiSubWindowMinimizedWidth instead.
+    \value PM_MdiSubWindowMinimizedWidth  Width of a minimized MDI window.
 
     \value PM_LayoutLeftMargin  Default \l{QLayout::setContentsMargins()}{left margin} for a
                                 QLayout.
@@ -1446,6 +1461,10 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 
     \value CT_CustomBase  Base value for custom contents types.
     Custom values must be greater than this value.
+
+    \value CT_MdiControls The minimize, normal, and close button
+                          in the menu bar for a maximized MDI
+                          subwindow.
 
     \sa sizeFromContents()
 */
@@ -1803,7 +1822,8 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     This enum describes the available standard pixmaps. A standard pixmap is a pixmap that
     can follow some existing GUI style or guideline.
 
-    \value SP_TitleBarMinButton  Minimize button on title bars.
+    \value SP_TitleBarMinButton  Minimize button on title bars (e.g.,
+        in QMdiSubWindow).
     \value SP_TitleBarMenuButton Menu button on a title bar.
     \value SP_TitleBarMaxButton  Maximize button on title bars.
     \value SP_TitleBarCloseButton  Close button on title bars.
@@ -1860,6 +1880,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value SP_ArrowBack Equivalent to SP_ArrowLeft when the current layout direction is Qt::LeftToRight, otherwise SP_ArrowRight.
     \value SP_ArrowForward Equivalent to SP_ArrowRight when the current layout direction is Qt::LeftToRight, otherwise SP_ArrowLeft.
     \value SP_CommandLink Icon used to indicate a Vista style command link glyph.
+    \value SP_VistaShield Icon used to indicate UAC prompts on Windows Vista. This will return a null pixmap or icon on all other platforms.
     \value SP_BrowserReload  Icon indicating that the current page should be reloaded.
     \value SP_BrowserStop  Icon indicating that the page loading should stop.
     \value SP_MediaPlay   Icon indicating that media should begin playback.
@@ -2084,7 +2105,10 @@ int QStyle::sliderValueFromPosition(int min, int max, int pos, int span, bool up
      Returns the style's standard palette.
 
     Note that on systems that support system colors, the style's
-    standard palette is not used.
+    standard palette is not used. In particular, the Windows XP,
+    Vista, and Mac styles do not use the standard palette, but make
+    use of native theme engines. With these styles, you should not set
+    the palette with QApplication::setStandardPalette().
 
  */
 QPalette QStyle::standardPalette() const
@@ -2262,3 +2286,4 @@ void QStyle::setProxy(QStyle *style)
 QT_END_NAMESPACE
 
 #include "moc_qstyle.h"
+#include "qrc_qstyle.cpp"

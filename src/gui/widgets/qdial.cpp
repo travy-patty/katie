@@ -37,6 +37,10 @@
 #include "qabstractslider_p.h"
 #include "qmath.h"
 
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
+
 QT_BEGIN_NAMESPACE
 
 class QDialPrivate : public QAbstractSliderPrivate

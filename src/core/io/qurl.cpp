@@ -36,8 +36,8 @@
     (IDNs).
 
     The most common way to use QUrl is to initialize it via the
-    constructor by passing a QString. Otherwise, setUrl() can also
-    be used.
+    constructor by passing a QString. Otherwise, setUrl() and
+    setEncodedUrl() can also be used.
 
     URLs can be represented in two forms: encoded or unencoded. The
     unencoded representation is suitable for showing to users, but
@@ -49,9 +49,10 @@
 
     A URL can also be constructed piece by piece by calling
     setScheme(), setUserName(), setPassword(), setHost(), setPort(),
-    setPath() and setFragment(). Some convenience functions are also
-    available: setAuthority() sets the user name, password, host and
-    port. setUserInfo() sets the user name and password at once.
+    setPath(), setEncodedQuery() and setFragment(). Some convenience
+    functions are also available: setAuthority() sets the user name,
+    password, host and port. setUserInfo() sets the user name and
+    password at once.
 
     Call isValid() to check if the URL is valid. This can be done at
     any point during the constructing of a URL.
@@ -98,6 +99,8 @@
        QUrl(string) and QUrl::toString() when converting a QUrl to or from
        a string.
     \endlist
+
+    \sa QUrlInfo
 */
 
 /*!
@@ -152,7 +155,6 @@
                         is removed.
     \value RemoveFragment
     \value StripTrailingSlash  The trailing slash is removed if one is present.
-    \value AddTrailingSlash  Add trailing slash is not present.
 
     Note that the case folding rules in \l{RFC 3491}{Nameprep}, which QUrl
     conforms to, require host names to always be converted to lower case,
@@ -1550,7 +1552,7 @@ QByteArray QUrlPrivate::toEncoded(QUrl::FormattingOptions options) const
     }
     QString savedHost = host;  // pre-validation, may be invalid!
     QString auth = authority();
-    bool doFileScheme = (scheme == QLatin1String("file"));
+    bool doFileScheme = scheme == QLatin1String("file") && encodedPath.startsWith('/');
     if ((options & QUrl::RemoveAuthority) != QUrl::RemoveAuthority && (!auth.isNull() || doFileScheme || !savedHost.isEmpty())) {
         if (doFileScheme && !encodedPath.startsWith('/'))
             url += '/';
@@ -1588,7 +1590,7 @@ QByteArray QUrlPrivate::toEncoded(QUrl::FormattingOptions options) const
         }
         if (!(options & QUrl::RemovePort) && port != -1) {
             url += ':';
-            url += QByteArray::number(port);
+            url += QString::number(port).toAscii();
         }
     }
 
@@ -1600,13 +1602,9 @@ QByteArray QUrlPrivate::toEncoded(QUrl::FormattingOptions options) const
         }
         url += encodedPath;
 
-        // check if we need to remove trailing slashes or add one
-        if ((options & QUrl::StripTrailingSlash)) {
-            while (url.endsWith('/'))
-                url.chop(1);
-        } else if ((options & QUrl::AddTrailingSlash) && !url.endsWith('/')) {
-            url += '/';
-        }
+        // check if we need to remove trailing slashes
+        while ((options & QUrl::StripTrailingSlash) && url.endsWith('/'))
+            url.chop(1);
     }
 
     if (!(options & QUrl::RemoveQuery) && hasQuery) {
@@ -1780,7 +1778,7 @@ QUrl::QUrl(const QString &url, ParsingMode parsingMode) : d(0)
     if (!url.isEmpty())
         setUrl(url, parsingMode);
     else {
-        d = new QUrlPrivate();
+        d = new QUrlPrivate;
         d->parsingMode = parsingMode;
     }
 }
@@ -1859,7 +1857,7 @@ void QUrl::clear()
 {
     if (d && !d->ref.deref())
         delete d;
-    d = nullptr;
+    d = 0;
 }
 
 /*!
@@ -1875,7 +1873,7 @@ void QUrl::clear()
 */
 void QUrl::setUrl(const QString &url, ParsingMode parsingMode)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     detach(lock);
@@ -1929,6 +1927,28 @@ inline static bool isHex(char c)
 static inline char toHex(quint8 c)
 {
     return c > 9 ? c - 10 + 'A' : c + '0';
+}
+
+/*!
+    Constructs a URL by parsing the contents of \a encodedUrl using
+    the given \a parsingMode.
+
+    \a encodedUrl is assumed to be a URL string in percent encoded
+    form, containing only ASCII characters.
+
+    Use isValid() to determine if a valid URL was constructed.
+
+    \sa setUrl()
+*/
+void QUrl::setEncodedUrl(const QByteArray &encodedUrl, ParsingMode parsingMode)
+{
+    if (!d) d = new QUrlPrivate;
+
+    QMutexLocker lock(&d->mutex);
+    detach(lock);
+
+    d->clear();
+    d->setEncodedUrl(encodedUrl, parsingMode);
 }
 
 void QUrlPrivate::setEncodedUrl(const QByteArray &encodedUrl, QUrl::ParsingMode parsing)
@@ -2004,7 +2024,7 @@ void QUrlPrivate::setEncodedUrl(const QByteArray &encodedUrl, QUrl::ParsingMode 
 */
 void QUrl::setScheme(const QString &scheme)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2048,7 +2068,7 @@ QString QUrl::scheme() const
 */
 void QUrl::setAuthority(const QString &authority)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2089,7 +2109,7 @@ QString QUrl::authority() const
 */
 void QUrl::setUserInfo(const QString &userInfo)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2122,7 +2142,7 @@ QString QUrl::userInfo() const
 */
 void QUrl::setUserName(const QString &userName)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2151,6 +2171,53 @@ QString QUrl::userName() const
 }
 
 /*!
+    \since 4.4
+
+    Sets the URL's user name to the percent-encoded \a userName. The \a
+    userName is part of the user info element in the authority of the
+    URL, as described in setUserInfo().
+
+    Note: this function does not verify that \a userName is properly
+    encoded. It is the caller's responsibility to ensure that the any
+    delimiters (such as colons or slashes) are properly encoded.
+
+    \sa setUserName(), encodedUserName(), setUserInfo()
+*/
+void QUrl::setEncodedUserName(const QByteArray &userName)
+{
+    if (!d) d = new QUrlPrivate;
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+    detach(lock);
+    QURL_UNSETFLAG(d->stateFlags, QUrlPrivate::Validated | QUrlPrivate::Normalized);
+
+    d->encodedUserName = userName;
+    d->userName.clear();
+}
+
+/*!
+    \since 4.4
+
+    Returns the user name of the URL if it is defined; otherwise
+    an empty string is returned. The returned value will have its
+    non-ASCII and other control characters percent-encoded, as in
+    toEncoded().
+
+    \sa setEncodedUserName()
+*/
+QByteArray QUrl::encodedUserName() const
+{
+    if (!d) return QByteArray();
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+
+    d->ensureEncodedParts();
+    return d->encodedUserName;
+}
+
+/*!
     Sets the URL's password to \a password. The \a password is part of
     the user info element in the authority of the URL, as described in
     setUserInfo().
@@ -2159,7 +2226,7 @@ QString QUrl::userName() const
 */
 void QUrl::setPassword(const QString &password)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
     detach(lock);
@@ -2187,6 +2254,53 @@ QString QUrl::password() const
 }
 
 /*!
+    \since 4.4
+
+    Sets the URL's password to the percent-encoded \a password. The \a
+    password is part of the user info element in the authority of the
+    URL, as described in setUserInfo().
+
+    Note: this function does not verify that \a password is properly
+    encoded. It is the caller's responsibility to ensure that the any
+    delimiters (such as colons or slashes) are properly encoded.
+
+    \sa setPassword(), encodedPassword(), setUserInfo()
+*/
+void QUrl::setEncodedPassword(const QByteArray &password)
+{
+    if (!d) d = new QUrlPrivate;
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+    detach(lock);
+    QURL_UNSETFLAG(d->stateFlags, QUrlPrivate::Validated | QUrlPrivate::Normalized);
+
+    d->encodedPassword = password;
+    d->password.clear();
+}
+
+/*!
+    \since 4.4
+
+    Returns the password of the URL if it is defined; otherwise an
+    empty string is returned. The returned value will have its
+    non-ASCII and other control characters percent-encoded, as in
+    toEncoded().
+
+    \sa setEncodedPassword(), toEncoded()
+*/
+QByteArray QUrl::encodedPassword() const
+{
+    if (!d) return QByteArray();
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+
+    d->ensureEncodedParts();
+    return d->encodedPassword;
+}
+
+/*!
     Sets the host of the URL to \a host. The host is part of the
     authority.
 
@@ -2194,7 +2308,7 @@ QString QUrl::password() const
 */
 void QUrl::setHost(const QString &host)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2223,6 +2337,41 @@ QString QUrl::host() const
 }
 
 /*!
+    \since 4.4
+
+    Sets the URL's host to the ACE- or percent-encoded \a host. The \a
+    host is part of the user info element in the authority of the
+    URL, as described in setAuthority().
+
+    \sa setHost(), encodedHost(), setAuthority(), fromAce()
+*/
+void QUrl::setEncodedHost(const QByteArray &host)
+{
+    setHost(fromPercentEncodingHelper(host));
+}
+
+/*!
+    \since 4.4
+
+    Returns the host part of the URL if it is defined; otherwise
+    an empty string is returned.
+
+    Note: encodedHost() does not return percent-encoded hostnames. Instead,
+    the ACE-encoded (bare ASCII in Punycode encoding) form will be
+    returned for any non-ASCII hostname.
+
+    This function is equivalent to calling QUrl::toAce() on the return
+    value of host().
+
+    \sa setEncodedHost()
+*/
+QByteArray QUrl::encodedHost() const
+{
+    // should we cache this in d->encodedHost?
+    return QUrl::toAce(host());
+}
+
+/*!
     Sets the port of the URL to \a port. The port is part of the
     authority of the URL, as described in setAuthority().
 
@@ -2231,7 +2380,7 @@ QString QUrl::host() const
 */
 void QUrl::setPort(int port)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2279,7 +2428,7 @@ int QUrl::port(int defaultPort) const
 */
 void QUrl::setPath(const QString &path)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2310,45 +2459,57 @@ QString QUrl::path() const
 }
 
 /*!
-    \since 4.13
+    \since 4.4
 
-    Sets the query string of the URL to \a query. The string is
-    percentage encoded.
+    Sets the URL's path to the percent-encoded \a path.  The path is
+    the part of the URL that comes after the authority but before the
+    query string.
 
-    This function is useful if you need to pass a query string that
-    does not fit into the key-value pattern.
+    \img qurl-ftppath.png
 
-    \sa query()
+    For non-hierarchical schemes, the path will be everything
+    following the scheme declaration, as in the following example:
+
+    \img qurl-mailtopath.png
+
+    Note: this function does not verify that \a path is properly
+    encoded. It is the caller's responsibility to ensure that the any
+    delimiters (such as '?' and '#') are properly encoded.
+
+    \sa setPath(), encodedPath(), setUserInfo()
 */
-void QUrl::setQuery(const QString &query)
+void QUrl::setEncodedPath(const QByteArray &path)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
     detach(lock);
     QURL_UNSETFLAG(d->stateFlags, QUrlPrivate::Validated | QUrlPrivate::Normalized);
 
-    const char alsoEncode[3] = { d->valueDelimiter , d->pairDelimiter, 0 };
-    d->query = toPercentEncodingHelper(query, queryExcludeChars, alsoEncode);
-    d->hasQuery = !query.isEmpty();
+    d->encodedPath = path;
+    d->path.clear();
 }
 
 /*!
-    \since 4.13
+    \since 4.4
 
-    Returns the query of the URL.
+    Returns the path of the URL if it is defined; otherwise an
+    empty string is returned. The returned value will have its
+    non-ASCII and other control characters percent-encoded, as in
+    toEncoded().
 
-    \sa setQuery()
+    \sa setEncodedPath(), toEncoded()
 */
-QString QUrl::query() const
+QByteArray QUrl::encodedPath() const
 {
-    if (!d) return QString();
+    if (!d) return QByteArray();
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
 
-    return fromPercentEncodingHelper(d->query);
+    d->ensureEncodedParts();
+    return d->encodedPath;
 }
 
 /*!
@@ -2356,7 +2517,7 @@ QString QUrl::query() const
 
     Returns true if this URL contains a Query (i.e., if ? was seen on it).
 
-    \sa hasQueryItem(), query()
+    \sa hasQueryItem(), encodedQuery()
 */
 bool QUrl::hasQuery() const
 {
@@ -2392,7 +2553,7 @@ bool QUrl::hasQuery() const
 */
 void QUrl::setQueryDelimiters(char valueDelimiter, char pairDelimiter)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     detach(lock);
@@ -2422,6 +2583,36 @@ char QUrl::queryValueDelimiter() const
 }
 
 /*!
+    Sets the query string of the URL to \a query. The string is
+    inserted as-is, and no further encoding is performed when calling
+    toEncoded().
+
+    This function is useful if you need to pass a query string that
+    does not fit into the key-value pattern, or that uses a different
+    scheme for encoding special characters than what is suggested by
+    QUrl.
+
+    Passing a value of QByteArray() to \a query (a null QByteArray) unsets
+    the query completely. However, passing a value of QByteArray("")
+    will set the query to an empty value, as if the original URL
+    had a lone "?".
+
+    \sa encodedQuery(), hasQuery()
+*/
+void QUrl::setEncodedQuery(const QByteArray &query)
+{
+    if (!d) d = new QUrlPrivate;
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+    detach(lock);
+    QURL_UNSETFLAG(d->stateFlags, QUrlPrivate::Validated | QUrlPrivate::Normalized);
+
+    d->query = query;
+    d->hasQuery = !query.isNull();
+}
+
+/*!
     Sets the query string of the URL to an encoded version of \a
     query. The contents of \a query are converted to a string
     internally, each pair delimited by the character returned by
@@ -2430,13 +2621,13 @@ char QUrl::queryValueDelimiter() const
 
     \note This method does not encode spaces (ASCII 0x20) as plus (+) signs,
     like HTML forms do. If you need that kind of encoding, you must encode
-    the value yourself.
+    the value yourself and use QUrl::setEncodedQueryItems.
 
-    \sa setQueryDelimiters(), queryItems()
+    \sa setQueryDelimiters(), queryItems(), setEncodedQueryItems()
 */
-void QUrl::setQueryItems(const QMap<QString, QString> &query)
+void QUrl::setQueryItems(const QList<QPair<QString, QString> > &query)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2444,19 +2635,48 @@ void QUrl::setQueryItems(const QMap<QString, QString> &query)
 
     const char alsoEncode[3] = { d->valueDelimiter , d->pairDelimiter, 0 };
     QByteArray queryTmp;
-    QMapIterator<QString, QString> queryit(query);
-    bool isfirst = true;
-    while (queryit.hasNext()) {
-        queryit.next();
-        if (isfirst) {
-            queryTmp += d->pairDelimiter;
-            isfirst = false;
-        }
+    for (int i = 0; i < query.size(); i++) {
+        if (i) queryTmp += d->pairDelimiter;
         // query = *( pchar / "/" / "?" )
-        queryTmp += toPercentEncodingHelper(queryit.key(), queryExcludeChars, alsoEncode);
+        queryTmp += toPercentEncodingHelper(query.at(i).first, queryExcludeChars, alsoEncode);
         queryTmp += d->valueDelimiter;
         // query = *( pchar / "/" / "?" )
-        queryTmp += toPercentEncodingHelper(queryit.value(), queryExcludeChars, alsoEncode);
+        queryTmp += toPercentEncodingHelper(query.at(i).second, queryExcludeChars, alsoEncode);
+    }
+
+    d->query = queryTmp;
+    d->hasQuery = !query.isEmpty();
+}
+
+/*!
+    \since 4.4
+
+    Sets the query string of the URL to the encoded version of \a
+    query. The contents of \a query are converted to a string
+    internally, each pair delimited by the character returned by
+    pairDelimiter(), and the key and value are delimited by
+    valueDelimiter().
+
+    Note: this function does not verify that the key-value pairs
+    are properly encoded. It is the caller's responsibility to ensure
+    that the query delimiters are properly encoded, if any.
+
+    \sa setQueryDelimiters(), encodedQueryItems(), setQueryItems()
+*/
+void QUrl::setEncodedQueryItems(const QList<QPair<QByteArray, QByteArray> > &query)
+{
+    if (!d) d = new QUrlPrivate;
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+    detach(lock);
+
+    QByteArray queryTmp;
+    for (int i = 0; i < query.size(); i++) {
+        if (i) queryTmp += d->pairDelimiter;
+        queryTmp += query.at(i).first;
+        queryTmp += d->valueDelimiter;
+        queryTmp += query.at(i).second;
     }
 
     d->query = queryTmp;
@@ -2475,11 +2695,13 @@ void QUrl::setQueryItems(const QMap<QString, QString> &query)
 
     \note This method does not encode spaces (ASCII 0x20) as plus (+) signs,
     like HTML forms do. If you need that kind of encoding, you must encode
-    the value yourself.
+    the value yourself and use QUrl::addEncodedQueryItem.
+
+    \sa addEncodedQueryItem()
 */
 void QUrl::addQueryItem(const QString &key, const QString &value)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2500,22 +2722,52 @@ void QUrl::addQueryItem(const QString &key, const QString &value)
 }
 
 /*!
+    \since 4.4
+
+    Inserts the pair \a key = \a value into the query string of the
+    URL.
+
+    Note: this function does not verify that either \a key or \a value
+    are properly encoded. It is the caller's responsibility to ensure
+    that the query delimiters are properly encoded, if any.
+
+    \sa addQueryItem(), setQueryDelimiters()
+*/
+void QUrl::addEncodedQueryItem(const QByteArray &key, const QByteArray &value)
+{
+    if (!d) d = new QUrlPrivate;
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+    detach(lock);
+
+    if (!d->query.isEmpty())
+        d->query += d->pairDelimiter;
+
+    d->query += key;
+    d->query += d->valueDelimiter;
+    d->query += value;
+
+    d->hasQuery = !d->query.isEmpty();
+}
+
+/*!
     Returns the query string of the URL, as a map of keys and values.
 
     \note This method does not decode spaces plus (+) signs as spaces (ASCII
     0x20), like HTML forms do. If you need that kind of decoding, you must
-    encode and decode the data yourself.
+    use QUrl::encodedQueryItems and decode the data yourself.
 
-    \sa setQueryItems()
+    \sa setQueryItems(), setEncodedQuery()
 */
-QMap<QString, QString> QUrl::queryItems() const
+QList<QPair<QString, QString> > QUrl::queryItems() const
 {
-    if (!d) return QMap<QString, QString>();
+    if (!d) return QList<QPair<QString, QString> >();
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
 
-    QMap<QString, QString> itemMap;
+    QList<QPair<QString, QString> > itemMap;
 
     int pos = 0;
     const char *query = d->query.constData();
@@ -2525,10 +2777,43 @@ QMap<QString, QString> QUrl::queryItems() const
         QByteArray q(query + pos, valuedelim - pos);
         if (valuedelim < end) {
             QByteArray v(query + valuedelim + 1, end - valuedelim - 1);
-            itemMap.insert(fromPercentEncodingMutable(&q), fromPercentEncodingMutable(&v));
+            itemMap += qMakePair(fromPercentEncodingMutable(&q),
+                                 fromPercentEncodingMutable(&v));
         } else {
-            itemMap.insert(fromPercentEncodingMutable(&q), QString());
+            itemMap += qMakePair(fromPercentEncodingMutable(&q), QString());
         }
+        pos = end + 1;
+    }
+
+    return itemMap;
+}
+
+/*!
+    \since 4.4
+
+    Returns the query string of the URL, as a map of encoded keys and values.
+
+    \sa setEncodedQueryItems(), setQueryItems(), setEncodedQuery()
+*/
+QList<QPair<QByteArray, QByteArray> > QUrl::encodedQueryItems() const
+{
+    if (!d) return QList<QPair<QByteArray, QByteArray> >();
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+
+    QList<QPair<QByteArray, QByteArray> > itemMap;
+
+    int pos = 0;
+    const char *query = d->query.constData();
+    while (pos < d->query.size()) {
+        int valuedelim, end;
+        d->queryItem(pos, &valuedelim, &end);
+        if (valuedelim < end)
+            itemMap += qMakePair(QByteArray(query + pos, valuedelim - pos),
+                                 QByteArray(query + valuedelim + 1, end - valuedelim - 1));
+        else
+            itemMap += qMakePair(QByteArray(query + pos, valuedelim - pos), QByteArray());
         pos = end + 1;
     }
 
@@ -2538,8 +2823,28 @@ QMap<QString, QString> QUrl::queryItems() const
 /*!
     Returns true if there is a query string pair whose key is equal
     to \a key from the URL.
+
+    \sa hasEncodedQueryItem()
 */
 bool QUrl::hasQueryItem(const QString &key) const
+{
+    return hasEncodedQueryItem(toPercentEncoding(key, queryExcludeChars));
+}
+
+/*!
+    \since 4.4
+
+    Returns true if there is a query string pair whose key is equal
+    to \a key from the URL.
+
+    Note: if the encoded \a key does not match the encoded version of
+    the query, this function will return false. That is, if the
+    encoded query of this URL is "search=Qt%20Rules", calling this
+    function with \a key = "%73earch" will return false.
+
+    \sa hasQueryItem()
+*/
+bool QUrl::hasEncodedQueryItem(const QByteArray &key) const
 {
     if (!d) return false;
 
@@ -2548,11 +2853,10 @@ bool QUrl::hasQueryItem(const QString &key) const
 
     int pos = 0;
     const char *query = d->query.constData();
-    QByteArray encodedKey = toPercentEncoding(key, queryExcludeChars);
     while (pos < d->query.size()) {
         int valuedelim, end;
         d->queryItem(pos, &valuedelim, &end);
-        if (encodedKey == QByteArray::fromRawData(query + pos, valuedelim - pos))
+        if (key == QByteArray::fromRawData(query + pos, valuedelim - pos))
             return true;
         pos = end + 1;
     }
@@ -2565,32 +2869,48 @@ bool QUrl::hasQueryItem(const QString &key) const
 
     \note This method does not decode spaces plus (+) signs as spaces (ASCII
     0x20), like HTML forms do. If you need that kind of decoding, you must
-    encode and decode the data yourself.
+    use QUrl::encodedQueryItemValue and decode the data yourself.
 
     \sa allQueryItemValues()
 */
 QString QUrl::queryItemValue(const QString &key) const
 {
     if (!d) return QString();
+    QByteArray tmp = encodedQueryItemValue(toPercentEncoding(key, queryExcludeChars));
+    return fromPercentEncodingMutable(&tmp);
+}
+
+/*!
+    \since 4.4
+
+    Returns the first query string value whose key is equal to \a key
+    from the URL.
+
+    Note: if the encoded \a key does not match the encoded version of
+    the query, this function will not work. That is, if the
+    encoded query of this URL is "search=Qt%20Rules", calling this
+    function with \a key = "%73earch" will return an empty string.
+
+    \sa queryItemValue(), allQueryItemValues()
+*/
+QByteArray QUrl::encodedQueryItemValue(const QByteArray &key) const
+{
+    if (!d) return QByteArray();
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
 
     int pos = 0;
     const char *query = d->query.constData();
-    QByteArray encodedKey = toPercentEncoding(key, queryExcludeChars);
     while (pos < d->query.size()) {
         int valuedelim, end;
         d->queryItem(pos, &valuedelim, &end);
-        if (encodedKey == QByteArray::fromRawData(query + pos, valuedelim - pos)) {
-            QByteArray v(query + valuedelim + 1, end - valuedelim - 1);
+        if (key == QByteArray::fromRawData(query + pos, valuedelim - pos))
             return valuedelim < end ?
-                      fromPercentEncodingMutable(&v)
-                      : QString();
-        }
+                QByteArray(query + valuedelim + 1, end - valuedelim - 1) : QByteArray();
         pos = end + 1;
     }
-    return QString();
+    return QByteArray();
 }
 
 /*!
@@ -2599,7 +2919,7 @@ QString QUrl::queryItemValue(const QString &key) const
 
     \note This method does not decode spaces plus (+) signs as spaces (ASCII
     0x20), like HTML forms do. If you need that kind of decoding, you must
-    encode and decode the data yourself.
+    use QUrl::allEncodedQueryItemValues and decode the data yourself.
 
     \sa queryItemValue()
 */
@@ -2610,10 +2930,11 @@ QStringList QUrl::allQueryItemValues(const QString &key) const
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
 
+    QByteArray encodedKey = toPercentEncoding(key, queryExcludeChars);
+    QStringList values;
+
     int pos = 0;
     const char *query = d->query.constData();
-    QStringList values;
-    const QByteArray encodedKey = toPercentEncoding(key, queryExcludeChars);
     while (pos < d->query.size()) {
         int valuedelim, end;
         d->queryItem(pos, &valuedelim, &end);
@@ -2630,12 +2951,67 @@ QStringList QUrl::allQueryItemValues(const QString &key) const
 }
 
 /*!
+    \since 4.4
+
+    Returns the a list of query string values whose key is equal to
+    \a key from the URL.
+
+    Note: if the encoded \a key does not match the encoded version of
+    the query, this function will not work. That is, if the
+    encoded query of this URL is "search=Qt%20Rules", calling this
+    function with \a key = "%73earch" will return an empty list.
+
+    \sa allQueryItemValues(), queryItemValue(), encodedQueryItemValue()
+*/
+QList<QByteArray> QUrl::allEncodedQueryItemValues(const QByteArray &key) const
+{
+    if (!d) return QList<QByteArray>();
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+
+    QList<QByteArray> values;
+
+    int pos = 0;
+    const char *query = d->query.constData();
+    while (pos < d->query.size()) {
+        int valuedelim, end;
+        d->queryItem(pos, &valuedelim, &end);
+        if (key == QByteArray::fromRawData(query + pos, valuedelim - pos))
+            values += valuedelim < end ?
+                      QByteArray(query + valuedelim + 1, end - valuedelim - 1)
+                      : QByteArray();
+        pos = end + 1;
+    }
+
+    return values;
+}
+
+/*!
     Removes the first query string pair whose key is equal to \a key
     from the URL.
 
     \sa removeAllQueryItems()
 */
 void QUrl::removeQueryItem(const QString &key)
+{
+    removeEncodedQueryItem(toPercentEncoding(key, queryExcludeChars));
+}
+
+/*!
+    \since 4.4
+
+    Removes the first query string pair whose key is equal to \a key
+    from the URL.
+
+    Note: if the encoded \a key does not match the encoded version of
+    the query, this function will not work. That is, if the
+    encoded query of this URL is "search=Qt%20Rules", calling this
+    function with \a key = "%73earch" will do nothing.
+
+    \sa removeQueryItem(), removeAllQueryItems()
+*/
+void QUrl::removeEncodedQueryItem(const QByteArray &key)
 {
     if (!d) return;
 
@@ -2645,11 +3021,10 @@ void QUrl::removeQueryItem(const QString &key)
 
     int pos = 0;
     const char *query = d->query.constData();
-    const QByteArray encodedKey = toPercentEncoding(key, queryExcludeChars);
     while (pos < d->query.size()) {
         int valuedelim, end;
         d->queryItem(pos, &valuedelim, &end);
-        if (encodedKey == QByteArray::fromRawData(query + pos, valuedelim - pos)) {
+        if (key == QByteArray::fromRawData(query + pos, valuedelim - pos)) {
             if (end < d->query.size())
                 ++end; // remove additional '%'
             d->query.remove(pos, end - pos);
@@ -2667,6 +3042,24 @@ void QUrl::removeQueryItem(const QString &key)
 */
 void QUrl::removeAllQueryItems(const QString &key)
 {
+    removeAllEncodedQueryItems(toPercentEncoding(key, queryExcludeChars));
+}
+
+/*!
+    \since 4.4
+
+    Removes all the query string pairs whose key is equal to \a key
+    from the URL.
+
+    Note: if the encoded \a key does not match the encoded version of
+    the query, this function will not work. That is, if the
+    encoded query of this URL is "search=Qt%20Rules", calling this
+    function with \a key = "%73earch" will do nothing.
+
+   \sa removeQueryItem()
+*/
+void QUrl::removeAllEncodedQueryItems(const QByteArray &key)
+{
     if (!d) return;
 
     QMutexLocker lock(&d->mutex);
@@ -2675,11 +3068,10 @@ void QUrl::removeAllQueryItems(const QString &key)
 
     int pos = 0;
     const char *query = d->query.constData();
-    const QByteArray encodedKey = toPercentEncoding(key, queryExcludeChars);
     while (pos < d->query.size()) {
         int valuedelim, end;
         d->queryItem(pos, &valuedelim, &end);
-        if (encodedKey == QByteArray::fromRawData(query + pos, valuedelim - pos)) {
+        if (key == QByteArray::fromRawData(query + pos, valuedelim - pos)) {
             if (end < d->query.size())
                 ++end; // remove additional '%'
             d->query.remove(pos, end - pos);
@@ -2688,6 +3080,19 @@ void QUrl::removeAllQueryItems(const QString &key)
             pos = end + 1;
         }
     }
+}
+
+/*!
+    Returns the query string of the URL in percent encoded form.
+*/
+QByteArray QUrl::encodedQuery() const
+{
+    if (!d) return QByteArray();
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+
+    return d->query;
 }
 
 /*!
@@ -2709,7 +3114,7 @@ void QUrl::removeAllQueryItems(const QString &key)
 */
 void QUrl::setFragment(const QString &fragment)
 {
-    if (!d) d = new QUrlPrivate();
+    if (!d) d = new QUrlPrivate;
 
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
@@ -2743,6 +3148,60 @@ QString QUrlPrivate::fragmentImpl() const
         that->fragment = fromPercentEncodingHelper(encodedFragment);
     }
     return fragment;
+}
+
+/*!
+    \since 4.4
+
+    Sets the URL's fragment to the percent-encoded \a fragment. The fragment is the
+    last part of the URL, represented by a '#' followed by a string of
+    characters. It is typically used in HTTP for referring to a
+    certain link or point on a page:
+
+    \img qurl-fragment.png
+
+    The fragment is sometimes also referred to as the URL "reference".
+
+    Passing an argument of QByteArray() (a null QByteArray) will unset
+    the fragment.  Passing an argument of QByteArray("") (an empty but
+    not null QByteArray) will set the fragment to an empty string (as
+    if the original URL had a lone "#").
+
+    \sa setFragment(), encodedFragment()
+*/
+void QUrl::setEncodedFragment(const QByteArray &fragment)
+{
+    if (!d) d = new QUrlPrivate;
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+    detach(lock);
+    QURL_UNSETFLAG(d->stateFlags, QUrlPrivate::Validated | QUrlPrivate::Normalized);
+
+    d->encodedFragment = fragment;
+    d->hasFragment = !fragment.isNull();
+    d->fragment.clear();
+}
+
+/*!
+    \since 4.4
+
+    Returns the fragment of the URL if it is defined; otherwise an
+    empty string is returned. The returned value will have its
+    non-ASCII and other control characters percent-encoded, as in
+    toEncoded().
+
+    \sa setEncodedFragment(), toEncoded()
+*/
+QByteArray QUrl::encodedFragment() const
+{
+    if (!d) return QByteArray();
+
+    QMutexLocker lock(&d->mutex);
+    if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
+
+    d->ensureEncodedParts();
+    return d->encodedFragment;
 }
 
 /*!
@@ -2819,7 +3278,7 @@ QUrl QUrl::resolved(const QUrl &relative) const
             t = relative;
             qAtomicDetach(t.d);
         } else {
-            t.d = new QUrlPrivate();
+            t.d = new QUrlPrivate;
             if (relative.d->encodedPath.isEmpty()) {
                 t.d->encodedPath = d->encodedPath;
                 t.d->query = relative.d->hasQuery ? relative.d->query : d->query;
@@ -2885,7 +3344,7 @@ QString QUrl::toString(FormattingOptions options) const
     if (!(options & QUrl::RemoveScheme) && !d->scheme.isEmpty())
         url += d->scheme + QLatin1Char(':');
     if ((options & QUrl::RemoveAuthority) != QUrl::RemoveAuthority) {
-        bool doFileScheme = (d->scheme == QLatin1String("file"));
+        bool doFileScheme = d->scheme == QLatin1String("file") && ourPath.startsWith(QLatin1Char('/'));
         QString tmp = d->authority(options);
         if (!tmp.isNull() || doFileScheme) {
             if (doFileScheme && !ourPath.startsWith(QLatin1Char('/')))
@@ -2900,13 +3359,9 @@ QString QUrl::toString(FormattingOptions options) const
             && !d->authority(options).isEmpty() && !ourPath.isEmpty() && ourPath.at(0) != QLatin1Char('/'))
             url += QLatin1Char('/');
         url += ourPath;
-        // check if we need to remove trailing slashes or add one
-        if ((options & QUrl::StripTrailingSlash)) {
-            while (url.endsWith(QLatin1Char('/')))
-                url.chop(1);
-        } else if ((options & QUrl::AddTrailingSlash) && !url.endsWith(QLatin1Char('/'))) {
-            url += QLatin1Char('/');
-        }
+        // check if we need to remove trailing slashes
+        while ((options & StripTrailingSlash) && url.endsWith(QLatin1Char('/')))
+            url.chop(1);
     }
 
     if (!(options & QUrl::RemoveQuery) && d->hasQuery) {
@@ -2949,13 +3404,7 @@ QByteArray QUrl::toEncoded(FormattingOptions options) const
 QUrl QUrl::fromEncoded(const QByteArray &input, ParsingMode parsingMode)
 {
     QUrl tmp;
-    if (!tmp.d) tmp.d = new QUrlPrivate();
-
-    QMutexLocker lock(&tmp.d->mutex);
-    tmp.detach(lock);
-
-    tmp.d->clear();
-    tmp.d->setEncodedUrl(input, parsingMode);
+    tmp.setEncodedUrl(input, parsingMode);
     return tmp;
 }
 
@@ -2983,6 +3432,33 @@ QString QUrl::fromPercentEncoding(const QByteArray &input)
 QByteArray QUrl::toPercentEncoding(const QString &input, const QByteArray &exclude, const QByteArray &include)
 {
     return toPercentEncodingHelper(input, exclude.constData(), include.constData());
+}
+
+/*!
+    \obsolete
+    Returns a \a uc in Punycode encoding.
+
+    Punycode is a Unicode encoding used for internationalized domain
+    names, as defined in RFC3492. If you want to convert a domain name from
+    Unicode to its ASCII-compatible representation, use toAce().
+*/
+QByteArray QUrl::toPunycode(const QString &uc)
+{
+    return QUrl::toAce(uc);
+}
+
+/*!
+    \obsolete
+    Returns the Punycode decoded representation of \a pc.
+
+    Punycode is a Unicode encoding used for internationalized domain
+    names, as defined in RFC3492. If you want to convert a domain from
+    its ASCII-compatible encoding to the Unicode representation, use
+    fromAce().
+*/
+QString QUrl::fromPunycode(const QByteArray &pc)
+{
+    return QUrl::fromAce(pc);
 }
 
 /*!
@@ -3042,7 +3518,7 @@ QString QUrl::fromAce(const QByteArray &domain)
     (like \c "example.com") to be written using international
     characters.
 
-    This function return an empty QByteArray if \a domain is not a valid
+    This function return an empty QByteArra if \a domain is not a valid
     hostname. Note, in particular, that IPv6 literals are not valid domain
     names.
 */
@@ -3141,7 +3617,7 @@ QUrl &QUrl::operator =(const QString &url)
         clear();
     } else {
         QUrl tmp(url);
-        if (!d) d = new QUrlPrivate();
+        if (!d) d = new QUrlPrivate;
         qAtomicAssign(d, tmp.d);
     }
     return *this;
@@ -3196,15 +3672,8 @@ QUrl QUrl::fromLocalFile(const QString &localFile)
 {
     QUrl url;
     url.setScheme(QLatin1String("file"));
-    // magic for authority path-abempty
-    if (localFile.startsWith(QLatin1String("//"))) {
-        int indexOfPath = localFile.indexOf(QLatin1Char('/'), 2);
-        url.setHost(localFile.mid(2, indexOfPath - 2));
-        if (indexOfPath > 2)
-            url.setPath(localFile.right(localFile.length() - indexOfPath));
-    } else {
-        url.setPath(localFile);
-    }
+    url.setPath(localFile);
+
     return url;
 }
 
@@ -3212,10 +3681,6 @@ QUrl QUrl::fromLocalFile(const QString &localFile)
     Returns the path of this URL formatted as a local file path. The path
     returned will use forward slashes, even if it was originally created
     from one with backslashes.
-
-    If this URL contains a non-empty hostname, it will be encoded in the
-    returned value in the form found on SMB networks (for example,
-    "//servername/path/to/file.txt").
 
     If this is a relative URL, in Qt 4.x this function returns the path to
     maintain backward compatability. This will change from 5.0 onwards. Then
@@ -3232,20 +3697,7 @@ QString QUrl::toLocalFile() const
     if (!isLocalFile() && !scheme().isEmpty())
         return QString();
 
-    QString tmp;
-    QString ourPath = path();
-
-    QMutexLocker lock(&d->mutex); // for d->host
-
-    // magic for authority path-abempty
-    if (!d->host.isEmpty()) {
-        tmp = QLatin1String("//") + d->host + (ourPath.length() > 0 && ourPath.at(0) != QLatin1Char('/')
-                                               ? QLatin1Char('/') + ourPath :  ourPath);
-    } else {
-        tmp = ourPath;
-    }
-
-    return tmp;
+    return path();
 }
 
 /*!
@@ -3266,7 +3718,9 @@ bool QUrl::isLocalFile() const
     QMutexLocker lock(&d->mutex);
     if (!QURL_HASFLAG(d->stateFlags, QUrlPrivate::Parsed)) d->parse();
 
-    return (d->scheme.compare(QLatin1String("file"), Qt::CaseInsensitive) == 0);
+    if (d->scheme.compare(QLatin1String("file"), Qt::CaseInsensitive) != 0)
+        return false;   // not file
+    return true;
 }
 
 /*!
@@ -3338,6 +3792,12 @@ bool QUrl::isParentOf(const QUrl &childUrl) const
     \fn bool QUrl::hasPath() const
 
     Use !path().isEmpty() instead.
+*/
+
+/*!
+    \fn void QUrl::setQuery(const QString &txt)
+
+    Use setEncodedQuery() instead.
 */
 
 /*!
@@ -3418,6 +3878,12 @@ bool QUrl::isParentOf(const QUrl &childUrl) const
     \fn QString QUrl::user() const
 
     Use userName() instead.
+*/
+
+/*!
+    \fn QString QUrl::query() const
+
+    Use encodedQuery() instead.
 */
 
 /*!

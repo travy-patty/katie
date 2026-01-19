@@ -68,9 +68,8 @@ inline int qstrnicmp(const char *str1, const char *str2, uint len)
         : (str1 ? 1 : (str2 ? -1 : 0));
 }
 
-Q_CORE_EXPORT quint32 qChecksum(const char *s, uint len);
-
-Q_CORE_EXPORT QByteArray qRandomUuid();
+// qChecksum: Internet checksum
+Q_CORE_EXPORT quint16 qChecksum(const char *s, uint len);
 
 class QByteRef;
 class QString;
@@ -98,8 +97,11 @@ public:
 
     QByteArray &operator=(const QByteArray &);
     QByteArray &operator=(const char *str);
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QByteArray &operator=(QByteArray &&other)
     { qSwap(d, other.d); return *this; }
+#endif
+
     inline void swap(QByteArray &other) { qSwap(d, other.d); }
 
     inline int size() const;

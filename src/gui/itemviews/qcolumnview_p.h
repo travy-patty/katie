@@ -35,14 +35,15 @@
 
 #include "qcolumnview.h"
 
-#ifndef QT_NO_COLUMNVIEW
+#ifndef QT_NO_QCOLUMNVIEW
 
 #include "qabstractitemview_p.h"
-#include "qabstractitemmodel.h"
-#include "qpropertyanimation.h"
-#include "qabstractitemdelegate.h"
-#include "qabstractitemview.h"
-#include "qitemdelegate.h"
+
+#include <QtCore/qabstractitemmodel.h>
+#include <QtGui/qpropertyanimation.h>
+#include <QtGui/qabstractitemdelegate.h>
+#include <QtGui/qabstractitemview.h>
+#include <QtGui/qitemdelegate.h>
 #include "qlistview.h"
 #include "qevent.h"
 #include "qscrollbar.h"
@@ -160,10 +161,9 @@ public:
                const QStyleOptionViewItem &option,
                const QModelIndex &index) const;
 };
+#endif // QT_NO_QCOLUMNVIEW
+
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_COLUMNVIEW
-
-#endif // QCOLUMNVIEW_P_H
+#endif //QCOLUMNVIEW_P_H
 

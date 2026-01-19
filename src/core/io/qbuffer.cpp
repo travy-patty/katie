@@ -31,16 +31,15 @@ class QBufferPrivate : public QIODevicePrivate
 
 public:
     QBufferPrivate()
-    : buf(0),
-    deleteBuf(true)
+    : buf(0)
 #ifndef QT_NO_QOBJECT
-    , writtenSinceLastEmit(0), signalConnectionCount(0), signalsEmitted(false)
+        , writtenSinceLastEmit(0), signalConnectionCount(0), signalsEmitted(false)
 #endif
     { }
     ~QBufferPrivate() { }
 
     QByteArray *buf;
-    bool deleteBuf;
+    QByteArray defaultBuf;
 
     qint64 peek(char *data, qint64 maxSize) final;
     QByteArray peek(qint64 maxSize) final;
@@ -123,9 +122,12 @@ QByteArray QBufferPrivate::peek(qint64 maxSize)
 
     QBuffer emits readyRead() when new data has arrived in the
     buffer. By connecting to this signal, you can use QBuffer to
-    store temporary data before processing it. QBuffer also
-    emits bytesWritten() every time new data has been written to
-    the buffer.
+    store temporary data before processing it. For example, you can
+    pass the buffer to QFtp when downloading a file from an FTP
+    server. Whenever a new payload of data has been downloaded,
+    readyRead() is emitted, and you can process the data that just
+    arrived. QBuffer also emits bytesWritten() every time new data
+    has been written to the buffer.
 
     \sa QFile, QDataStream, QTextStream, QByteArray
 */
@@ -135,19 +137,14 @@ QBuffer::QBuffer()
     : QIODevice(*new QBufferPrivate)
 {
     Q_D(QBuffer);
-    d->buf = new QByteArray();
+    d->buf = &d->defaultBuf;
 }
-
 QBuffer::QBuffer(QByteArray *buf)
     : QIODevice(*new QBufferPrivate)
 {
     Q_D(QBuffer);
-    if (buf) {
-        d->buf = buf;
-        d->deleteBuf = false;
-    } else {
-        d->buf = new QByteArray();
-    }
+    d->buf = buf ? buf : &d->defaultBuf;
+    d->defaultBuf.clear();
 }
 #else
 /*!
@@ -161,7 +158,7 @@ QBuffer::QBuffer(QObject *parent)
     : QIODevice(*new QBufferPrivate, parent)
 {
     Q_D(QBuffer);
-    d->buf = new QByteArray();
+    d->buf = &d->defaultBuf;
 }
 
 /*!
@@ -185,12 +182,8 @@ QBuffer::QBuffer(QByteArray *byteArray, QObject *parent)
     : QIODevice(*new QBufferPrivate, parent)
 {
     Q_D(QBuffer);
-    if (byteArray) {
-        d->buf = byteArray;
-        d->deleteBuf = false;
-    } else {
-        d->buf = new QByteArray();
-    }
+    d->buf = byteArray ? byteArray : &d->defaultBuf;
+    d->defaultBuf.clear();
 }
 #endif
 
@@ -200,10 +193,6 @@ QBuffer::QBuffer(QByteArray *byteArray, QObject *parent)
 
 QBuffer::~QBuffer()
 {
-    Q_D(QBuffer);
-    if (d->deleteBuf) {
-        delete d->buf;
-    }
 }
 
 /*!
@@ -235,17 +224,12 @@ void QBuffer::setBuffer(QByteArray *byteArray)
         return;
     }
     Q_D(QBuffer);
-    if (d->deleteBuf) {
-        delete d->buf;
-        d->buf = nullptr;
-    }
     if (byteArray) {
         d->buf = byteArray;
-        d->deleteBuf = false;
     } else {
-        d->buf = new QByteArray();
-        d->deleteBuf = true;
+        d->buf = &d->defaultBuf;
     }
+    d->defaultBuf.clear();
 }
 
 /*!

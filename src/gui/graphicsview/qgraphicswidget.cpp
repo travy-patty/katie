@@ -47,9 +47,6 @@
 
 #include "qdebug.h"
 
-        
-static const int qSubWindowFrameWidth = 4;
-
 QT_BEGIN_NAMESPACE
 
 /*!
@@ -573,7 +570,8 @@ void QGraphicsWidget::unsetWindowFrameMargins()
          (d->windowFlags & Qt::WindowType_Mask) != Qt::ToolTip && !(d->windowFlags & Qt::FramelessWindowHint)) {
         QStyleOptionTitleBar bar;
         d->initStyleOptionTitleBar(&bar);
-        qreal margin = qSubWindowFrameWidth;
+        QStyle *style = this->style();
+        qreal margin = style->pixelMetric(QStyle::PM_MdiSubWindowFrameWidth);
         qreal titleBarHeight  = d->titleBarHeight(bar);
         setWindowFrameMargins(margin, titleBarHeight, margin, margin);
     } else {
@@ -2230,7 +2228,7 @@ void QGraphicsWidget::paintWindowFrame(QPainter *painter, const QStyleOptionGrap
     QStyleHintReturnMask mask;
     bool setMask = style()->styleHint(QStyle::SH_WindowFrame_Mask, &bar, widget, &mask) && !mask.region.isEmpty();
     bool hasBorder = !style()->styleHint(QStyle::SH_TitleBar_NoBorder, &bar, widget);
-    int frameWidth = qSubWindowFrameWidth;
+    int frameWidth = style()->pixelMetric(QStyle::PM_MDIFrameWidth, &bar, widget);
     if (setMask) {
         painter->save();
         painter->setClipRegion(mask.region, Qt::IntersectClip);
@@ -2282,7 +2280,7 @@ void QGraphicsWidget::paintWindowFrame(QPainter *painter, const QStyleOptionGrap
 
     frameOptions.palette.setCurrentColorGroup(isActive ? QPalette::Active : QPalette::Normal);
     frameOptions.rect = windowFrameRect;
-    frameOptions.lineWidth = qSubWindowFrameWidth;
+    frameOptions.lineWidth = style()->pixelMetric(QStyle::PM_MdiSubWindowFrameWidth, 0, widget);
     frameOptions.midLineWidth = 1;
     style()->drawPrimitive(QStyle::PE_FrameWindow, &frameOptions, painter, widget);
 }

@@ -34,7 +34,7 @@
 #include "qstringlist.h"
 #include "qmetaobject.h"
 #include "qbitarray.h"
-#include "qmutex.h"
+#include "qreadwritelock.h"
 #include "qdir.h"
 #include "qmetatype.h"
 #include "qobjectdefs.h"
@@ -87,11 +87,15 @@ struct QDeclarativeMetaTypeData
     QList<QDeclarativePrivate::AutoParentFunction> parentFunctions;
 };
 Q_GLOBAL_STATIC(QDeclarativeMetaTypeData, metaTypeData)
-Q_GLOBAL_STATIC(QMutex, metaTypeDataLock)
+Q_GLOBAL_STATIC(QReadWriteLock, metaTypeDataLock)
 
-typedef QMap<QByteArray, QDeclarativeDirComponents*> QDeclarativeRegisteredComponentMap;
-Q_GLOBAL_STATIC(QDeclarativeRegisteredComponentMap, registeredComponentData)
-Q_GLOBAL_STATIC(QMutex, registeredComponentDataLock)
+struct QDeclarativeRegisteredComponentData
+{
+    QMap<QByteArray, QDeclarativeDirComponents*> registeredComponents;
+};
+
+Q_GLOBAL_STATIC(QDeclarativeRegisteredComponentData, registeredComponentData)
+Q_GLOBAL_STATIC(QReadWriteLock, registeredComponentDataLock)
 
 QDeclarativeMetaTypeData::~QDeclarativeMetaTypeData()
 {
@@ -325,7 +329,7 @@ void QDeclarativeTypePrivate::init() const
 {
     if (m_isSetup) return;
 
-    QMutexLocker lock(metaTypeDataLock());
+    QWriteLocker lock(metaTypeDataLock());
     if (m_isSetup)
         return;
 
@@ -385,14 +389,15 @@ void QDeclarativeTypePrivate::init() const
     }
 
     m_isSetup = true;
+    lock.unlock();
 }
 
 QByteArray QDeclarativeType::typeName() const
 {
-    if (d->m_baseMetaObject) {
+    if (d->m_baseMetaObject)
         return d->m_baseMetaObject->className();
-    }
-    return QByteArray();
+    else
+        return QByteArray();
 }
 
 QByteArray QDeclarativeType::qmlTypeName() const
@@ -549,7 +554,7 @@ int QDeclarativeType::index() const
 
 int registerAutoParentFunction(QDeclarativePrivate::RegisterAutoParent &autoparent)
 {
-    QMutexLocker lock(metaTypeDataLock());
+    QWriteLocker lock(metaTypeDataLock());
     QDeclarativeMetaTypeData *data = metaTypeData();
 
     data->parentFunctions.append(autoparent.function);
@@ -559,11 +564,10 @@ int registerAutoParentFunction(QDeclarativePrivate::RegisterAutoParent &autopare
 
 int registerInterface(const QDeclarativePrivate::RegisterInterface &interface)
 {
-    if (Q_UNLIKELY(interface.version > 0)) {
+    if (interface.version > 0) 
         qFatal("qmlRegisterType(): Cannot mix incompatible QML versions.");
-    }
 
-    QMutexLocker lock(metaTypeDataLock());
+    QWriteLocker lock(metaTypeDataLock());
     QDeclarativeMetaTypeData *data = metaTypeData();
 
     int index = data->types.count();
@@ -591,14 +595,14 @@ int registerType(const QDeclarativePrivate::RegisterType &type)
 {
     if (type.elementName) {
         for (int ii = 0; type.elementName[ii]; ++ii) {
-            if (Q_UNLIKELY(!isalnum(type.elementName[ii]))) {
+            if (!isalnum(type.elementName[ii])) {
                 qWarning("qmlRegisterType(): Invalid QML element name \"%s\"", type.elementName);
                 return -1;
             }
         }
     }
 
-    QMutexLocker lock(metaTypeDataLock());
+    QWriteLocker lock(metaTypeDataLock());
     QDeclarativeMetaTypeData *data = metaTypeData();
     int index = data->types.count();
 
@@ -622,8 +626,8 @@ int registerType(const QDeclarativePrivate::RegisterType &type)
 
     if (type.uri) {
         QByteArray mod(type.uri);
-        const QDeclarativeMetaTypeData::ModuleInfoHash::const_iterator it = data->modules.constFind(mod);
-        if (it == data->modules.constEnd()) {
+        QDeclarativeMetaTypeData::ModuleInfoHash::Iterator it = data->modules.find(mod);
+        if (it == data->modules.end()) {
             // New module
             data->modules.insert(mod, QDeclarativeMetaTypeData::ModuleInfo(type.versionMajor,type.versionMinor));
         } else if ((*it).vmajor_max < type.versionMajor || ((*it).vmajor_max == type.versionMajor && (*it).vminor_max < type.versionMinor)) {
@@ -640,9 +644,9 @@ int registerType(const QDeclarativePrivate::RegisterType &type)
 
 int registerComponent(const QDeclarativePrivate::RegisterComponent& data)
 {
-    if (Q_LIKELY(data.typeName)) {
+    if (data.typeName) {
         for (int ii = 0; data.typeName[ii]; ++ii) {
-            if (Q_UNLIKELY(!isalnum(data.typeName[ii]))) {
+            if (!isalnum(data.typeName[ii])) {
                 qWarning("qmlRegisterType(): Invalid QML type name \"%s\"", data.typeName);
                 return 0;
             }
@@ -652,14 +656,14 @@ int registerComponent(const QDeclarativePrivate::RegisterComponent& data)
         return 0;
     }
 
-    QMutexLocker lock(registeredComponentDataLock());
+    QWriteLocker lock(registeredComponentDataLock());
     QString path;
     // Relative paths are relative to application working directory
     if (data.url.isRelative() || data.url.scheme() == QLatin1String("file")) // Workaround QTBUG-11929
         path = QUrl::fromLocalFile(QDir::currentPath()+QLatin1String("/")).resolved(data.url).toString();
     else
         path = data.url.toString();
-    QDeclarativeRegisteredComponentMap *datamap = registeredComponentData();
+    QDeclarativeRegisteredComponentData *d = registeredComponentData();
     QDeclarativeDirParser::Component comp(
         QString::fromUtf8(data.typeName),
         path,
@@ -667,9 +671,9 @@ int registerComponent(const QDeclarativePrivate::RegisterComponent& data)
         data.minorVersion
     );
 
-    QDeclarativeDirComponents* comps = datamap->value(QByteArray(data.uri), nullptr);
+    QDeclarativeDirComponents* comps = d->registeredComponents.value(QByteArray(data.uri), 0);
     if (!comps)
-        datamap->insert(QByteArray(data.uri), comps = new QDeclarativeDirComponents);
+        d->registeredComponents.insert(QByteArray(data.uri), comps = new QDeclarativeDirComponents);
 
     // Types added later should take precedence, like registerType
     comps->prepend(comp);
@@ -705,10 +709,19 @@ int QDeclarativePrivate::qmlregister(RegistrationType type, void *data)
 */
 bool QDeclarativeMetaType::isModule(const QByteArray &module, int versionMajor, int versionMinor)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
-    const QDeclarativeMetaTypeData::ModuleInfoHash::const_iterator it = data->modules.constFind(module);
-    return it != data->modules.constEnd()
+    // "import Qt 4.7" should have died off
+    if (strcmp(module.constData(), "Qt") == 0 && versionMajor == 4 && versionMinor == 7) {
+        static bool qt47Registered = false;
+        if (!qt47Registered) {
+            qWarning() << Q_FUNC_INFO << "Qt 4.7 import detected; please note that Qt 4.7 is directly reusable as QtQuick 1.x with no code changes.";
+            qt47Registered = true;
+        }
+    }
+
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+    QDeclarativeMetaTypeData::ModuleInfoHash::Iterator it = data->modules.find(module);
+    return it != data->modules.end()
         && ((versionMajor<0 && versionMinor<0) ||
                 (((*it).vmajor_max > versionMajor ||
                     ((*it).vmajor_max == versionMajor && (*it).vminor_max >= versionMinor))
@@ -718,8 +731,8 @@ bool QDeclarativeMetaType::isModule(const QByteArray &module, int versionMajor, 
 
 QList<QDeclarativePrivate::AutoParentFunction> QDeclarativeMetaType::parentFunctions()
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
     return data->parentFunctions;
 }
 
@@ -740,8 +753,8 @@ bool QDeclarativeMetaType::isQObject(int userType)
     if (userType == QMetaType::QObjectStar)
         return true;
 
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
     return userType >= 0 && userType < data->objects.size() && data->objects.testBit(userType);
 }
 
@@ -750,32 +763,33 @@ bool QDeclarativeMetaType::isQObject(int userType)
  */
 int QDeclarativeMetaType::listType(int id)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
-    const QDeclarativeType *type = data->idToType.value(id);
-    if (type && type->qListTypeId() == id) {
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+    QDeclarativeType *type = data->idToType.value(id);
+    if (type && type->qListTypeId() == id)
         return type->typeId();
-    }
-    return 0;
+    else
+        return 0;
 }
 
 int QDeclarativeMetaType::attachedPropertiesFuncId(const QMetaObject *mo)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
-    const QDeclarativeType *type = data->metaObjectToType.value(mo);
-    if (type && type->attachedPropertiesFunction()) {
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+
+    QDeclarativeType *type = data->metaObjectToType.value(mo);
+    if (type && type->attachedPropertiesFunction())
         return type->attachedPropertiesId();
-    }
-    return -1;
+    else
+        return -1;
 }
 
 QDeclarativeAttachedPropertiesFunc QDeclarativeMetaType::attachedPropertiesFuncById(int id)
 {
     if (id < 0)
         return 0;
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
     return data->types.at(id)->attachedPropertiesFunction();
 }
 
@@ -838,38 +852,39 @@ QDeclarativeMetaType::TypeCategory QDeclarativeMetaType::typeCategory(int userTy
     if (userType == QMetaType::QObjectStar)
         return Object;
 
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
-    if (userType < data->objects.size() && data->objects.testBit(userType)) {
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+    if (userType < data->objects.size() && data->objects.testBit(userType))
         return Object;
-    } else if (userType < data->lists.size() && data->lists.testBit(userType)) {
+    else if (userType < data->lists.size() && data->lists.testBit(userType))
         return List;
-    }
-    return Unknown;
+    else
+        return Unknown;
 }
 
 bool QDeclarativeMetaType::isInterface(int userType)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
     return userType >= 0 && userType < data->interfaces.size() && data->interfaces.testBit(userType);
 }
 
 const char *QDeclarativeMetaType::interfaceIId(int userType)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
-    const QDeclarativeType *type = data->idToType.value(userType);
-    if (type && type->isInterface() && type->typeId() == userType) {
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+    QDeclarativeType *type = data->idToType.value(userType);
+    lock.unlock();
+    if (type && type->isInterface() && type->typeId() == userType)
         return type->interfaceIId();
-    }
-    return 0;
+    else
+        return 0;
 }
 
 bool QDeclarativeMetaType::isList(int userType)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
     return userType >= 0 && userType < data->lists.size() && data->lists.testBit(userType);
 }
 
@@ -879,14 +894,14 @@ bool QDeclarativeMetaType::isList(int userType)
 */
 QDeclarativeType *QDeclarativeMetaType::qmlType(const QByteArray &name, int version_major, int version_minor)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
-    const QList<QDeclarativeType*> types = data->nameToType.values(name);
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+
+    QList<QDeclarativeType*> types = data->nameToType.values(name);
     foreach (QDeclarativeType *t, types) {
         // XXX version_major<0 just a kludge for QDeclarativePropertyPrivate::initProperty
-        if (version_major<0 || t->availableInVersion(version_major,version_minor)) {
+        if (version_major<0 || t->availableInVersion(version_major,version_minor))
             return t;
-        }
     }
     return 0;
 }
@@ -897,8 +912,9 @@ QDeclarativeType *QDeclarativeMetaType::qmlType(const QByteArray &name, int vers
 */
 QDeclarativeType *QDeclarativeMetaType::qmlType(const QMetaObject *metaObject)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+
     return data->metaObjectToType.value(metaObject);
 }
 
@@ -909,10 +925,11 @@ QDeclarativeType *QDeclarativeMetaType::qmlType(const QMetaObject *metaObject)
 */
 QDeclarativeType *QDeclarativeMetaType::qmlType(const QMetaObject *metaObject, const QByteArray &module, int version_major, int version_minor)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
-    QDeclarativeMetaTypeData::MetaObjects::const_iterator it = data->metaObjectToType.constFind(metaObject);
-    while (it != data->metaObjectToType.constEnd() && it.key() == metaObject) {
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+
+    QDeclarativeMetaTypeData::MetaObjects::const_iterator it = data->metaObjectToType.find(metaObject);
+    while (it != data->metaObjectToType.end() && it.key() == metaObject) {
         QDeclarativeType *t = *it;
         if (version_major < 0 || t->availableInVersion(module, version_major,version_minor))
             return t;
@@ -928,13 +945,14 @@ QDeclarativeType *QDeclarativeMetaType::qmlType(const QMetaObject *metaObject, c
 */
 QDeclarativeType *QDeclarativeMetaType::qmlType(int userType)
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+
     QDeclarativeType *type = data->idToType.value(userType);
-    if (type && type->typeId() == userType) {
+    if (type && type->typeId() == userType)
         return type;
-    }
-    return 0;
+    else
+        return 0;
 }
 
 /*!
@@ -943,18 +961,19 @@ QDeclarativeType *QDeclarativeMetaType::qmlType(int userType)
 */
 QDeclarativeDirComponents QDeclarativeMetaType::qmlComponents(const QByteArray &module, int version_major, int version_minor)
 {
-    QMutexLocker lock(registeredComponentDataLock());
-    const QDeclarativeDirComponents* comps = registeredComponentData()->value(module, nullptr);
-    if (!comps) {
+    QReadLocker lock(registeredComponentDataLock());
+    QDeclarativeRegisteredComponentData *data = registeredComponentData();
+
+    QDeclarativeDirComponents* comps = data->registeredComponents.value(module, 0);
+    if (!comps)
         return QDeclarativeDirComponents();
-    }
     QDeclarativeDirComponents ret = *comps;
     for (int i = ret.count() - 1; i >= 0; i--) {
         QDeclarativeDirParser::Component &c = ret[i];
-        if (version_major >= 0 && (c.majorVersion != version_major || c.minorVersion > version_minor)) {
+        if (version_major >= 0 && (c.majorVersion != version_major || c.minorVersion > version_minor))
             ret.removeAt(i);
-        }
     }
+
     return ret;
 }
 
@@ -964,8 +983,9 @@ QDeclarativeDirComponents QDeclarativeMetaType::qmlComponents(const QByteArray &
 */
 QList<QByteArray> QDeclarativeMetaType::qmlTypeNames()
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+
     return data->nameToType.keys();
 }
 
@@ -974,8 +994,9 @@ QList<QByteArray> QDeclarativeMetaType::qmlTypeNames()
 */
 QList<QDeclarativeType*> QDeclarativeMetaType::qmlTypes()
 {
-    QMutexLocker lock(metaTypeDataLock());
-    const QDeclarativeMetaTypeData *data = metaTypeData();
+    QReadLocker lock(metaTypeDataLock());
+    QDeclarativeMetaTypeData *data = metaTypeData();
+
     return data->nameToType.values();
 }
 
@@ -1004,6 +1025,7 @@ QT_END_NAMESPACE
 #include <QtGui/qvector2d.h>
 #include <QtGui/qvector3d.h>
 #include <QtGui/qvector4d.h>
+#include <QtGui/qquaternion.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -1047,6 +1069,7 @@ bool QDeclarativeMetaType::canCopy(int type)
     case QMetaType::QLineF:
     case QMetaType::QPoint:
     case QMetaType::QPointF:
+    case QMetaType::QVector3D:
     case QMetaType::QRegExp:
     case QMetaType::Void:
     case QMetaType::QFont:
@@ -1070,15 +1093,9 @@ bool QDeclarativeMetaType::canCopy(int type)
     case QMetaType::QMatrix:
     case QMetaType::QTransform:
     case QMetaType::QMatrix4x4:
-#ifndef QT_NO_VECTOR2D
     case QMetaType::QVector2D:
-#endif // QT_NO_VECTOR2D
-#ifndef QT_NO_VECTOR3D
-    case QMetaType::QVector3D:
-#endif // QT_NO_VECTOR3D
-#ifndef QT_NO_VECTOR4D
     case QMetaType::QVector4D:
-#endif // QT_NO_VECTOR4D
+    case QMetaType::QQuaternion:
         return true;
 
     default:
@@ -1212,6 +1229,9 @@ bool QDeclarativeMetaType::copy(int type, void *data, const void *copy)
         case QMetaType::QPointF:
             *static_cast<NS(QPointF) *>(data) = *static_cast<const NS(QPointF)*>(copy);
             return true;
+        case QMetaType::QVector3D:
+            *static_cast<NS(QVector3D) *>(data) = *static_cast<const NS(QVector3D)*>(copy);
+            return true;
         case QMetaType::QRegExp:
             *static_cast<NS(QRegExp) *>(data) = *static_cast<const NS(QRegExp)*>(copy);
             return true;
@@ -1278,21 +1298,15 @@ bool QDeclarativeMetaType::copy(int type, void *data, const void *copy)
         case QMetaType::QMatrix4x4:
             *static_cast<NS(QMatrix4x4) *>(data) = *static_cast<const NS(QMatrix4x4)*>(copy);
             return true;
-#ifndef QT_NO_VECTOR2D
         case QMetaType::QVector2D:
             *static_cast<NS(QVector2D) *>(data) = *static_cast<const NS(QVector2D)*>(copy);
             return true;
-#endif // QT_NO_VECTOR2D
-#ifndef QT_NO_VECTOR3D
-        case QMetaType::QVector3D:
-            *static_cast<NS(QVector3D) *>(data) = *static_cast<const NS(QVector3D)*>(copy);
-            return true;
-#endif // QT_NO_VECTOR3D
-#ifndef QT_NO_VECTOR4D
         case QMetaType::QVector4D:
             *static_cast<NS(QVector4D) *>(data) = *static_cast<const NS(QVector4D)*>(copy);
             return true;
-#endif // QT_NO_VECTOR4D
+        case QMetaType::QQuaternion:
+            *static_cast<NS(QQuaternion) *>(data) = *static_cast<const NS(QQuaternion)*>(copy);
+            return true;
 
         default:
             if (type == qMetaTypeId<QVariant>()) {
@@ -1416,6 +1430,9 @@ bool QDeclarativeMetaType::copy(int type, void *data, const void *copy)
         case QMetaType::QPointF:
             *static_cast<NS(QPointF) *>(data) = NS(QPointF)();
             return true;
+        case QMetaType::QVector3D:
+            *static_cast<NS(QVector3D) *>(data) = NS(QVector3D)();
+            return true;
         case QMetaType::QRegExp:
             *static_cast<NS(QRegExp) *>(data) = NS(QRegExp)();
             return true;
@@ -1482,21 +1499,15 @@ bool QDeclarativeMetaType::copy(int type, void *data, const void *copy)
         case QMetaType::QMatrix4x4:
             *static_cast<NS(QMatrix4x4) *>(data) = NS(QMatrix4x4)();
             return true;
-#ifndef QT_NO_VECTOR2D
         case QMetaType::QVector2D:
             *static_cast<NS(QVector2D) *>(data) = NS(QVector2D)();
             return true;
-#endif // QT_NO_VECTOR2D
-#ifndef QT_NO_VECTOR3D
-        case QMetaType::QVector3D:
-            *static_cast<NS(QVector3D) *>(data) = NS(QVector3D)();
-            return true;
-#endif // QT_NO_VECTOR3D
-#ifndef QT_NO_VECTOR4D
         case QMetaType::QVector4D:
             *static_cast<NS(QVector4D) *>(data) = NS(QVector4D)();
             return true;
-#endif // QT_NO_VECTOR4D
+        case QMetaType::QQuaternion:
+            *static_cast<NS(QQuaternion) *>(data) = NS(QQuaternion)();
+            return true;
         default:
             if (type == qMetaTypeId<QVariant>()) {
                 *static_cast<NS(QVariant) *>(data) = NS(QVariant)();

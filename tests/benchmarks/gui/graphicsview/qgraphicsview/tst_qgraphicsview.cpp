@@ -373,22 +373,31 @@ void tst_QGraphicsView::mapRectFromScene()
 void tst_QGraphicsView::chipTester_data()
 {
     QTest::addColumn<bool>("antialias");
+    QTest::addColumn<bool>("opengl");
     QTest::addColumn<int>("operation");
-    QTest::newRow("rotate") << false << 0;
-    QTest::newRow("rotate, antialias") << true << 0;
-    QTest::newRow("zoom") << false << 1;
-    QTest::newRow("zoom, antialias") << true << 1;
-    QTest::newRow("translate") << false << 2;
-    QTest::newRow("translate, antialias") << true << 2;
+    QTest::newRow("rotate, normal") << false << false << 0;
+    QTest::newRow("rotate, normal, antialias") << true << false << 0;
+    QTest::newRow("rotate, opengl") << false << true << 0;
+    QTest::newRow("rotate, opengl, antialias") << true << true << 0;
+    QTest::newRow("zoom, normal") << false << false << 1;
+    QTest::newRow("zoom, normal, antialias") << true << false << 1;
+    QTest::newRow("zoom, opengl") << false << true << 1;
+    QTest::newRow("zoom, opengl, antialias") << true << true << 1;
+    QTest::newRow("translate, normal") << false << false << 2;
+    QTest::newRow("translate, normal, antialias") << true << false << 2;
+    QTest::newRow("translate, opengl") << false << true << 2;
+    QTest::newRow("translate, opengl, antialias") << true << true << 2;
 }
 
 void tst_QGraphicsView::chipTester()
 {
     QFETCH(bool, antialias);
+    QFETCH(bool, opengl);
     QFETCH(int, operation);
 
     ChipTester tester;
     tester.setAntialias(antialias);
+    tester.setOpenGL(opengl);
     tester.setOperation(ChipTester::Operation(operation));
     tester.show();
     QTest::qWaitForWindowShown(&tester);
@@ -525,11 +534,11 @@ void tst_QGraphicsView::imageRiver()
 
     QGraphicsScene scene(0, 0, 300, 300);
 
-    QPixmap pix(QLatin1String(SRCDIR "/images/designer.png"));
+    QPixmap pix(QLatin1String(":/images/designer.png"));
     QVERIFY(!pix.isNull());
 
     QList<QGraphicsItem *> items;
-    QFile file(QLatin1String(SRCDIR "/random.data"));
+    QFile file(QLatin1String(":/random.data"));
     QVERIFY(file.open(QIODevice::ReadOnly));
     QDataStream str(&file);
     for (int i = 0; i < 50; ++i) {
@@ -634,11 +643,11 @@ void tst_QGraphicsView::textRiver()
 
     QGraphicsScene scene(0, 0, 300, 300);
 
-    QPixmap pix(QLatin1String(SRCDIR "/images/designer.png"));
+    QPixmap pix(QLatin1String(":/images/designer.png"));
     QVERIFY(!pix.isNull());
 
     QList<QGraphicsItem *> items;
-    QFile file(QLatin1String(SRCDIR "/random.data"));
+    QFile file(QLatin1String(":/random.data"));
     QVERIFY(file.open(QIODevice::ReadOnly));
     QDataStream str(&file);
     for (int i = 0; i < 50; ++i) {
@@ -733,11 +742,11 @@ void tst_QGraphicsView::moveItemCache()
 
     QGraphicsScene scene(0, 0, 300, 300);
 
-    QPixmap pix(QLatin1String(SRCDIR "/images/wine.png"));
+    QPixmap pix(QLatin1String(":/images/wine.jpeg"));
     QVERIFY(!pix.isNull());
 
     QList<QGraphicsItem *> items;
-    QFile file(QLatin1String(SRCDIR "/random.data"));
+    QFile file(QLatin1String(":/random.data"));
     QVERIFY(file.open(QIODevice::ReadOnly));
     QDataStream str(&file);
     for (int i = 0; i < 5; ++i) {
@@ -822,17 +831,19 @@ void tst_QGraphicsView::paintItemCache_data()
 
 void tst_QGraphicsView::paintItemCache()
 {
+    Q_INIT_RESOURCE(qgraphicsview);
+
     QFETCH(bool, updatePartial);
     QFETCH(bool, rotation);
     QFETCH(int, cacheMode);
 
     QGraphicsScene scene(0, 0, 300, 300);
 
-    QPixmap pix(QLatin1String(SRCDIR "/images/wine.png"));
+    QPixmap pix(QLatin1String(":/images/wine.jpeg"));
     QVERIFY(!pix.isNull());
 
     QList<QGraphicsItem *> items;
-    QFile file(QLatin1String(SRCDIR "/random.data"));
+    QFile file(QLatin1String(":/random.data"));
     QVERIFY(file.open(QIODevice::ReadOnly));
     QDataStream str(&file);
     UpdatedPixmapCacheItem *item = new UpdatedPixmapCacheItem(updatePartial);
@@ -843,7 +854,7 @@ void tst_QGraphicsView::paintItemCache()
     item->setPos(-100, -100);
     scene.addItem(item);
 
-    QPixmap pix2(QLatin1String(SRCDIR "/images/wine-big.png"));
+    QPixmap pix2(QLatin1String(":/images/wine-big.jpeg"));
     item = new UpdatedPixmapCacheItem(updatePartial);
     item->setPixmap(pix2);
     item->setCacheMode((QGraphicsItem::CacheMode)cacheMode);
@@ -874,3 +885,4 @@ void tst_QGraphicsView::paintItemCache()
 QTEST_MAIN(tst_QGraphicsView)
 
 #include "moc_tst_qgraphicsview.cpp"
+#include "qrc_qgraphicsview.cpp"

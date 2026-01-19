@@ -57,6 +57,7 @@ public:
 
     QLocale keyboardInputLocale;
     Qt::LayoutDirection keyboardInputDirection;
+    QTextCodec *keyMapperCodec;
 
 #if defined(Q_WS_X11)
     bool translateKeyEvent(QWidget *keywidget, const XEvent *event);
@@ -64,8 +65,7 @@ public:
 #endif
 
 private:
-    Q_DISABLE_COPY(QKeyMapper);
-    QTextCodec *keyMapperCodec;
+    Q_DISABLE_COPY(QKeyMapper)
 };
 
 QKeyMapper *qt_keymapper(); // from qkeymapper.cpp

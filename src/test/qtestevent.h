@@ -34,7 +34,7 @@
 QT_BEGIN_NAMESPACE
 
 
-class Q_TEST_EXPORT QTestEvent
+class QTestEvent
 {
 public:
     virtual void simulate(QWidget *w) = 0;
@@ -44,7 +44,7 @@ public:
 };
 
 #ifdef QT_GUI_LIB
-class Q_TEST_EXPORT QTestKeyEvent : public QTestEvent
+class QTestKeyEvent: public QTestEvent
 {
 public:
     inline QTestKeyEvent(QTest::KeyAction action, Qt::Key key, Qt::KeyboardModifiers modifiers, int delay)
@@ -70,7 +70,7 @@ protected:
     Qt::Key _key;
 };
 
-class Q_TEST_EXPORT QTestKeyClicksEvent : public QTestEvent
+class QTestKeyClicksEvent: public QTestEvent
 {
 public:
     inline QTestKeyClicksEvent(const QString &keys, Qt::KeyboardModifiers modifiers, int delay)
@@ -88,7 +88,7 @@ private:
     int _delay;
 };
 
-class Q_TEST_EXPORT QTestMouseEvent : public QTestEvent
+class QTestMouseEvent: public QTestEvent
 {
 public:
     inline QTestMouseEvent(QTest::MouseAction action, Qt::MouseButton button,
@@ -111,7 +111,7 @@ private:
 #endif //QT_GUI_LIB
 
 
-class Q_TEST_EXPORT QTestDelayEvent : public QTestEvent
+class QTestDelayEvent: public QTestEvent
 {
 public:
     inline QTestDelayEvent(int msecs): _delay(msecs) {}
@@ -123,7 +123,7 @@ private:
     int _delay;
 };
 
-class Q_TEST_EXPORT QTestEventList : public QList<QTestEvent *>
+class QTestEventList: public QList<QTestEvent *>
 {
 public:
     inline QTestEventList() : QList<QTestEvent *>() {}

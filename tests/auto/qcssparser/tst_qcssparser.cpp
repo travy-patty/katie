@@ -23,7 +23,6 @@
 #include <QtXml/QDomDocument>
 #include <QDir>
 #include <QFileInfo>
-#include <QFontDatabase>
 #include <QDebug>
 
 //TESTED_CLASS=QCss
@@ -1444,6 +1443,11 @@ void tst_QCssParser::gradient_data()
          "spread: reflect, stop:0.2 rgb(1, 2, 3), stop: 0.5   rgba(1, 2, 3, 4))" << "linear" << QPointF(0, 0) << QPointF(0, 1)
                              << 1 << qreal(0.2) << QColor(1, 2, 3) << qreal(0.5) << QColor(1, 2, 3, 4);
 
+    QTest::newRow("conical gradient") <<
+     "selection-background-color: qconicalgradient(cx: 4, cy : 2, angle: 23, "
+         "spread: repeat, stop:0.2 rgb(1, 2, 3), stop:0.5 rgba(1, 2, 3, 4))" << "conical" << QPointF(4, 2) << QPointF()
+                             << 2 << qreal(0.2) << QColor(1, 2, 3) << qreal(0.5) << QColor(1, 2, 3, 4);
+
     /* wont pass: stop values are expected to be sorted
      QTest::newRow("unsorted-stop") <<
      "selection-background: lineargradient(x1:0, y1:0, x2:0, y2:1, "
@@ -1487,6 +1491,10 @@ void tst_QCssParser::gradient()
         const QLinearGradient *lg = static_cast<const QLinearGradient *>(sbg.gradient());
         QCOMPARE(lg->start(), start);
         QCOMPARE(lg->finalStop(), finalStop);
+    } else if (type == "conical") {
+        QVERIFY(sbg.style() == Qt::ConicalGradientPattern);
+        const QConicalGradient *cg = static_cast<const QConicalGradient *>(sbg.gradient());
+        QCOMPARE(cg->center(), start);
     }
     const QGradient *g = sbg.gradient();
     QCOMPARE(g->spread(), QGradient::Spread(spread));
@@ -1498,30 +1506,29 @@ void tst_QCssParser::gradient()
 
 void tst_QCssParser::extractFontFamily_data()
 {
-    QFontDatabase fontdb;
-    if (!fontdb.hasFamily("FreeSerif"))
-        QSKIP("'FreeSerif' font not found ", SkipAll);
+    if (QFontInfo(QFont("Times New Roman")).family() != "Times New Roman")
+        QSKIP("'Times New Roman' font not found ", SkipAll);
 
     QTest::addColumn<QString>("css");
     QTest::addColumn<QString>("expectedFamily");
 
-    const QString invalidfamily = fontdb.font("invalid font", "invalid style", 12).family();
-    QTest::newRow("unquoted-family-name") << "font-family: FreeSerif" << QString("FreeSerif");
-    QTest::newRow("quoted-family-name") << "font-family: 'FreeSerif'" << QString("FreeSerif");
-    QTest::newRow("quoted-family-name2") << "font-family: \"FreeSerif\"" << QString("FreeSerif");
-    QTest::newRow("invalid") << "font-family: invalid" << invalidfamily;
-    QTest::newRow("shorthand") << "font: 12pt FreeSerif" << QString("FreeSerif");
-    QTest::newRow("shorthand invalid") << "font: 12pt invalid" << invalidfamily;
-    QTest::newRow("invalid spaces") << "font-family: invalid spaces" << invalidfamily;
-    QTest::newRow("invalid spaces quotes") << "font-family: 'invalid spaces'" << invalidfamily;
-    QTest::newRow("invalid spaces quotes2") << "font-family: \"invalid spaces\"" << invalidfamily;
+    QTest::newRow("quoted-family-name") << "font-family: 'Times New Roman'" << QString("Times New Roman");
+    QTest::newRow("unquoted-family-name") << "font-family: Times New Roman" << QString("Times New Roman");
+    QTest::newRow("unquoted-family-name2") << "font-family: Times        New     Roman" << QString("Times New Roman");
+    QTest::newRow("multiple") << "font-family: Times New Roman  , foobar, 'baz'" << QString("Times New Roman");
+    QTest::newRow("multiple2") << "font-family: invalid,  Times New   Roman " << QString("Times New Roman");
+    QTest::newRow("invalid") << "font-family: invalid" << QFontInfo(QFont("invalid font")).family();
+    QTest::newRow("shorthand") << "font: 12pt Times New Roman" << QString("Times New Roman");
+    QTest::newRow("shorthand multiple quote") << "font: 12pt invalid, \"Times New Roman\" " << QString("Times New Roman");
+    QTest::newRow("shorthand multiple") << "font: 12pt invalid, Times New Roman " << QString("Times New Roman");
+    QTest::newRow("invalid spaces") << "font-family: invalid spaces, Times New Roman " << QString("Times New Roman");
+    QTest::newRow("invalid spaces quotes") << "font-family: 'invalid spaces', 'Times New Roman' " << QString("Times New Roman");
 }
 
 
 void tst_QCssParser::extractFontFamily()
 {
     QFETCH(QString, css);
-    QFETCH(QString, expectedFamily);
     css.prepend("dummy {");
     css.append("}");
 
@@ -1540,8 +1547,8 @@ void tst_QCssParser::extractFontFamily()
     int adjustment = 0;
     QFont fnt;
     extractor.extractFont(&fnt, &adjustment);
-    QFont sf = QFontDatabase().font(fnt.family(), fnt.styleName(), fnt.pointSize());
-    QCOMPARE(sf.family(), expectedFamily);
+    QFontInfo info(fnt);
+    QTEST(info.family(), "expectedFamily");
 }
 
 void tst_QCssParser::extractBorder_data()

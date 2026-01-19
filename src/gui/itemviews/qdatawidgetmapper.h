@@ -26,7 +26,9 @@
 
 #ifndef QT_NO_DATAWIDGETMAPPER
 
+
 QT_BEGIN_NAMESPACE
+
 
 class QAbstractItemDelegate;
 class QAbstractItemModel;
@@ -44,6 +46,7 @@ class Q_GUI_EXPORT QDataWidgetMapper: public QObject
 
 public:
     QDataWidgetMapper(QObject *parent = nullptr);
+    ~QDataWidgetMapper();
 
     void setModel(QAbstractItemModel *model);
     QAbstractItemModel *model() const;
@@ -96,7 +99,7 @@ private:
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_DATAWIDGETMAPPER
 
-#endif // QDATAWIDGETMAPPER_H
+#endif // QT_NO_DATAWIDGETMAPPER
+#endif
 

@@ -50,7 +50,6 @@
 #include "qx11info_x11.h"
 #include "qwidget_p.h"
 #include "qcursor_p.h"
-#include "qguiimages_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -234,6 +233,21 @@ static QPixmap *defaultPm = 0;
 
 static const int default_pm_hotx = -2;
 static const int default_pm_hoty = -16;
+static const char* const default_pm[] = {
+"13 9 3 1",
+".      c None",
+"       c #000000",
+"X      c #FFFFFF",
+"X X X X X X X",
+" X X X X X X ",
+"X ......... X",
+" X.........X ",
+"X ......... X",
+" X.........X ",
+"X ......... X",
+" X X X X X X ",
+"X X X X X X X"
+};
 
 class QShapedPixmapWidget : public QWidget
 {
@@ -445,7 +459,7 @@ bool QX11Data::xdndMimeDataForAtom(Atom a, QMimeData *mimeData, QByteArray *data
                 img = img.convertToFormat(QImage::Format_MonoLSB);
                 pm = QPixmap::fromImage(img);
             }
-            Pixmap handle = pm.toX11Pixmap();
+            Pixmap handle = pm.handle();
             *data = QByteArray(reinterpret_cast<const char *>(&handle), sizeof(Pixmap));
             ret = true;
         } else {
@@ -523,14 +537,13 @@ QVariant QX11Data::xdndMimeConvertToFormat(Atom a, const QByteArray &data, const
         }
     }
 
-    // special case for images
+    // special cas for images
     if (format == QLatin1String("image/ppm")) {
         if (a == XA_PIXMAP && data.size() == sizeof(Pixmap)) {
             Pixmap xpm = *((Pixmap*)data.data());
             if (!xpm)
                 return QByteArray();
             QPixmap qpm = QPixmap::fromX11Pixmap(xpm);
-            XFreePixmap(qt_x11Data->display, xpm);
             QImageWriter imageWriter;
             imageWriter.setFormat("PPMRAW");
             QImage imageToWrite = qpm.toImage();
@@ -601,6 +614,7 @@ Atom QX11Data::xdndMimeAtomForFormat(const QString &format, QVariant::Type reque
 }
 
 void QX11Data::xdndSetup() {
+    QCursorData::initialize();
     qAddPostRoutine(qt_xdnd_cleanup);
 }
 
@@ -1932,10 +1946,8 @@ void QDragManager::updatePixmap()
                 pm_hot = dragPrivate()->hotspot;
         }
         if (pm.isNull()) {
-            if (!defaultPm) {
-                defaultPm = new QPixmap();
-                defaultPm->loadFromData(default_pm_png, default_pm_png_len, qt_images_format);
-            }
+            if (!defaultPm)
+                defaultPm = new QPixmap(default_pm);
             pm = *defaultPm;
         }
         xdnd_data.deco->pm_hot = pm_hot;
@@ -1963,7 +1975,7 @@ QVariant QDropData::retrieveData_sys(const QString &mimetype, QVariant::Type req
             QImage image = qvariant_cast<QImage>(o->data->imageData());
             QBuffer buf(&result);
             buf.open(QBuffer::WriteOnly);
-            image.save(&buf, QImageWriter::formatForMimeType(mimetype.toLatin1()));
+            image.save(&buf, mimetype.mid(mimetype.indexOf(QLatin1Char('/')) + 1).toLatin1().toUpper());
         }
         return result;
     }

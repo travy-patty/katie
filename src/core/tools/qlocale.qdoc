@@ -83,7 +83,7 @@
     \note For the current keyboard input locale take a look at
     QApplication::keyboardInputLocale().
 
-    QLocale's data is based on Common Locale Data Repository v43.1.
+    QLocale's data is based on Common Locale Data Repository v40.
 
     The double-to-string and string-to-double conversion functions are
     covered by the following licenses:
@@ -158,7 +158,6 @@
     \value Assamese
     \value Asturian
     \value Asu
-    \value Atikamekw
     \value Atsam
     \value AustralianEnglish
     \value AustrianGerman
@@ -214,14 +213,12 @@
     \value Cantonese
     \value Capiznon
     \value Carib
-    \value CarolinaAlgonquian
     \value Catalan
     \value Cayuga
     \value Cebuano
     \value CentralAtlasTamazight
     \value CentralDusun
     \value CentralKurdish
-    \value CentralOjibwa
     \value CentralYupik
     \value ChadianArabic
     \value Chagatai
@@ -233,7 +230,6 @@
     \value Chibcha
     \value Chickasaw
     \value Chiga
-    \value Chilcotin
     \value ChimborazoHighlandQuichua
     \value Chinese
     \value ChineseCantonese
@@ -253,7 +249,7 @@
     \value Cornish
     \value Corsican
     \value Cree
-    \value CrimeanTatar
+    \value CrimeanTurkish
     \value Croatian
     \value Czech
     \value Dakota
@@ -270,9 +266,7 @@
     \value Dutch
     \value Dyula
     \value Dzongkha
-    \value EasternCanadianInuktitut
     \value EasternFrisian
-    \value EasternOjibwa
     \value Efik
     \value EgyptianArabic
     \value Ekajuk
@@ -300,7 +294,7 @@
     \value Frafra
     \value French
     \value Friulian
-    \value Fula
+    \value Fulah
     \value Ga
     \value Gagauz
     \value Galician
@@ -328,20 +322,15 @@
     \value Haida
     \value HaitianCreole
     \value HakkaChinese
-    \value Halkomelem
-    \value Haryanvi
     \value Hausa
     \value Hawaiian
     \value Hebrew
     \value Herero
     \value Hiligaynon
     \value Hindi
-    \value HindiLatin
-    \value Hinglish
     \value HiriMotu
     \value Hittite
     \value Hmong
-    \value HmongNjua
     \value Hungarian
     \value Hupa
     \value Iban
@@ -354,7 +343,6 @@
     \value Indonesian
     \value Ingrian
     \value Ingush
-    \value Innuaimun
     \value Interlingua
     \value Interlingue
     \value Inuktitut
@@ -422,10 +410,10 @@
     \value KurdishSorani
     \value Kurukh
     \value Kutenai
-    \value Kwakwala
     \value Kwasio
     \value Kyrgyz
     \value Ladino
+    \value Lahnda
     \value Lakota
     \value Lamba
     \value Langi
@@ -437,7 +425,6 @@
     \value Laz
     \value Lezghian
     \value Ligurian
-    \value Lillooet
     \value Limburgish
     \value Lingala
     \value LinguaFrancaNova
@@ -474,7 +461,6 @@
     \value Malagasy
     \value Malay
     \value Malayalam
-    \value MaliseetPassamaquoddy
     \value Maltese
     \value Manchu
     \value Mandar
@@ -496,7 +482,6 @@
     \value Meru
     \value Meta
     \value MexicanSpanish
-    \value Michif
     \value MiddleDutch
     \value MiddleEnglish
     \value MiddleFrench
@@ -515,7 +500,6 @@
     \value Mongo
     \value Mongolian
     \value Montenegrin
-    \value MooseCree
     \value Morisyen
     \value MoroccanArabic
     \value Mossi
@@ -544,14 +528,10 @@
     \value Nogai
     \value Nolinguisticcontent
     \value NorthNdebele
-    \value NorthernEastCree
     \value NorthernFrisian
-    \value NorthernHaida
     \value NorthernLuri
     \value NorthernSami
     \value NorthernSotho
-    \value NorthernTutchone
-    \value NorthwesternOjibwa
     \value Norwegian
     \value NorwegianBokmal
     \value NorwegianNynorsk
@@ -563,12 +543,9 @@
     \value NyasaTonga
     \value Nyoro
     \value Nzima
-    \value Obolo
     \value Occitan
     \value Odia
-    \value OjiCree
     \value Ojibwa
-    \value Okanagan
     \value OldEnglish
     \value OldFrench
     \value OldHighGerman
@@ -593,8 +570,6 @@
     \value Phoenician
     \value Picard
     \value Piedmontese
-    \value Pijin
-    \value PlainsCree
     \value Plautdietsch
     \value Pohnpeian
     \value Polish
@@ -620,8 +595,8 @@
     \value Russian
     \value Rusyn
     \value Rwa
-    \value Saamia
     \value Saho
+    \value Sakha
     \value SamaritanAramaic
     \value Samburu
     \value SamiInari
@@ -674,23 +649,17 @@
     \value Soninke
     \value SouthNdebele
     \value SouthernAltai
-    \value SouthernEastCree
-    \value SouthernHaida
     \value SouthernKurdish
-    \value SouthernLushootseed
     \value SouthernSami
     \value SouthernSotho
-    \value SouthernTutchone
     \value Spanish
     \value SrananTongo
     \value StandardMoroccanTamazight
-    \value StraitsSalish
     \value Sukuma
     \value Sumerian
     \value Sundanese
     \value Susu
     \value Swahili
-    \value SwampyCree
     \value Swati
     \value Swedish
     \value SwissFrench
@@ -699,10 +668,7 @@
     \value Syriac
     \value Tachelhit
     \value Tagalog
-    \value Tagish
     \value Tahitian
-    \value Tahltan
-    \value TaiDam
     \value Taita
     \value Tajik
     \value Talysh
@@ -724,10 +690,8 @@
     \value Tlingit
     \value TokPisin
     \value TokelauLanguage
-    \value TokiPona
     \value Tongan
     \value TornedalenFinnish
-    \value Torwali
     \value TraditionalChinese
     \value TraditionalMandarinChinese
     \value Tsakhur
@@ -775,18 +739,13 @@
     \value Welsh
     \value WestFlemish
     \value WesternBalochi
-    \value WesternCanadianInuktitut
     \value WesternFrisian
     \value WesternMari
-    \value WesternOjibwa
-    \value WesternPanjabi
     \value Wolaytta
     \value Wolof
-    \value WoodsCree
     \value WuChinese
     \value Xhosa
     \value XiangChinese
-    \value Yakut
     \value Yangben
     \value Yao
     \value Yapese
@@ -825,7 +784,6 @@
     \value Anguilla
     \value Antarctica
     \value AntiguaAndBarbuda
-    \value AotearoaNewZealand
     \value Argentina
     \value Armenia
     \value Aruba
@@ -1045,7 +1003,6 @@
     \value Samoa
     \value SanMarino
     \value SaoTomeAndPrincipe
-    \value Sark
     \value SaudiArabia
     \value Senegal
     \value Serbia
@@ -1095,7 +1052,6 @@
     \value TristandaCunha
     \value Tunisia
     \value Turkey
-    \value Turkiye
     \value Turkmenistan
     \value TurksAndCaicosIslands
     \value Tuvalu
@@ -1217,7 +1173,6 @@
     \value KaithiScript
     \value KannadaScript
     \value KatakanaScript
-    \value KawiScript
     \value KayahLiScript
     \value KharoshthiScript
     \value KhitansmallscriptScript
@@ -1258,7 +1213,6 @@
     \value MyanmarScript
     \value NKoScript
     \value NabataeanScript
-    \value NagMundariScript
     \value NandinagariScript
     \value NastaliqScript
     \value NaxiGebaScript
@@ -1419,6 +1373,21 @@
 */
 
 /*!
+    \enum QLocale::QuotationStyle
+
+    This enum defines a set of possible styles for locale specific quotation.
+
+    \value StandardQuotation If this option is set, the standard quotation marks
+            will be used to quote strings.
+    \value AlternateQuotation If this option is set, the alternate quotation marks
+            will be used to quote strings.
+
+    \since 4.8
+
+    \sa quoteString()
+*/
+
+/*!
 \fn QString QLocale::toString(short i) const
 
 \overload
@@ -1474,4 +1443,33 @@
 \a f and \a prec have the same meaning as in QString::number(double, char, int).
 
 \sa toDouble()
+*/
+
+/*!
+    \fn QString QLocale::toCurrencyString(short value, const QString &symbol) const
+    \since 4.8
+    \overload
+*/
+
+/*!
+    \fn QString QLocale::toCurrencyString(ushort value, const QString &symbol) const
+    \since 4.8
+    \overload
+*/
+
+/*!
+    \fn QString QLocale::toCurrencyString(int value, const QString &symbol) const
+    \since 4.8
+    \overload
+*/
+
+/*!
+    \fn QString QLocale::toCurrencyString(uint value, const QString &symbol) const
+    \since 4.8
+    \overload
+*/
+/*!
+    \fn QString QLocale::toCurrencyString(float value, const QString &symbol) const
+    \since 4.8
+    \overload
 */

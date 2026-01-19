@@ -29,6 +29,7 @@
 #include "qpen.h"
 #include "qpolygon.h"
 #include "qtextlayout.h"
+#include "qvarlengtharray.h"
 #include "qmath.h"
 #include "qbezier_p.h"
 #include "qfontengine_p.h"
@@ -36,11 +37,23 @@
 #include "qobject_p.h"
 #include "qpathclipper_p.h"
 #include "qstroker_p.h"
+#include "qtextengine_p.h"
 #include "qguicommon_p.h"
 
 #include <limits.h>
 
 QT_BEGIN_NAMESPACE
+
+struct QPainterPathPrivateDeleter
+{
+    static inline void cleanup(QPainterPathPrivate *d)
+    {
+        // note - we must up-cast to QPainterPathData since QPainterPathPrivate
+        // has a non-virtual destructor!
+        if (d && !d->ref.deref())
+            delete static_cast<QPainterPathData *>(d);
+    }
+};
 
 // This value is used to determine the length of control point vectors
 // when approximating arc segments as curves. The factor is multiplied
@@ -427,42 +440,28 @@ static void qt_debug_path(const QPainterPath &path)
 */
 
 /*!
+    \fn int QPainterPath::elementCount() const
+
     Returns the number of path elements in the painter path.
 
     \sa ElementType, elementAt(), isEmpty()
 */
-int QPainterPath::elementCount() const
-{
-    return d_ptr ? d_ptr->elements.size() : 0;
-}
 
 /*!
+    \fn const QPainterPath::Element &QPainterPath::elementAt(int index) const
+
     Returns the element at the given \a index in the painter path.
 
     \sa ElementType, elementCount(), isEmpty()
 */
-const QPainterPath::Element &QPainterPath::elementAt(int i) const
-{
-    Q_ASSERT(d_ptr);
-    Q_ASSERT(i >= 0 && i < elementCount());
-    return d_ptr->elements.at(i);
-}
 
 /*!
+    \fn void QPainterPath::setElementPositionAt(int index, qreal x, qreal y)
     \since 4.2
 
     Sets the x and y coordinate of the element at index \a index to \a
     x and \a y.
 */
-void QPainterPath::setElementPositionAt(int i, qreal x, qreal y)
-{
-    Q_ASSERT(d_ptr);
-    Q_ASSERT(i >= 0 && i < elementCount());
-    detach();
-    QPainterPath::Element &e = d_ptr->elements[i];
-    e.x = x;
-    e.y = y;
-}
 
 /*###
     \fn QPainterPath &QPainterPath::operator +=(const QPainterPath &other)
@@ -475,7 +474,7 @@ void QPainterPath::setElementPositionAt(int i, qreal x, qreal y)
     Constructs an empty QPainterPath object.
 */
 QPainterPath::QPainterPath()
-    : d_ptr(nullptr)
+    : d_ptr(0)
 {
 }
 
@@ -487,11 +486,10 @@ QPainterPath::QPainterPath()
     \sa operator=()
 */
 QPainterPath::QPainterPath(const QPainterPath &other)
-    : d_ptr(other.d_ptr)
+    : d_ptr(other.d_ptr.data())
 {
-    if (d_ptr) {
+    if (d_ptr)
         d_ptr->ref.ref();
-    }
 }
 
 /*!
@@ -500,7 +498,7 @@ QPainterPath::QPainterPath(const QPainterPath &other)
 */
 
 QPainterPath::QPainterPath(const QPointF &startPoint)
-    : d_ptr(new QPainterPathPrivate())
+    : d_ptr(new QPainterPathData)
 {
     Element e = { startPoint.x(), startPoint.y(), MoveToElement };
     d_func()->elements << e;
@@ -509,14 +507,22 @@ QPainterPath::QPainterPath(const QPointF &startPoint)
 /*!
     \internal
 */
+void QPainterPath::detach_helper()
+{
+    QPainterPathPrivate *data = new QPainterPathData(*d_func());
+    d_ptr.reset(data);
+}
+
+/*!
+    \internal
+*/
 void QPainterPath::ensureData_helper()
 {
-    Q_ASSERT(d_ptr == nullptr);
-    QPainterPathPrivate *data = new QPainterPathPrivate();
+    QPainterPathPrivate *data = new QPainterPathData;
     QPainterPath::Element e = { 0, 0, QPainterPath::MoveToElement };
     data->elements << e;
-    d_ptr = data;
-    Q_ASSERT(d_ptr != nullptr);
+    d_ptr.reset(data);
+    Q_ASSERT(d_ptr != 0);
 }
 
 /*!
@@ -528,7 +534,12 @@ void QPainterPath::ensureData_helper()
 */
 QPainterPath &QPainterPath::operator=(const QPainterPath &other)
 {
-    qAtomicAssign(d_ptr, other.d_func());
+    if (other.d_func() != d_func()) {
+        QPainterPathPrivate *data = other.d_func();
+        if (data)
+            data->ref.ref();
+        d_ptr.reset(data);
+    }
     return *this;
 }
 
@@ -545,9 +556,6 @@ QPainterPath &QPainterPath::operator=(const QPainterPath &other)
 */
 QPainterPath::~QPainterPath()
 {
-    if (d_ptr && !d_ptr->ref.deref()) {
-        delete d_ptr;
-    }
 }
 
 /*!
@@ -607,7 +615,7 @@ void QPainterPath::moveTo(const QPointF &p)
     ensureData();
     detach();
 
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = d_func();
     Q_ASSERT(!d->elements.isEmpty());
 
     d->require_moveTo = false;
@@ -657,7 +665,7 @@ void QPainterPath::lineTo(const QPointF &p)
     ensureData();
     detach();
 
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = d_func();
     Q_ASSERT(!d->elements.isEmpty());
     d->maybeMoveTo();
     if (p == QPointF(d->elements.last()))
@@ -717,7 +725,7 @@ void QPainterPath::cubicTo(const QPointF &c1, const QPointF &c2, const QPointF &
     ensureData();
     detach();
 
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = d_func();
     Q_ASSERT(!d->elements.isEmpty());
 
 
@@ -1060,8 +1068,8 @@ void QPainterPath::addEllipse(const QRectF &boundingRect)
 
     Adds the given \a text to this path as a set of closed subpaths
     created from the \a font supplied. The subpaths are positioned so
-    that the left end of the text's baseline lies at the specified
-    \a point.
+    that the left end of the text's baseline lies at the specified \a
+    point.
 
     \table 100%
     \row
@@ -1081,34 +1089,56 @@ void QPainterPath::addText(const QPointF &point, const QFont &f, const QString &
     ensureData();
     detach();
 
-    // qDebug() << Q_FUNC_INFO << point << f << text;
-
-    QFontEngine* engine = f.d->engineForScript(QUnicodeTables::Common);
-    if (Q_UNLIKELY(!engine)) {
-        qWarning("QPainterPath::addText: Invalid font %s", f.family().toLocal8Bit().constData());
+    QTextLayout layout(text, f);
+    layout.setCacheEnabled(true);
+    QTextEngine *eng = layout.engine();
+    layout.beginLayout();
+    QTextLine line = layout.createLine();
+    Q_UNUSED(line);
+    layout.endLayout();
+    const QScriptLine &sl = eng->lines[0];
+    if (!sl.length || !eng->layoutData)
         return;
-    }
 
-    static const QTextEngine::ShaperFlags shaperflags = 0;
-    int nglyphs = text.size();
-    QVarLengthGlyphLayoutArray glyphs(nglyphs);
-    engine->stringToCMap(text.unicode(), nglyphs, &glyphs, &nglyphs, shaperflags);
-    engine->addOutlineToPath(point.x(), point.y(), glyphs, this);
+    int nItems = eng->layoutData->items.size();
 
-    if (f.underline() || f.overline() || f.strikeOut()) {
-        const QFontMetricsF fontmetrics(f);
-        const qreal linewidth = fontmetrics.lineWidth();
-        const qreal textwidth = (fontmetrics.width('x') * text.size());
-        // TODO: implement underline style in QFont
-        if (f.underline()) {
-            addRect(point.x(), point.y() + fontmetrics.underlinePos(), textwidth, linewidth);
+    qreal x(point.x());
+    qreal y(point.y());
+
+    QVarLengthArray<int> visualOrder(nItems);
+    QVarLengthArray<uchar> levels(nItems);
+    for (int i = 0; i < nItems; ++i)
+        levels[i] = eng->layoutData->items[i].analysis.bidiLevel;
+    QTextEngine::bidiReorder(nItems, levels.data(), visualOrder.data());
+
+    for (int i = 0; i < nItems; ++i) {
+        int item = visualOrder[i];
+        QScriptItem &si = eng->layoutData->items[item];
+
+        if (si.analysis.flags < QScriptAnalysis::TabOrObject) {
+            QGlyphLayout glyphs = eng->shapedGlyphs(&si);
+            QFontEngine *fe = f.d->engineForScript(si.analysis.script);
+            Q_ASSERT(fe);
+            fe->addOutlineToPath(x, y, glyphs, this,
+                                 si.analysis.bidiLevel % 2
+                                 ? QTextItem::RenderFlags(QTextItem::RightToLeft)
+                                 : QTextItem::RenderFlags(0));
+
+            const qreal lw = fe->lineThickness().toReal();
+            if (f.d->underline) {
+                qreal pos = fe->underlinePosition().toReal();
+                addRect(x, y + pos, si.width.toReal(), lw);
+            }
+            if (f.d->overline) {
+                qreal pos = fe->ascent().toReal() + 1;
+                addRect(x, y - pos, si.width.toReal(), lw);
+            }
+            if (f.d->strikeOut) {
+                qreal pos = fe->ascent().toReal() / 3;
+                addRect(x, y - pos, si.width.toReal(), lw);
+            }
         }
-        if (f.overline()) {
-            addRect(point.x(), point.y() - fontmetrics.overlinePos(), textwidth, linewidth);
-        }
-        if (f.strikeOut()) {
-            addRect(point.x(), point.y() - fontmetrics.strikeOutPos(), textwidth, linewidth);
-        }
+        x += si.width.toReal();
     }
 }
 
@@ -1128,7 +1158,7 @@ void QPainterPath::addPath(const QPainterPath &other)
     ensureData();
     detach();
 
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = reinterpret_cast<QPainterPathData *>(d_func());
     // Remove last moveto so we don't get multiple moveto's
     if (d->elements.last().type == MoveToElement)
         d->elements.remove(d->elements.size()-1);
@@ -1159,7 +1189,7 @@ void QPainterPath::connectPath(const QPainterPath &other)
     ensureData();
     detach();
 
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = reinterpret_cast<QPainterPathData *>(d_func());
     // Remove last moveto so we don't get multiple moveto's
     if (d->elements.last().type == MoveToElement)
         d->elements.remove(d->elements.size()-1);
@@ -1351,7 +1381,7 @@ QRectF QPainterPath::boundingRect() const
 {
     if (!d_ptr)
         return QRectF();
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = d_func();
 
     if (d->dirtyBounds)
         computeBoundingRect();
@@ -1372,23 +1402,22 @@ QRectF QPainterPath::controlPointRect() const
 {
     if (!d_ptr)
         return QRectF();
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = d_func();
 
     if (d->dirtyControlBounds)
         computeControlPointRect();
     return d->controlBounds;
 }
 
+
 /*!
+    \fn bool QPainterPath::isEmpty() const
+
     Returns true if either there are no elements in this path, or if the only
     element is a MoveToElement; otherwise returns false.
 
     \sa elementCount()
 */
-bool QPainterPath::isEmpty() const
-{
-    return !d_ptr || (d_ptr->elements.size() == 1 && d_ptr->elements.first().type == MoveToElement);
-}
 
 /*!
     Creates and returns a reversed copy of the path.
@@ -1537,7 +1566,6 @@ QList<QPolygonF> QPainterPath::toFillPolygons(const QTransform &matrix) const
         return polys;
 
     QList<QRectF> bounds;
-    bounds.reserve(count);
     for (int i=0; i<count; ++i)
         bounds += subpaths.at(i).boundingRect();
 
@@ -1554,7 +1582,7 @@ QList<QPolygonF> QPainterPath::toFillPolygons(const QTransform &matrix) const
     for (int j=0; j<count; ++j) {
         if (subpaths.at(j).size() <= 2)
             continue;
-        const QRectF &cbounds = bounds.at(j);
+        QRectF cbounds = bounds.at(j);
         for (int i=0; i<count; ++i) {
             if (cbounds.intersects(bounds.at(i))) {
                 isects[j] << i;
@@ -1606,7 +1634,6 @@ QList<QPolygonF> QPainterPath::toFillPolygons(const QTransform &matrix) const
         const QList<int> &subpath_list = isects[i];
         if (!subpath_list.isEmpty()) {
             QPolygonF buildUp;
-            buildUp.reserve(subpath_list.size());
             for (int j=0; j<subpath_list.size(); ++j) {
                 const QPolygonF &subpath = subpaths.at(subpath_list.at(j));
                 buildUp += subpath;
@@ -1632,8 +1659,8 @@ QList<QPolygonF> QPainterPath::toFillPolygons(const QMatrix &matrix) const
 
 //same as qt_polygon_isect_line in qpolygon.cpp
 static void qt_painterpath_isect_line(const QPointF &p1,
-                                      const QPointF &p2,
-                                      const QPointF &pos,
+				      const QPointF &p2,
+				      const QPointF &pos,
                                       int *winding)
 {
     qreal x1 = p1.x();
@@ -1710,7 +1737,7 @@ bool QPainterPath::contains(const QPointF &pt) const
     if (isEmpty() || !controlPointRect().contains(pt))
         return false;
 
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = d_func();
 
     int winding_number = 0;
 
@@ -2137,7 +2164,7 @@ static inline bool epsilonCompare(const QPointF &a, const QPointF &b, const QSiz
 
 bool QPainterPath::operator==(const QPainterPath &path) const
 {
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = reinterpret_cast<QPainterPathData *>(d_func());
     if (path.d_func() == d)
         return true;
     else if (!d || !path.d_func())
@@ -2290,10 +2317,10 @@ QDataStream &operator<<(QDataStream &s, const QPainterPath &p)
     }
 
     s << p.elementCount();
-    for (int i = 0; i < p.d_func()->elements.size(); ++i) {
+    for (int i=0; i < p.d_func()->elements.size(); ++i) {
         const QPainterPath::Element &e = p.d_func()->elements.at(i);
         s << int(e.type);
-        s << qreal(e.x) << qreal(e.y);
+        s << double(e.x) << double(e.y);
     }
     s << p.d_func()->cStart;
     s << int(p.d_func()->fillRule);
@@ -2323,9 +2350,9 @@ QDataStream &operator>>(QDataStream &s, QPainterPath &p)
         p.d_func()->elements.clear();
     }
     p.d_func()->elements.reserve(p.d_func()->elements.size() + size);
-    for (int i = 0; i < size; ++i) {
+    for (int i=0; i<size; ++i) {
         int type;
-        qreal x, y;
+        double x, y;
         s >> type;
         s >> x;
         s >> y;
@@ -2355,19 +2382,19 @@ QDataStream &operator>>(QDataStream &s, QPainterPath &p)
  * class QPainterPathStroker
  */
 
-void qt_path_stroke_move_to(qreal x, qreal y, void *data)
+void qt_path_stroke_move_to(qfixed x, qfixed y, void *data)
 {
     ((QPainterPath *) data)->moveTo(x, y);
 }
 
-void qt_path_stroke_line_to(qreal x, qreal y, void *data)
+void qt_path_stroke_line_to(qfixed x, qfixed y, void *data)
 {
     ((QPainterPath *) data)->lineTo(x, y);
 }
 
-void qt_path_stroke_cubic_to(qreal c1x, qreal c1y,
-                             qreal c2x, qreal c2y,
-                             qreal ex, qreal ey,
+void qt_path_stroke_cubic_to(qfixed c1x, qfixed c1y,
+                             qfixed c2x, qfixed c2y,
+                             qfixed ex, qfixed ey,
                              void *data)
 {
     ((QPainterPath *) data)->cubicTo(c1x, c1y,
@@ -2446,7 +2473,6 @@ QPainterPathStroker::QPainterPathStroker()
 */
 QPainterPathStroker::~QPainterPathStroker()
 {
-    delete d_ptr;
 }
 
 
@@ -2563,6 +2589,7 @@ qreal QPainterPathStroker::miterLimit() const
     return d_func()->stroker.miterLimit();
 }
 
+
 /*!
     Specifies the curve flattening \a threshold, controlling the
     granularity with which the generated outlines' curve is drawn.
@@ -2664,7 +2691,6 @@ QPolygonF QPainterPath::toFillPolygon(const QTransform &matrix) const
     if (flats.isEmpty())
         return polygon;
     QPointF first = flats.first().first();
-    polygon.reserve(flats.size());
     for (int i=0; i<flats.size(); ++i) {
         polygon += flats.at(i);
         if (!flats.at(i).isClosed())
@@ -3258,7 +3284,7 @@ void QPainterPath::setDirty(bool dirty)
 
 void QPainterPath::computeBoundingRect() const
 {
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = d_func();
     d->dirtyBounds = false;
     if (!d_ptr) {
         d->bounds = QRect();
@@ -3305,7 +3331,7 @@ void QPainterPath::computeBoundingRect() const
 
 void QPainterPath::computeControlPointRect() const
 {
-    QPainterPathPrivate *d = d_func();
+    QPainterPathData *d = d_func();
     d->dirtyControlBounds = false;
     if (!d_ptr) {
         d->controlBounds = QRect();
@@ -3328,7 +3354,7 @@ void QPainterPath::computeControlPointRect() const
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug s, const QPainterPath &p)
 {
-    s.nospace() << "QPainterPath: Element count=" << p.elementCount() << '\n';
+    s.nospace() << "QPainterPath: Element count=" << p.elementCount() << endl;
     static const char *types[] = {
         "MoveTo",
         "LineTo",
@@ -3336,17 +3362,17 @@ QDebug operator<<(QDebug s, const QPainterPath &p)
         "CurveToData"
     };
     for (int i=0; i<p.elementCount(); ++i) {
-        s.nospace() << " -> " << types[p.elementAt(i).type] << "(x=" << p.elementAt(i).x << ", y=" << p.elementAt(i).y << ")\n";
+        s.nospace() << " -> " << types[p.elementAt(i).type] << "(x=" << p.elementAt(i).x << ", y=" << p.elementAt(i).y << ')' << endl;
 
     }
     return s;
 }
 #endif
 
-void QPainterPath::detach()
-{
-    qAtomicDetach(d_ptr);
-    setDirty(true);
-}
-
 QT_END_NAMESPACE
+
+
+
+
+
+

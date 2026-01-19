@@ -33,7 +33,9 @@
 #include <qprogressbar.h>
 #include <qtoolbutton.h>
 #include <qtoolbar.h>
+#include <qplastiquestyle.h>
 #include <qwindowsstyle.h>
+#include <qmotifstyle.h>
 #include <qcommonstyle.h>
 #include <qproxystyle.h>
 #include <qstylefactory.h>
@@ -45,12 +47,13 @@
 #include <qcombobox.h>
 #include <qradiobutton.h>
 #include <qlineedit.h>
+#include <qmdiarea.h>
 #include <qwidget.h>
 #include <qdebug.h>
 #include <qcleanlooksstyle.h>
 
 //TESTED_CLASS=
-//TESTED_FILES=gui/styles/qstyle.h gui/styles/qstyle.cpp gui/styles/qwindowsstyle.cpp
+//TESTED_FILES=gui/styles/qstyle.h gui/styles/qstyle.cpp gui/styles/qplastiquestyle.cpp gui/styles/qwindowsstyle.cpp gui/styles/qwindowsxpstyle.cpp gui/styles/qwindowsvistastyle.cpp gui/styles/qmotifstyle.cpp gui/styles/qs60style.cpp
 
 // Make a widget frameless to prevent size constraints of title bars
 // from interfering (Windows).
@@ -77,11 +80,14 @@ private slots:
     void cleanupTestCase();
     void init();
     void cleanup();
+    void testMotifStyle();
+    void testPlastiqueStyle();
     void testWindowsStyle();
     void testCleanlooksStyle();
     void testStyleFactory();
     void testProxyStyle();
     void pixelMetric();
+    void progressBarChangeStyle();
     void defaultFont();
     void testDrawingShortcuts();
 private:
@@ -129,8 +135,14 @@ void tst_QStyle::cleanupTestCase()
 void tst_QStyle::testStyleFactory()
 {
     QStringList keys = QStyleFactory::keys();
+#ifndef QT_NO_STYLE_MOTIF
+    QVERIFY(keys.contains("Motif"));
+#endif
 #ifndef QT_NO_STYLE_CLEANLOOKS
     QVERIFY(keys.contains("Cleanlooks"));
+#endif
+#ifndef QT_NO_STYLE_PLASTIQUE
+    QVERIFY(keys.contains("Plastique"));
 #endif
 #ifndef QT_NO_STYLE_WINDOWS
     QVERIFY(keys.contains("Windows"));
@@ -143,7 +155,6 @@ void tst_QStyle::testStyleFactory()
     }
 }
 
-#ifndef QT_NO_STYLE_PROXY
 class CustomProxy : public QProxyStyle
 {
     virtual int pixelMetric(PixelMetric metric, const QStyleOption *option = 0,
@@ -154,11 +165,9 @@ class CustomProxy : public QProxyStyle
         return QProxyStyle::pixelMetric(metric, option, widget);
     }
 };
-#endif // QT_NO_STYLE_PROXY
 
 void tst_QStyle::testProxyStyle()
 {
-#if !defined(QT_NO_STYLE_PROXY) && !defined(QT_NO_STYLE_WINDOWS)
     QProxyStyle *proxyStyle = new QProxyStyle();
     QVERIFY(proxyStyle->baseStyle());
     QStyle *style = new QWindowsStyle;
@@ -182,9 +191,6 @@ void tst_QStyle::testProxyStyle()
     edit.setStyle(&customStyle);
     QVERIFY(!customStyle.parent());
     QVERIFY(edit.style()->pixelMetric(QStyle::PM_ButtonIconSize) == 13);
-#else // QT_NO_STYLE_PROXY
-    QSKIP("Katie compiled without style proxy or windows style support (QT_NO_STYLE_PROXY or QT_NO_STYLE_WINDOWS)", SkipAll);
-#endif // QT_NO_STYLE_PROXY
 }
 
 void tst_QStyle::drawItemPixmap()
@@ -234,10 +240,8 @@ void tst_QStyle::testAllFunctions(QStyle *style)
 
         QStyleOptionGroupBox copt2;
         copt2.init(testWidget);
-#ifndef QT_NO_SIZEGRIP
         QStyleOptionSizeGrip copt3;
         copt3.init(testWidget);
-#endif // QT_NO_SIZEGRIP
         QStyleOptionSlider copt4;
         copt4.init(testWidget);
         copt4.minimum = 0;
@@ -295,6 +299,17 @@ void tst_QStyle::testScrollBarSubControls(QStyle* style)
     }
 }
 
+void tst_QStyle::testPlastiqueStyle()
+{
+#if !defined(QT_NO_STYLE_PLASTIQUE)
+    QPlastiqueStyle pstyle;
+    testAllFunctions(&pstyle);
+    lineUpLayoutTest(&pstyle);
+#else
+    QSKIP("No Plastique style", SkipAll);
+#endif
+}
+
 void tst_QStyle::testCleanlooksStyle()
 {
 #if !defined(QT_NO_STYLE_CLEANLOOKS)
@@ -308,7 +323,6 @@ void tst_QStyle::testCleanlooksStyle()
 
 void tst_QStyle::testWindowsStyle()
 {
-#ifndef QT_NO_STYLE_WINDOWS
     QWindowsStyle wstyle;
     testAllFunctions(&wstyle);
     lineUpLayoutTest(&wstyle);
@@ -319,9 +333,6 @@ void tst_QStyle::testWindowsStyle()
     QPixmap surface(QSize(200, 200));
     QPainter painter(&surface);
     wstyle.drawControl(QStyle::CE_ProgressBar, &pb, &painter, 0);
-#else // QT_NO_STYLE_WINDOWS
-    QSKIP("Katie compiled without windows style support (QT_NO_STYLE_WINDOWS)", SkipAll);
-#endif // QT_NO_STYLE_WINDOWS
 }
 
 void writeImage(const QString &fileName, QImage image)
@@ -347,6 +358,16 @@ void comparePixmap(const QString &filename, const QPixmap &pixmap)
         writeImage(filename, pixmap.toImage());
 }
 
+void tst_QStyle::testMotifStyle()
+{
+#if !defined(QT_NO_STYLE_MOTIF)
+    QMotifStyle mstyle;
+    testAllFunctions(&mstyle);
+#else
+    QSKIP("No Motif style", SkipAll);
+#endif
+}
+
 // Helper class...
 
 MyWidget::MyWidget( QWidget* parent, const char* name )
@@ -363,7 +384,7 @@ void MyWidget::paintEvent( QPaintEvent* )
     style()->drawItemPixmap(&p, rect(), Qt::AlignCenter, big);
 }
 
-#ifndef QT_NO_STYLE_WINDOWS
+
 class Qt42Style : public QWindowsStyle
 {
     Q_OBJECT
@@ -402,11 +423,10 @@ int Qt42Style::pixelMetric(PixelMetric metric, const QStyleOption * option /*= 0
     }
     return QWindowsStyle::pixelMetric(metric, option, widget);
 }
-#endif // QT_NO_STYLE_WINDOWS
+
 
 void tst_QStyle::pixelMetric()
 {
-#ifndef QT_NO_STYLE_WINDOWS
     Qt42Style *style = new Qt42Style();
     QCOMPARE(style->pixelMetric(QStyle::PM_DefaultTopLevelMargin), 10);
     QCOMPARE(style->pixelMetric(QStyle::PM_DefaultChildMargin), 5);
@@ -427,9 +447,53 @@ void tst_QStyle::pixelMetric()
     QCOMPARE(style->pixelMetric(QStyle::PM_DefaultLayoutSpacing), -1);
 
     delete style;
-#else // QT_NO_STYLE_WINDOWS
-    QSKIP("Katie compiled without windows style support (QT_NO_STYLE_WINDOWS)", SkipAll);
-#endif // QT_NO_STYLE_WINDOWS
+}
+
+void tst_QStyle::progressBarChangeStyle()
+{
+#if !defined(QT_NO_STYLE_PLASTIQUE) && !defined(QT_NO_STYLE_WINDOWS)
+    //test a crashing situation (task 143530)
+    //where changing the styles and deleting a progressbar would crash
+
+    QWindowsStyle style1;
+    QPlastiqueStyle style2;
+
+    QProgressBar *progress=new QProgressBar;
+    progress->setStyle(&style1);
+
+    progress->show();
+
+    progress->setStyle(&style2);
+
+    QTest::qWait(100);
+    delete progress;
+
+    QTest::qWait(100);
+
+    //before the correction, there would be a crash here
+#elif !defined(QT_NO_STYLE_S60) && !defined(QT_NO_STYLE_WINDOWS)
+    //test a crashing situation (task 143530)
+    //where changing the styles and deleting a progressbar would crash
+
+    QWindowsStyle style1;
+    QS60Style style2;
+
+    QProgressBar *progress=new QProgressBar;
+    progress->setStyle(&style1);
+
+    progress->show();
+
+    progress->setStyle(&style2);
+
+    QTest::qWait(100);
+    delete progress;
+
+    QTest::qWait(100);
+
+    //before the correction, there would be a crash here
+#else
+    QSKIP("Either style Plastique or Windows or S60 missing", SkipAll);
+#endif
 }
 
 void tst_QStyle::lineUpLayoutTest(QStyle *style)
@@ -479,7 +543,6 @@ void tst_QStyle::defaultFont()
     qApp->setFont(defaultFont);
 }
 
-#ifndef QT_NO_STYLE_PROXY
 class DrawTextStyle : public QProxyStyle
 {
     Q_OBJECT
@@ -495,11 +558,9 @@ public:
     }
     int alignment;
 };
-#endif // QT_NO_STYLE_PROXY
 
 void tst_QStyle::testDrawingShortcuts()
 {
-#ifndef QT_NO_STYLE_PROXY
     {   
         QWidget w;
         setFrameless(&w);
@@ -530,10 +591,7 @@ void tst_QStyle::testDrawingShortcuts()
         bool showMnemonic = dts->styleHint(QStyle::SH_UnderlineShortcut, &sotb, tb);
         QVERIFY(dts->alignment & (showMnemonic ? Qt::TextShowMnemonic : Qt::TextHideMnemonic));
         delete dts;
-    }
-#else // QT_NO_STYLE_PROXY
-    QSKIP("Katie compiled without style proxy support (QT_NO_STYLE_PROXY)", SkipAll);
-#endif // QT_NO_STYLE_PROXY
+     }   
 }
 
 QTEST_MAIN(tst_QStyle)

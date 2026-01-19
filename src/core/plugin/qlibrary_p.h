@@ -43,22 +43,28 @@ QT_BEGIN_NAMESPACE
 
 bool qt_debug_component();
 
+class QSettings;
 class QLibraryPrivate
 {
 public:
-    QLibraryPrivate();
-    ~QLibraryPrivate();
+    bool did_load;
 
     void *pHnd;
+
     QString fileName;
 
     bool load();
     bool loadPlugin(); // loads and resolves instance
     bool unload();
+    void release();
     void *resolve(const char *);
+
+    static QLibraryPrivate *findOrCreate(const QString &fileName, const QString &version = QString());
 
     QWeakPointer<QObject> inst;
     QtPluginInstanceFunction instance;
+    uint qt_version;
+    QString lastModified;
 
     QString errorString;
     QLibrary::LoadHints loadHints;
@@ -66,11 +72,15 @@ public:
     bool isPlugin();
 
 private:
-    Q_DISABLE_COPY(QLibraryPrivate);
+    explicit QLibraryPrivate(const QString &canonicalFileName);
+    ~QLibraryPrivate();
 
     bool load_sys();
     bool unload_sys();
     void *resolve_sys(const char *);
+
+    QAtomicInt libraryRefCount;
+    QAtomicInt libraryUnloadCount;
 
     enum {
         IsAPlugin,

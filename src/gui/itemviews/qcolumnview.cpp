@@ -99,6 +99,13 @@ void QColumnViewPrivate::initialize()
 }
 
 /*!
+    Destroys the column view.
+*/
+QColumnView::~QColumnView()
+{
+}
+
+/*!
     \property QColumnView::resizeGripsVisible
     \brief the way to specify if the list views gets resize grips or not
 

@@ -278,6 +278,7 @@ private:
     friend class QGraphicsViewPrivate;
     friend class QGraphicsWidget;
     friend class QGraphicsWidgetPrivate;
+    friend class QGraphicsEffect;
     friend class QGraphicsSceneIndex;
     friend class QGraphicsSceneIndexPrivate;
     friend class QGraphicsSceneBspTreeIndex;

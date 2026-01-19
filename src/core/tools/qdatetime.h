@@ -24,7 +24,6 @@
 
 #include <QtCore/qnamespace.h>
 #include <QtCore/qsharedpointer.h>
-#include <QtCore/qdatastream.h>
 
 
 QT_BEGIN_NAMESPACE
@@ -145,6 +144,10 @@ public:
     static QTime fromString(const QString &s, const QString &format);
 #endif
     static bool isValid(int h, int m, int s, int ms = 0);
+
+    void start();
+    int restart();
+    int elapsed() const;
 
 private:
     enum TimeFlag { NullTime = -1 };

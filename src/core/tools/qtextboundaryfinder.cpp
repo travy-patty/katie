@@ -41,9 +41,8 @@ static inline UBreakIteratorType getBreakType(const QTextBoundaryFinder::Boundar
     Q_UNREACHABLE();
 }
 
-static const char* getBreakLocale()
-{
-    const QByteArray bcp = QLocale::system().bcp47Name();
+static const char* getBreakLocale() {
+    QByteArray bcp = QLocale::system().bcp47Name().toLatin1();
     for(int i = 0; i < ubrk_countAvailable(); i++) {
         const char* locale = ubrk_getAvailable(i);
         if (qstrcmp(locale, bcp.constData()) == 0) {
@@ -139,7 +138,7 @@ QTextBoundaryFinderPrivate::~QTextBoundaryFinderPrivate()
     \enum QTextBoundaryFinder::BoundaryType
 
     \value Grapheme Finds a grapheme which is the smallest boundary. It
-    including letters, punctuation marks, numerals and more.
+    including letters, punctation marks, numerals and more.
     \value Word Finds a word.
     \value Line Finds possible positions for breaking the text into multiple
     lines.
@@ -148,15 +147,15 @@ QTextBoundaryFinderPrivate::~QTextBoundaryFinderPrivate()
 */
 
 /*!
-    \enum QTextBoundaryFinder::BoundaryReason
+  \enum QTextBoundaryFinder::BoundaryReason
 
-    \value NotAtBoundary  The boundary finder is not at a boundary position.
-    \value StartWord  The boundary finder is at the start of a word.
-    \value EndWord  The boundary finder is at the end of a word.
+  \value NotAtBoundary  The boundary finder is not at a boundary position.
+  \value StartWord  The boundary finder is at the start of a word.
+  \value EndWord  The boundary finder is at the end of a word.
 */
 
 /*!
-    Constructs an invalid QTextBoundaryFinder object.
+  Constructs an invalid QTextBoundaryFinder object.
 */
 QTextBoundaryFinder::QTextBoundaryFinder()
     : d(new QTextBoundaryFinderPrivate())
@@ -164,23 +163,18 @@ QTextBoundaryFinder::QTextBoundaryFinder()
 }
 
 /*!
-    Copies the QTextBoundaryFinder object, \a other.
+  Copies the QTextBoundaryFinder object, \a other.
 */
 QTextBoundaryFinder::QTextBoundaryFinder(const QTextBoundaryFinder &other)
     : d(new QTextBoundaryFinderPrivate(other.d->type, other.d->string))
 {
-    d->pos = other.d->pos;
 }
 
 /*!
-    Assigns the object, \a other, to another QTextBoundaryFinder object.
+  Assigns the object, \a other, to another QTextBoundaryFinder object.
 */
 QTextBoundaryFinder &QTextBoundaryFinder::operator=(const QTextBoundaryFinder &other)
 {
-    if (d == other.d) {
-        return *this;
-    }
-
     d->type = other.d->type;
     d->pos = other.d->pos;
     d->string = other.d->string;
@@ -194,7 +188,6 @@ QTextBoundaryFinder &QTextBoundaryFinder::operator=(const QTextBoundaryFinder &o
     if (Q_UNLIKELY(U_FAILURE(error))) {
         qWarning("QTextBoundaryFinder: ubrk_safeClone() failed %s", u_errorName(error));
         d->breakiter = nullptr;
-        return *this;
     }
     error = U_ZERO_ERROR;
     ubrk_setText(d->breakiter, reinterpret_cast<const UChar*>(d->string.unicode()), d->string.size(), &error);
@@ -208,7 +201,7 @@ QTextBoundaryFinder &QTextBoundaryFinder::operator=(const QTextBoundaryFinder &o
 }
 
 /*!
-    Destructs the QTextBoundaryFinder object.
+  Destructs the QTextBoundaryFinder object.
 */
 QTextBoundaryFinder::~QTextBoundaryFinder()
 {
@@ -216,7 +209,7 @@ QTextBoundaryFinder::~QTextBoundaryFinder()
 }
 
 /*!
-    Creates a QTextBoundaryFinder object of \a type operating on \a string.
+  Creates a QTextBoundaryFinder object of \a type operating on \a string.
 */
 QTextBoundaryFinder::QTextBoundaryFinder(BoundaryType type, const QString &string)
     : d(new QTextBoundaryFinderPrivate(type, string))
@@ -224,8 +217,8 @@ QTextBoundaryFinder::QTextBoundaryFinder(BoundaryType type, const QString &strin
 }
 
 /*!
-    Creates a QTextBoundaryFinder object of \a type operating on \a chars
-    with \a length.
+  Creates a QTextBoundaryFinder object of \a type operating on \a chars
+  with \a length.
 */
 QTextBoundaryFinder::QTextBoundaryFinder(BoundaryType type, const QChar *chars, const int length)
     : d(new QTextBoundaryFinderPrivate(type, QString::fromRawData(chars, length)))
@@ -233,9 +226,9 @@ QTextBoundaryFinder::QTextBoundaryFinder(BoundaryType type, const QChar *chars, 
 }
 
 /*!
-    Moves the finder to the start of the string. This is equivalent to setPosition(0).
+  Moves the finder to the start of the string. This is equivalent to setPosition(0).
 
-    \sa setPosition(), position()
+  \sa setPosition(), position()
 */
 void QTextBoundaryFinder::toStart()
 {
@@ -243,9 +236,9 @@ void QTextBoundaryFinder::toStart()
 }
 
 /*!
-    Moves the finder to the end of the string. This is equivalent to setPosition(string.length()).
+  Moves the finder to the end of the string. This is equivalent to setPosition(string.length()).
 
-    \sa setPosition(), position()
+  \sa setPosition(), position()
 */
 void QTextBoundaryFinder::toEnd()
 {
@@ -253,12 +246,12 @@ void QTextBoundaryFinder::toEnd()
 }
 
 /*!
-    Returns the current position of the QTextBoundaryFinder.
+  Returns the current position of the QTextBoundaryFinder.
 
-    The range is from 0 (the beginning of the string) to the length of
-    the string inclusive.
+  The range is from 0 (the beginning of the string) to the length of
+  the string inclusive.
 
-    \sa setPosition()
+  \sa setPosition()
 */
 int QTextBoundaryFinder::position() const
 {
@@ -266,36 +259,36 @@ int QTextBoundaryFinder::position() const
 }
 
 /*!
-    Sets the current position of the QTextBoundaryFinder to \a position.
+  Sets the current position of the QTextBoundaryFinder to \a position.
 
-    If \a position is out of bounds, it will be bound to only valid
-    positions. In this case, valid positions are from 0 to the length of
-    the string inclusive.
+  If \a position is out of bounds, it will be bound to only valid
+  positions. In this case, valid positions are from 0 to the length of
+  the string inclusive.
 
-    \sa position()
+  \sa position()
 */
 void QTextBoundaryFinder::setPosition(const int position)
 {
     d->pos = qBound(0, position, d->string.size());
 }
 
-/*!
-    Returns the type of the QTextBoundaryFinder.
+/*! \fn QTextBoundaryFinder::BoundaryType QTextBoundaryFinder::type() const
+
+  Returns the type of the QTextBoundaryFinder.
 */
 QTextBoundaryFinder::BoundaryType QTextBoundaryFinder::type() const
 {
     return d->type;
 }
 
-/*!
-    \fn bool QTextBoundaryFinder::isValid() const
+/*! \fn bool QTextBoundaryFinder::isValid() const
 
-    Returns true if the text boundary finder is valid; otherwise returns false.
-    A default QTextBoundaryFinder is invalid.
+   Returns true if the text boundary finder is valid; otherwise returns false.
+   A default QTextBoundaryFinder is invalid.
 */
 
 /*!
-    Returns the string the QTextBoundaryFinder object operates on.
+  Returns the string the QTextBoundaryFinder object operates on.
 */
 QString QTextBoundaryFinder::string() const
 {
@@ -303,9 +296,9 @@ QString QTextBoundaryFinder::string() const
 }
 
 /*!
-    Moves the QTextBoundaryFinder to the next boundary position and returns that position.
+  Moves the QTextBoundaryFinder to the next boundary position and returns that position.
 
-    Returns -1 if there is no next boundary.
+  Returns -1 if there is no next boundary.
 */
 int QTextBoundaryFinder::toNextBoundary()
 {
@@ -313,15 +306,16 @@ int QTextBoundaryFinder::toNextBoundary()
         return -1;
     }
     if (d->pos != -1) {
-        d->pos = ubrk_following(d->breakiter, d->pos);
+        ubrk_following(d->breakiter, d->pos - 1);
     }
+    d->pos = ubrk_next(d->breakiter);
     return d->pos;
 }
 
 /*!
-    Moves the QTextBoundaryFinder to the previous boundary position and returns that position.
+  Moves the QTextBoundaryFinder to the previous boundary position and returns that position.
 
-    Returns -1 if there is no previous boundary.
+  Returns -1 if there is no previous boundary.
 */
 int QTextBoundaryFinder::toPreviousBoundary()
 {
@@ -329,13 +323,14 @@ int QTextBoundaryFinder::toPreviousBoundary()
         return -1;
     }
     if (d->pos != -1) {
-        d->pos = ubrk_preceding(d->breakiter, d->pos);
+        ubrk_preceding(d->breakiter, d->pos + 1);
     }
+    d->pos = ubrk_previous(d->breakiter);
     return d->pos;
 }
 
 /*!
-    Returns true if the object's position() is currently at a valid text boundary.
+  Returns true if the object's position() is currently at a valid text boundary.
 */
 bool QTextBoundaryFinder::isAtBoundary() const
 {
@@ -346,12 +341,16 @@ bool QTextBoundaryFinder::isAtBoundary() const
 }
 
 /*!
-    Returns the reasons for the boundary finder to have chosen the current position as a boundary.
+  Returns the reasons for the boundary finder to have chosen the current position as a boundary.
 */
 QTextBoundaryFinder::BoundaryReasons QTextBoundaryFinder::boundaryReasons() const
 {
     if (!isAtBoundary()) {
         return QTextBoundaryFinder::NotAtBoundary;
+    } else if (d->pos == 0) {
+        return QTextBoundaryFinder::StartWord;
+    } else if (d->pos == d->string.size()) {
+        return QTextBoundaryFinder::EndWord;
     }
 
     QTextBoundaryFinder::BoundaryReasons reasons;

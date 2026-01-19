@@ -155,20 +155,6 @@ QT_BEGIN_NAMESPACE
 static const qint64 invalidData = Q_INT64_C(0x8000000000000000);
 
 /*!
-    Constructs an invalid QElapsedTimer. A timer becomes valid once it has been
-    started.
-
-    \since 4.12
-
-    \sa isValid(), start()
-*/
-QElapsedTimer::QElapsedTimer()
-    : t1(invalidData),
-    t2(invalidData)
-{
-}
-
-/*!
     Marks this QElapsedTimer object as invalid.
 
     An invalid object can be checked with isValid(). Calculations of timer
@@ -183,8 +169,8 @@ void QElapsedTimer::invalidate()
 }
 
 /*!
-    Returns false if the timer has never been started or invalidated by a
-    call to invalidate().
+    Returns false if this object was invalidated by a call to invalidate() and
+    has not been restarted since.
 
     \sa invalidate(), start(), restart()
 */

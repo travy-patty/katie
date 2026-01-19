@@ -27,14 +27,14 @@
 
 QT_BEGIN_NAMESPACE
 
-class Q_TEST_EXPORT QTestFileLogger
+class QTestFileLogger
 {
-public:
-    QTestFileLogger();
-    ~QTestFileLogger();
+    public:
+        QTestFileLogger();
+        ~QTestFileLogger();
 
-    void init();
-    void flush(const char *msg);
+        void init();
+        void flush(const char *msg);
 };
 
 QT_END_NAMESPACE

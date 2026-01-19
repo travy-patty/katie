@@ -39,6 +39,10 @@
 #include "qpushbutton_p.h"
 #include "qaction_p.h"
 
+#ifndef QT_NO_ACCESSIBILITY
+# include "qaccessible.h"
+#endif
+
 #ifndef QT_NO_EFFECTS
 # include "qeffects_p.h"
 #endif
@@ -543,7 +547,8 @@ void QMenuPrivate::setCurrentAction(QAction *action, int popup, SelectionReason 
         activeMenu = 0;
 #ifndef QT_NO_EFFECTS
         // kill any running effect
-        qFadeEffect(nullptr);
+        qFadeEffect(0);
+        qScrollEffect(0);
 #endif
         hideMenu(hideActiveMenu);
     }
@@ -1012,6 +1017,13 @@ void QMenuPrivate::activateAction(QAction *action, QAction::ActionEvent action_e
 
 
     if (action_e == QAction::Hover) {
+#ifndef QT_NO_ACCESSIBILITY
+        if (QAccessible::isActive()) {
+            int actionIndex = indexOf(action) + 1;
+            QAccessible::updateAccessibility(q, actionIndex, QAccessible::Focus);
+            QAccessible::updateAccessibility(q, actionIndex, QAccessible::Selection);
+        }
+#endif
         action->showStatusText(topCausedWidget());
     } else {
         actionAboutToTrigger = 0;
@@ -1824,7 +1836,25 @@ void QMenu::popup(const QPoint &p, QAction *atAction)
     }
     setGeometry(QRect(pos, size));
 #ifndef QT_NO_EFFECTS
-    if (QApplication::isEffectEnabled(Qt::UI_FadeMenu)) {
+    int hGuess = isRightToLeft() ? QEffects::LeftScroll : QEffects::RightScroll;
+    int vGuess = QEffects::DownScroll;
+    if (isRightToLeft()) {
+        if ((snapToMouse && (pos.x() + size.width() / 2 > mouse.x())) ||
+           (qobject_cast<QMenu*>(d->causedPopup.widget) && pos.x() + size.width() / 2 > d->causedPopup.widget->x()))
+            hGuess = QEffects::RightScroll;
+    } else {
+        if ((snapToMouse && (pos.x() + size.width() / 2 < mouse.x())) ||
+           (qobject_cast<QMenu*>(d->causedPopup.widget) && pos.x() + size.width() / 2 < d->causedPopup.widget->x()))
+            hGuess = QEffects::LeftScroll;
+    }
+
+#ifndef QT_NO_MENUBAR
+    if ((snapToMouse && (pos.y() + size.height() / 2 < mouse.y())) ||
+       (qobject_cast<QMenuBar*>(d->causedPopup.widget) &&
+        pos.y() + size.width() / 2 < d->causedPopup.widget->mapToGlobal(d->causedPopup.widget->pos()).y()))
+       vGuess = QEffects::UpScroll;
+#endif
+    if (QApplication::isEffectEnabled(Qt::UI_AnimateMenu)) {
         bool doChildEffects = true;
 #ifndef QT_NO_MENUBAR
         if (QMenuBar *mb = qobject_cast<QMenuBar*>(d->causedPopup.widget)) {
@@ -1838,10 +1868,16 @@ void QMenu::popup(const QPoint &p, QAction *atAction)
         }
 
         if (doChildEffects) {
-            qFadeEffect(this);
+            if (QApplication::isEffectEnabled(Qt::UI_FadeMenu))
+                qFadeEffect(this);
+            else if (d->causedPopup.widget)
+                qScrollEffect(this, qobject_cast<QMenu*>(d->causedPopup.widget) ? hGuess : vGuess);
+            else
+                qScrollEffect(this, hGuess | vGuess);
         } else {
             // kill any running effect
-            qFadeEffect(nullptr);
+            qFadeEffect(0);
+            qScrollEffect(0);
 
             show();
         }
@@ -1850,6 +1886,10 @@ void QMenu::popup(const QPoint &p, QAction *atAction)
     {
         show();
     }
+
+#ifndef QT_NO_ACCESSIBILITY
+    QAccessible::updateAccessibility(this, 0, QAccessible::PopupMenuStart);
+#endif
 }
 
 /*!
@@ -1968,6 +2008,9 @@ void QMenu::hideEvent(QHideEvent *)
     if (d->eventLoop)
         d->eventLoop->exit();
     d->setCurrentAction(0);
+#ifndef QT_NO_ACCESSIBILITY
+    QAccessible::updateAccessibility(this, 0, QAccessible::PopupMenuEnd);
+#endif
 #ifndef QT_NO_MENUBAR
     if (QMenuBar *mb = qobject_cast<QMenuBar*>(d->causedPopup.widget))
         mb->d_func()->setCurrentAction(0);

@@ -56,7 +56,9 @@
 #include <QtGui/QAbstractButton>
 #include <QtGui/QAbstractItemView>
 #include <QtGui/QHeaderView>
-#include "qlayout_p.h"
+#ifndef QFORMINTERNAL_NAMESPACE
+#  include "qlayout_p.h" // Compiling within Designer
+#endif
 
 #include <QtXml/QXmlStreamReader>
 
@@ -69,6 +71,8 @@
 #include <QtGui/QToolBar>
 #include <QtGui/QMenuBar>
 #include <QtGui/QDockWidget>
+#include <QtGui/QMdiArea>
+#include <QtGui/QWorkspace>
 #include <QtGui/QWizard>
 
 #include <limits.h>
@@ -79,12 +83,20 @@ static const char *buttonGroupPropertyC = "buttonGroup";
 
 QT_BEGIN_NAMESPACE
 
+#ifdef QFORMINTERNAL_NAMESPACE
+using namespace QFormInternal;
+#endif
+
 class QFriendlyLayout: public QLayout
 {
 public:
     inline QFriendlyLayout() { Q_ASSERT(false); }
 
+#ifdef QFORMINTERNAL_NAMESPACE
+    friend class QFormInternal::QAbstractFormBuilder;
+#else
     friend class QAbstractFormBuilder;
+#endif
 };
 
 /*!
@@ -94,7 +106,7 @@ public:
     implementation for classes that create user interfaces at
     run-time.
 
-    \inmodule QtUiTools
+    \inmodule QtDesigner
 
     QAbstractFormBuilder provides a standard interface and a default
     implementation for constructing forms from user interface
@@ -155,7 +167,8 @@ QAbstractFormBuilder::~QAbstractFormBuilder()
 */
 QWidget *QAbstractFormBuilder::load(QIODevice *dev, QWidget *parentWidget)
 {
-    QXmlStreamReader reader(dev);
+    QXmlStreamReader reader;
+    reader.setDevice(dev);
     DomUI ui;
     bool initialized = false;
 
@@ -218,6 +231,7 @@ QWidget *QAbstractFormBuilder::create(DomUI *ui, QWidget *parentWidget)
                     it.value().second->setParent(widget);
         }
         createConnections(ui->elementConnections(), widget);
+        createResources(ui->elementResources()); // maybe this should go first, before create()...
         applyTabStops(widget, ui->elementTabStops());
         formBuilderPrivate->applyInternalProperties();
         reset();
@@ -311,6 +325,13 @@ QWidget *QAbstractFormBuilder::create(DomWidget *ui_widget, QWidget *parentWidge
     }
 
     loadExtraInfo(ui_widget, w, parentWidget);
+#ifndef QT_FORMBUILDER_NO_SCRIPT
+    QString scriptErrorMessage;
+    QFormBuilderExtra *extra = QFormBuilderExtra::instance(this);
+    extra->formScriptRunner().run(ui_widget,
+                                  extra->customWidgetScript(ui_widget->attributeClass()),
+                                  w, children, &scriptErrorMessage);
+#endif
     addItem(ui_widget, w, parentWidget);
 
     if (qobject_cast<QDialog *>(w) && parentWidget)
@@ -533,6 +554,20 @@ bool QAbstractFormBuilder::addItem(DomWidget *ui_widget, QWidget *widget, QWidge
 #ifndef QT_NO_SPLITTER
     else if (QSplitter *splitter = qobject_cast<QSplitter*>(parentWidget)) {
         splitter->addWidget(widget);
+        return true;
+    }
+#endif
+
+#ifndef QT_NO_MDIAREA
+    else if (QMdiArea *mdiArea = qobject_cast<QMdiArea*>(parentWidget)) {
+        mdiArea->addSubWindow(widget);
+        return true;
+    }
+#endif
+
+#ifndef QT_NO_WORKSPACE
+    else if (QWorkspace *ws = qobject_cast<QWorkspace*>(parentWidget)) {
+        ws->addWindow(widget);
         return true;
     }
 #endif
@@ -819,7 +854,11 @@ QLayoutItem *QAbstractFormBuilder::create(DomLayoutItem *ui_layoutItem, QLayout 
     switch (ui_layoutItem->kind()) {
     case DomLayoutItem::Widget: {
         if (QWidget *w = create(ui_layoutItem->elementWidget(), parentWidget)) {
+#ifdef QFORMINTERNAL_NAMESPACE // uilib
+            QWidgetItem *item = new QWidgetItemV2(w);
+#else                         // Within Designer: Use factory method that returns special items that refuse to shrink to 0,0
             QWidgetItem *item = QLayoutPrivate::createWidgetItem(layout, w);
+#endif
             item->setAlignment(alignmentFromDom(ui_layoutItem->attributeAlignment()));
             return item;
         }
@@ -973,7 +1012,9 @@ QBrush QAbstractFormBuilder::setupBrush(DomBrush *brush)
 
     const Qt::BrushStyle style = enumKeyOfObjectToValue<QAbstractFormBuilderGadget, Qt::BrushStyle>("brushStyle", brush->attributeBrushStyle().toLatin1());
 
-    if (style == Qt::LinearGradientPattern || style == Qt::RadialGradientPattern) {
+    if (style == Qt::LinearGradientPattern ||
+            style == Qt::RadialGradientPattern ||
+            style == Qt::ConicalGradientPattern) {
         const QMetaEnum gradientType_enum = metaEnum<QAbstractFormBuilderGadget>("gradientType");
         const QMetaEnum gradientSpread_enum = metaEnum<QAbstractFormBuilderGadget>("gradientSpread");
         const QMetaEnum gradientCoordinate_enum = metaEnum<QAbstractFormBuilderGadget>("gradientCoordinate");
@@ -991,6 +1032,9 @@ QBrush QAbstractFormBuilder::setupBrush(DomBrush *brush)
             gr = new QRadialGradient(QPointF(gradient->attributeCentralX(), gradient->attributeCentralY()),
                             gradient->attributeRadius(),
                             QPointF(gradient->attributeFocalX(), gradient->attributeFocalY()));
+        } else if (type == QGradient::ConicalGradient) {
+            gr = new QConicalGradient(QPointF(gradient->attributeCentralX(), gradient->attributeCentralY()),
+                            gradient->attributeAngle());
         }
         if (!gr)
             return br;
@@ -1011,8 +1055,7 @@ QBrush QAbstractFormBuilder::setupBrush(DomBrush *brush)
     } else if (style == Qt::TexturePattern) {
         const DomProperty *texture = brush->elementTexture();
         if (texture && texture->kind() == DomProperty::Pixmap) {
-            QVariant v = resourceBuilder()->loadResource(workingDirectory(), texture);
-            br.setTexture(qvariant_cast<QPixmap>(v));
+            br.setTexture(domPropertyToPixmap(texture));
         }
     } else {
         const DomColor *color = brush->elementColor();
@@ -1033,7 +1076,9 @@ DomBrush *QAbstractFormBuilder::saveBrush(const QBrush &br)
     DomBrush *brush = new DomBrush();
     const Qt::BrushStyle style = br.style();
     brush->setAttributeBrushStyle(QString::fromLatin1(brushStyle_enum.valueToKey(style)));
-    if (style == Qt::LinearGradientPattern || style == Qt::RadialGradientPattern) {
+    if (style == Qt::LinearGradientPattern ||
+                style == Qt::RadialGradientPattern ||
+                style == Qt::ConicalGradientPattern) {
         const QMetaEnum gradientType_enum = metaEnum<QAbstractFormBuilderGadget>("gradientType");
         const QMetaEnum gradientSpread_enum = metaEnum<QAbstractFormBuilderGadget>("gradientSpread");
         const QMetaEnum gradientCoordinate_enum = metaEnum<QAbstractFormBuilderGadget>("gradientCoordinate");
@@ -1073,14 +1118,19 @@ DomBrush *QAbstractFormBuilder::saveBrush(const QBrush &br)
             gradient->setAttributeFocalX(rgr->focalPoint().x());
             gradient->setAttributeFocalY(rgr->focalPoint().y());
             gradient->setAttributeRadius(rgr->radius());
+        } else if (type == QGradient::ConicalGradient) {
+            QConicalGradient *cgr = (QConicalGradient *)(gr);
+            gradient->setAttributeCentralX(cgr->center().x());
+            gradient->setAttributeCentralY(cgr->center().y());
+            gradient->setAttributeAngle(cgr->angle());
         }
 
         brush->setElementGradient(gradient);
     } else if (style == Qt::TexturePattern) {
         const QPixmap pixmap = br.texture();
         if (!pixmap.isNull()) {
-            DomProperty *p = resourceBuilder()->saveResource(workingDirectory(), QVariant(pixmap));
-            setPixmapProperty(*p,  p->elementPixmap()->text());
+            DomProperty *p = new DomProperty;
+            setPixmapProperty(*p,  pixmapPaths(pixmap));
             brush->setElementTexture(p);
         }
     } else {
@@ -1186,6 +1236,9 @@ void QAbstractFormBuilder::saveDom(DomUI *ui, QWidget *widget)
         ui->setElementTabStops(ui_tabStops);
     }
 
+    if (DomResources *ui_resources = saveResources()) {
+        ui->setElementResources(ui_resources);
+    }
     if (DomButtonGroups *ui_buttonGroups = saveButtonGroups(widget))
         ui->setElementButtonGroups(ui_buttonGroups);
 }
@@ -1665,6 +1718,14 @@ DomCustomWidgets *QAbstractFormBuilder::saveCustomWidgets()
     \internal
 */
 DomTabStops *QAbstractFormBuilder::saveTabStops()
+{
+    return 0;
+}
+
+/*!
+    \internal
+*/
+DomResources *QAbstractFormBuilder::saveResources()
 {
     return 0;
 }
@@ -2373,7 +2434,9 @@ void QAbstractFormBuilder::loadButtonExtraInfo(const DomWidget *ui_widget, QAbst
     ButtonGroupHash &buttonGroups = extra->buttonGroups();
     ButtonGroupHash::iterator it = buttonGroups.find(groupName);
     if (it == buttonGroups.end()) {
+#ifdef QFORMINTERNAL_NAMESPACE // Suppress the warning when copying in Designer
         uiLibWarning(QCoreApplication::translate("QAbstractFormBuilder", "Invalid QButtonGroup reference '%1' referenced by '%2'.").arg(groupName, button->objectName()));
+#endif
         return;
     }
     // Create button group on demand?
@@ -2501,6 +2564,68 @@ void QAbstractFormBuilder::loadExtraInfo(DomWidget *ui_widget, QWidget *widget, 
 }
 
 /*!
+    \internal
+*/
+QIcon QAbstractFormBuilder::nameToIcon(const QString &filePath, const QString &qrcPath)
+{
+    Q_UNUSED(filePath)
+    Q_UNUSED(qrcPath)
+    qWarning() << "QAbstractFormBuilder::nameToIcon() is obsoleted";
+    return QIcon();
+}
+
+/*!
+    \internal
+*/
+QString QAbstractFormBuilder::iconToFilePath(const QIcon &pm) const
+{
+    Q_UNUSED(pm)
+    qWarning() << "QAbstractFormBuilder::iconToFilePath() is obsoleted";
+    return QString();
+}
+
+/*!
+    \internal
+*/
+QString QAbstractFormBuilder::iconToQrcPath(const QIcon &pm) const
+{
+    Q_UNUSED(pm)
+    qWarning() << "QAbstractFormBuilder::iconToQrcPath() is obsoleted";
+    return QString();
+}
+
+/*!
+    \internal
+*/
+QPixmap QAbstractFormBuilder::nameToPixmap(const QString &filePath, const QString &qrcPath)
+{
+    Q_UNUSED(filePath)
+    Q_UNUSED(qrcPath)
+    qWarning() << "QAbstractFormBuilder::nameToPixmap() is obsoleted";
+    return QPixmap();
+}
+
+/*!
+    \internal
+*/
+QString QAbstractFormBuilder::pixmapToFilePath(const QPixmap &pm) const
+{
+    Q_UNUSED(pm)
+    qWarning() << "QAbstractFormBuilder::pixmapToFilePath() is obsoleted";
+    return QString();
+}
+
+/*!
+    \internal
+*/
+QString QAbstractFormBuilder::pixmapToQrcPath(const QPixmap &pm) const
+{
+    Q_UNUSED(pm)
+    qWarning() << "QAbstractFormBuilder::pixmapToQrcPath() is obsoleted";
+    return QString();
+}
+
+/*!
     Returns the current working directory of the form builder.
 
     \sa setWorkingDirectory() */
@@ -2609,14 +2734,42 @@ QMetaEnum QAbstractFormBuilder::toolBarAreaMetaEnum()
 
 /*!
     \internal
+    Return paths of an icon.
+*/
+
+QAbstractFormBuilder::IconPaths QAbstractFormBuilder::iconPaths(const QIcon &icon) const
+{
+    Q_UNUSED(icon);
+    qWarning() << "QAbstractFormBuilder::iconPaths() is obsoleted";
+    return IconPaths();
+}
+
+/*!
+    \internal
+    Return paths of a pixmap.
+*/
+
+QAbstractFormBuilder::IconPaths QAbstractFormBuilder::pixmapPaths(const QPixmap &pixmap) const
+{
+    Q_UNUSED(pixmap);
+    qWarning() << "QAbstractFormBuilder::pixmapPaths() is obsoleted";
+    return IconPaths();
+}
+
+/*!
+    \internal
     Set up a DOM property with icon.
 */
 
-void QAbstractFormBuilder::setIconProperty(DomProperty &p, const QString &ip) const
+void QAbstractFormBuilder::setIconProperty(DomProperty &p, const IconPaths &ip) const
 {
     DomResourceIcon *dpi = new DomResourceIcon;
 
-    dpi->setText(ip);
+ /* TODO
+    if (!ip.second.isEmpty())
+        pix->setAttributeResource(ip.second);
+*/
+    dpi->setText(ip.first);
 
     p.setAttributeName(QFormBuilderStrings::instance().iconAttribute);
     p.setElementIconSet(dpi);
@@ -2627,14 +2780,28 @@ void QAbstractFormBuilder::setIconProperty(DomProperty &p, const QString &ip) co
     Set up a DOM property with pixmap.
 */
 
-void QAbstractFormBuilder::setPixmapProperty(DomProperty &p, const QString &ip) const
+void QAbstractFormBuilder::setPixmapProperty(DomProperty &p, const IconPaths &ip) const
 {
     DomResourcePixmap *pix = new DomResourcePixmap;
+    if (!ip.second.isEmpty())
+        pix->setAttributeResource(ip.second);
 
-    pix->setText(ip);
+    pix->setText(ip.first);
 
     p.setAttributeName(QFormBuilderStrings::instance().pixmapAttribute);
     p.setElementPixmap(pix);
+}
+
+/*!
+    \internal
+    Convenience. Return DOM property for icon; 0 if icon.isNull().
+*/
+
+DomProperty* QAbstractFormBuilder::iconToDomProperty(const QIcon &icon) const
+{
+    Q_UNUSED(icon);
+    qWarning() << "QAbstractFormBuilder::iconToDomProperty() is obsoleted";
+    return 0;
 }
 
 /*!
@@ -2670,6 +2837,79 @@ DomProperty *QAbstractFormBuilder::saveText(const QString &attributeName, const 
 }
 
 /*!
+    \internal
+    Return the appropriate DOM pixmap for an image dom property.
+    From 4.4 - unused
+*/
+
+const DomResourcePixmap *QAbstractFormBuilder::domPixmap(const DomProperty* p) {
+    switch (p->kind()) {
+    case DomProperty::IconSet:
+        qDebug() << "** WARNING QAbstractFormBuilder::domPixmap() called for icon set!";
+        break;
+    case DomProperty::Pixmap:
+        return p->elementPixmap();
+    default:
+        break;
+    }
+    return 0;
+}
+
+/*!
+    \internal
+    Create icon from DOM.
+    From 4.4 - unused
+*/
+
+QIcon QAbstractFormBuilder::domPropertyToIcon(const DomResourcePixmap *icon)
+{
+    Q_UNUSED(icon);
+    qWarning() << "QAbstractFormBuilder::domPropertyToIcon() is obsoleted";
+    return QIcon();
+}
+
+/*!
+    \internal
+    Create icon from DOM. Assert if !domPixmap
+    From 4.4 - unused
+*/
+
+QIcon QAbstractFormBuilder::domPropertyToIcon(const DomProperty* p)
+{
+    Q_UNUSED(p);
+    qWarning() << "QAbstractFormBuilder::domPropertyToIcon() is obsoleted";
+    return QIcon();
+}
+
+
+/*!
+    \internal
+    Create pixmap from DOM.
+    From 4.4 - unused
+*/
+
+QPixmap QAbstractFormBuilder::domPropertyToPixmap(const DomResourcePixmap* pixmap)
+{
+    Q_UNUSED(pixmap);
+    qWarning() << "QAbstractFormBuilder::domPropertyToPixmap() is obsoleted";
+    return QPixmap();
+}
+
+
+/*!
+    \internal
+    Create pixmap from DOM. Assert if !domPixmap
+    From 4.4 - unused
+*/
+
+QPixmap QAbstractFormBuilder::domPropertyToPixmap(const DomProperty* p)
+{
+    Q_UNUSED(p);
+    qWarning() << "QAbstractFormBuilder::domPropertyToPixmap() is obsoleted";
+    return QPixmap();
+}
+
+/*!
     \fn void QAbstractFormBuilder::createConnections ( DomConnections *, QWidget * )
     \internal
 */
@@ -2678,5 +2918,59 @@ DomProperty *QAbstractFormBuilder::saveText(const QString &attributeName, const 
     \fn void QAbstractFormBuilder::createCustomWidgets ( DomCustomWidgets * )
     \internal
 */
+
+/*!
+    \fn void QAbstractFormBuilder::createResources ( DomResources * )
+    \internal
+*/
+
+/*!
+     \fn QFormScriptRunner *QAbstractFormBuilder::formScriptRunner() const
+     \internal
+     \since 4.3
+*/
+#ifndef QT_FORMBUILDER_NO_SCRIPT
+QFormScriptRunner *QAbstractFormBuilder::formScriptRunner() const
+{
+    return &(QFormBuilderExtra::instance(this)->formScriptRunner());
+}
+#endif
+
+/*!
+    Sets whether the execution of scripts is enabled to \a enabled.
+    \since 4.3
+    \internal
+*/
+
+void QAbstractFormBuilder::setScriptingEnabled(bool enabled)
+{
+#ifdef QT_FORMBUILDER_NO_SCRIPT
+    if (enabled)
+        uiLibWarning(QCoreApplication::translate("QAbstractFormBuilder", "This version of the uitools library is linked without script support."));
+#else
+    QFormScriptRunner::Options options = formScriptRunner()->options();
+    if (enabled)
+        options &= ~QFormScriptRunner::DisableScripts;
+    else
+        options |= QFormScriptRunner::DisableScripts;
+    formScriptRunner()->setOptions(options);
+#endif
+}
+
+/*!
+    Returns whether the execution of scripts is enabled.
+    \sa setScriptingEnabled()
+    \since 4.3
+    \internal
+*/
+
+bool QAbstractFormBuilder::isScriptingEnabled() const
+{
+#ifdef QT_FORMBUILDER_NO_SCRIPT
+    return false;
+#else
+    return !(formScriptRunner()->options() & QFormScriptRunner::DisableScripts);
+#endif
+}
 
 QT_END_NAMESPACE

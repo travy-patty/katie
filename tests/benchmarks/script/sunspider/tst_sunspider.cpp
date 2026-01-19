@@ -20,7 +20,6 @@
 ****************************************************************************/
 
 #include <qtest.h>
-#include <QtCore/qdebug.h>
 #include <QtCore/qdir.h>
 #include <QtCore/qfile.h>
 #include <QtCore/qtextstream.h>
@@ -59,7 +58,7 @@ private:
 
 tst_SunSpider::tst_SunSpider()
 {
-    testsDir = QDir(QLatin1String(SRCDIR "/tests"));
+    testsDir = QDir(QLatin1String(":/tests"));
     if (!testsDir.exists())
         qWarning("*** no tests/ dir!");
 }
@@ -96,12 +95,10 @@ void tst_SunSpider::benchmark()
     QBENCHMARK {
         engine.evaluate(testContents);
     }
-    if (engine.hasUncaughtException()) {
-        qWarning() << engine.uncaughtException().toString();
-    }
     QVERIFY(!engine.hasUncaughtException());
 }
 
 QTEST_MAIN(tst_SunSpider)
 
 #include "moc_tst_sunspider.cpp"
+#include "qrc_sunspider.cpp"

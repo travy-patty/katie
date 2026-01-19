@@ -44,6 +44,9 @@
 #include "qdebug.h"
 #include "qtextedit.h"
 #include "qtextedit_p.h"
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
 #include "qabstractitemview.h"
 #include "qstylesheetstyle_p.h"
 
@@ -246,6 +249,16 @@ QLineEdit::QLineEdit(const QString& contents, QWidget* parent)
 {
     Q_D(QLineEdit);
     d->init(contents);
+}
+
+
+
+/*!
+    Destroys the line edit.
+*/
+
+QLineEdit::~QLineEdit()
+{
 }
 
 
@@ -909,6 +922,46 @@ void QLineEdit::setDragEnabled(bool b)
     d->dragEnabled = b;
 }
 
+
+/*!
+  \property QLineEdit::cursorMoveStyle
+  \brief the movement style of cursor in this line edit
+  \since 4.8
+
+  When this property is set to Qt::VisualMoveStyle, the line edit will use visual
+  movement style. Pressing the left arrow key will always cause the cursor to move
+  left, regardless of the text's writing direction. The same behavior applies to
+  right arrow key.
+
+  When the property is Qt::LogicalMoveStyle (the default), within a LTR text block,
+  increase cursor position when pressing left arrow key, decrease cursor position
+  when pressing the right arrow key. If the text block is right to left, the opposite
+  behavior applies.
+*/
+
+/*!
+    \since 4.8
+
+    Returns the movement style for the cursor in the line edit.
+*/
+Qt::CursorMoveStyle QLineEdit::cursorMoveStyle() const
+{
+    Q_D(const QLineEdit);
+    return d->control->cursorMoveStyle();
+}
+
+/*!
+    \since 4.8
+
+    Sets the movement style for the cursor in the line edit to the given
+    \a style.
+*/
+void QLineEdit::setCursorMoveStyle(Qt::CursorMoveStyle style)
+{
+    Q_D(QLineEdit);
+    d->control->setCursorMoveStyle(style);
+}
+
 /*!
     \property QLineEdit::acceptableInput
     \brief whether the input satisfies the inputMask and the
@@ -1250,7 +1303,8 @@ bool QLineEdit::event(QEvent * e)
             d->control->setCursorBlinkPeriod(QApplication::cursorFlashTime());
             QStyleOptionFrameV2 opt;
             initStyleOption(&opt);
-            if (!hasSelectedText() || style()->styleHint(QStyle::SH_BlinkCursorWhenTextSelected, &opt, this))
+            if ((!hasSelectedText() && d->control->preeditAreaText().isEmpty())
+                || style()->styleHint(QStyle::SH_BlinkCursorWhenTextSelected, &opt, this))
                 d->setCursorVisible(true);
         }
     }
@@ -1415,7 +1469,8 @@ void QLineEdit::focusInEvent(QFocusEvent *e)
     d->control->setCursorBlinkPeriod(QApplication::cursorFlashTime());
     QStyleOptionFrameV2 opt;
     initStyleOption(&opt);
-    if(!hasSelectedText() || style()->styleHint(QStyle::SH_BlinkCursorWhenTextSelected, &opt, this))
+    if((!hasSelectedText() && d->control->preeditAreaText().isEmpty())
+       || style()->styleHint(QStyle::SH_BlinkCursorWhenTextSelected, &opt, this))
         d->setCursorVisible(true);
 #ifndef QT_NO_COMPLETER
     if (d->control->completer()) {

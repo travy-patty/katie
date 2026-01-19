@@ -26,17 +26,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wtf/Assertions.h>
-#include <QStringList>
-#include <QDebug>
 
-// for reference:
-// https://en.cppreference.com/w/cpp/regex/basic_regex
+#include <pcre.h>
 
 namespace JSC {
 
 inline RegExp::RegExp(const UString& pattern)
     : m_pattern(pattern)
     , m_flagBits(0)
+    , m_constructionError(0)
     , m_numSubpatterns(0)
 {
     compile();
@@ -45,6 +43,7 @@ inline RegExp::RegExp(const UString& pattern)
 inline RegExp::RegExp(const UString& pattern, const UString& flags)
     : m_pattern(pattern)
     , m_flagBits(0)
+    , m_constructionError(0)
     , m_numSubpatterns(0)
 {
     // NOTE: The global flag is handled on a case-by-case basis by functions like
@@ -64,6 +63,7 @@ inline RegExp::RegExp(const UString& pattern, const UString& flags)
             break;
         default:
             m_constructionError = flagError;
+            m_regExp = 0;
             return;
         }
     }
@@ -73,6 +73,7 @@ inline RegExp::RegExp(const UString& pattern, const UString& flags)
 
 RegExp::~RegExp()
 {
+    pcre_free(m_regExp);
 }
 
 PassRefPtr<RegExp> RegExp::create(const UString& pattern)
@@ -87,62 +88,54 @@ PassRefPtr<RegExp> RegExp::create(const UString& pattern, const UString& flags)
 
 void RegExp::compile()
 {
-    m_constructionError.clear();
-    m_numSubpatterns = 0;
+    m_regExp = nullptr;
 
-    if (multiline()) {
-        m_constructionError = "Multi-line not implemented";
-        return;
-    }
-    Qt::CaseSensitivity regexOptions = Qt::CaseSensitive;
-    if (ignoreCase()) {
-        regexOptions = Qt::CaseInsensitive;
-    }
-    m_regExp = QRegExp(QString(m_pattern), regexOptions);
-    if (!m_regExp.isValid()) {
-        m_constructionError = m_regExp.errorString().toLatin1();
-        return;
-    }
-    m_numSubpatterns = m_regExp.captureCount();
+    int regexOptions = PCRE_JAVASCRIPT_COMPAT | PCRE_NO_UTF8_CHECK;
+    if (ignoreCase())
+        regexOptions |= PCRE_CASELESS;
+    if (multiline())
+        regexOptions |= PCRE_MULTILINE;
+    int errorOffset;
+    m_regExp = pcre_compile(m_pattern.ascii(), regexOptions, &m_constructionError, &errorOffset, nullptr);
+
+    pcre_fullinfo(m_regExp, nullptr, PCRE_INFO_CAPTURECOUNT, &m_numSubpatterns);
 }
 
 int RegExp::match(const UString& s, int startOffset, Vector<int, 32>* ovector)
 {
-    if (!ovector) {
-        return -1;
-    }
-    if (startOffset < 0) {
+    if (startOffset < 0)
         startOffset = 0;
-    }
-    ovector->clear();
+    if (ovector)
+        ovector->clear();
 
     if (startOffset > s.size() || s.isNull())
         return -1;
 
-    if (isValid()) {
-        const QString qstring(s);
-        const bool didmatch = (m_regExp.indexIn(qstring, startOffset) != -1);
-
-        if (!didmatch) {
-#ifndef QT_NO_DEBUG
-            fprintf(stderr, "jsRegExpExecute failed with result\n");
-#endif
-            return -1;
+    if (m_regExp) {
+        // Set up the offset vector for the result.
+        // First 2/3 used for result, the last third used by PCRE.
+        int* offsetVector;
+        int offsetVectorSize;
+        int fixedSizeOffsetVector[3];
+        if (!ovector) {
+            offsetVectorSize = 3;
+            offsetVector = fixedSizeOffsetVector;
+        } else {
+            offsetVectorSize = (m_numSubpatterns + 1) * 3;
+            ovector->resize(offsetVectorSize);
+            offsetVector = ovector->data();
         }
 
-        const int capsize = m_regExp.capturedTexts().size();
+        const int numMatches = pcre_exec(m_regExp, nullptr, s.ascii(), s.size(), startOffset, 0, offsetVector, offsetVectorSize);
 
-        // Set up the offset vector for the result.
-        // First 2/3 used for result, the last third unused but there for compatibility.
-        ovector->resize((capsize + 1) * 3);
-        int* offsetVector= ovector->data();
-
-        size_t nummatches = 0;
-        for (int i = 0; i < capsize; i++) {
-            offsetVector[nummatches] = m_regExp.pos(i);
-            offsetVector[nummatches + 1] = m_regExp.cap(i).length();
-            offsetVector[nummatches + 2] = 0;
-            nummatches++;
+        if (numMatches < 0) {
+#ifndef QT_NO_DEBUG
+            if (numMatches != PCRE_ERROR_NOMATCH)
+                fprintf(stderr, "jsRegExpExecute failed with result %d\n", numMatches);
+#endif
+            if (ovector)
+                ovector->clear();
+            return -1;
         }
 
         return offsetVector[0];

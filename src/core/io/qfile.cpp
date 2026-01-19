@@ -22,14 +22,13 @@
 #include "qplatformdefs.h"
 #include "qdebug.h"
 #include "qfile.h"
+#include "qfsfileengine.h"
 #include "qtemporaryfile.h"
 #include "qlist.h"
 #include "qfileinfo.h"
 #include "qiodevice_p.h"
 #include "qfile_p.h"
-#include "qfilesystemengine_p.h"
 #include "qcorecommon_p.h"
-#include "qcore_unix_p.h"
 
 #ifdef QT_NO_QOBJECT
 #define tr(X) QString::fromLatin1(X)
@@ -39,61 +38,42 @@ QT_BEGIN_NAMESPACE
 
 //************* QFilePrivate
 QFilePrivate::QFilePrivate()
-    : error(QFile::NoError),
-    fd(-1),
-    closeFileHandle(false)
+    : fileEngine(0),
+      error(QFile::NoError)
 {
 }
 
 QFilePrivate::~QFilePrivate()
 {
+    delete fileEngine;
+    fileEngine = 0;
 }
 
-bool QFilePrivate::doStat(QFileSystemMetaData::MetaDataFlags flags) const
+bool
+QFilePrivate::openExternalFile(int flags, int fd, QFile::FileHandleFlags handleFlags)
 {
-    if (!metaData.hasFlags(flags)) {
-        if (!fileEntry.isEmpty())
-            QFileSystemEngine::fillMetaData(fileEntry, metaData, metaData.missingFlags(flags));
-
-        if (metaData.missingFlags(flags) && fd != -1)
-            QFileSystemEngine::fillMetaData(fd, metaData);
-    }
-
-    return metaData.exists();
+#ifdef QT_NO_FSFILEENGINE
+    Q_UNUSED(flags);
+    Q_UNUSED(fd);
+    return false;
+#else
+    delete fileEngine;
+    fileEngine = 0;
+    QFSFileEngine *fe = new QFSFileEngine;
+    fileEngine = fe;
+    return fe->open(QIODevice::OpenMode(flags), fd, handleFlags);
+#endif
 }
 
-bool QFilePrivate::openExternalFile(QIODevice::OpenMode mode, int _fd, QFile::FileHandleFlags handleFlags)
+void
+QFilePrivate::setError(QFile::FileError err)
 {
-    // Append implies WriteOnly.
-    if (mode & QFile::Append)
-        mode |= QFile::WriteOnly;
-
-    // WriteOnly implies Truncate if neither ReadOnly nor Append are sent.
-    if ((mode & QFile::WriteOnly) && !(mode & (QFile::ReadOnly | QFile::Append)))
-        mode |= QFile::Truncate;
-
-    closeFileHandle = (handleFlags & QFile::AutoCloseHandle);
-    fileEntry.clear();
-    fd = _fd;
-    metaData.clear();
-
-    // Seek to the end when in Append mode.
-    if (mode & QFile::Append) {
-        if (QT_LSEEK(fd, 0, SEEK_END) == -1) {
-            setError(errno == EMFILE ? QFile::ResourceError : QFile::OpenError,
-                     qt_error_string(errno));
-            if (closeFileHandle) {
-                qt_safe_close(fd);
-            }
-            fd = -1;
-            return false;
-        }
-    }
-
-    return true;
+    error = err;
+    errorString.clear();
 }
 
-void QFilePrivate::setError(QFile::FileError err, const QString &errStr)
+void
+QFilePrivate::setError(QFile::FileError err, const QString &errStr)
 {
     error = err;
     errorString = errStr;
@@ -297,7 +277,7 @@ QFile::QFile()
 QFile::QFile(const QString &name)
     : QIODevice(*new QFilePrivate)
 {
-    d_func()->fileEntry = QFileSystemEntry(name);
+    d_func()->fileName = name;
 }
 QFile::QFile(QFilePrivate &dd)
     : QIODevice(dd)
@@ -318,7 +298,6 @@ QFile::QFile(QObject *parent)
     : QIODevice(*new QFilePrivate, parent)
 {
 }
-
 /*!
     Constructs a new file object to represent the file with the given \a name.
 */
@@ -326,9 +305,8 @@ QFile::QFile(const QString &name)
     : QIODevice(*new QFilePrivate, 0)
 {
     Q_D(QFile);
-    d->fileEntry = QFileSystemEntry(name);
+    d->fileName = name;
 }
-
 /*!
     Constructs a new file object with the given \a parent to represent the
     file with the specified \a name.
@@ -337,9 +315,8 @@ QFile::QFile(const QString &name, QObject *parent)
     : QIODevice(*new QFilePrivate, parent)
 {
     Q_D(QFile);
-    d->fileEntry = QFileSystemEntry(name);
+    d->fileName = name;
 }
-
 /*!
     \internal
 */
@@ -365,8 +342,7 @@ QFile::~QFile()
 */
 QString QFile::fileName() const
 {
-    Q_D(const QFile);
-    return d->fileEntry.filePath();
+    return fileEngine()->fileName(QAbstractFileEngine::DefaultName);
 }
 
 /*!
@@ -387,16 +363,30 @@ QString QFile::fileName() const
 
     \sa fileName(), QFileInfo, QDir
 */
-void QFile::setFileName(const QString &name)
+void
+QFile::setFileName(const QString &name)
 {
     Q_D(QFile);
     if (Q_UNLIKELY(isOpen())) {
         qWarning("QFile::setFileName: File (%s) is already opened",
                  qPrintable(fileName()));
+        close();
     }
-    close();
-    d->fileEntry = QFileSystemEntry(name);
+    if(d->fileEngine) { //get a new file engine later
+        delete d->fileEngine;
+        d->fileEngine = 0;
+    }
+    d->fileName = name;
 }
+
+/*!
+    \fn QString QFile::decodeName(const char *localFileName)
+
+    \overload
+
+    Returns the Unicode version of the given \a localFileName. See
+    encodeName() for details.
+*/
 
 /*!
     This function converts \a fileName to the local 8-bit encoding
@@ -417,19 +407,12 @@ QByteArray QFile::encodeName(const QString &fileName)
 
     \sa setDecodingFunction(), encodeName()
 */
-QString QFile::decodeName(const QByteArray &localFileName)
+
+QString
+QFile::decodeName(const QByteArray &localFileName)
 {
-    return QString::fromLocal8Bit(localFileName.constData(), localFileName.size());
+    return QString::fromLocal8Bit(localFileName.constData());
 }
-
-/*!
-    \fn QString QFile::decodeName(const char *localFileName)
-
-    \overload
-
-    Returns the Unicode version of the given \a localFileName. See
-    encodeName() for details.
-*/
 
 /*!
     \overload
@@ -439,26 +422,27 @@ QString QFile::decodeName(const QByteArray &localFileName)
 
     \sa fileName(), setFileName()
 */
-bool QFile::exists() const
+
+bool
+QFile::exists() const
 {
-    Q_D(const QFile);
-    d->metaData.clear(); // always stat
-    if (!d->doStat(QFileSystemMetaData::ExistsAttribute | QFileSystemMetaData::FileType))
-        return false;
-    return d->metaData.exists() && d->metaData.isFile();
+    // 0x1000000 = QAbstractFileEngine::Refresh, forcing an update
+    const QAbstractFileEngine::FileFlags flags = fileEngine()->fileFlags(QAbstractFileEngine::Refresh
+        | QAbstractFileEngine::FlagsMask);
+    const QAbstractFileEngine::FileFlags type = fileEngine()->fileFlags(QAbstractFileEngine::Refresh
+        | QAbstractFileEngine::TypesMask);
+    return ((flags & QAbstractFileEngine::ExistsFlag) && (type & QAbstractFileEngine::FileType));
 }
 
 /*!
     Returns true if the file specified by \a fileName exists; otherwise
     returns false.
 */
-bool QFile::exists(const QString &fileName)
+
+bool
+QFile::exists(const QString &fileName)
 {
-#ifdef QT_BOOTSTRAPPED
     QFileInfo info(fileName);
-#else
-    QStatInfo info(fileName);
-#endif
     return (info.exists() && info.isFile());
 }
 
@@ -467,26 +451,24 @@ bool QFile::exists(const QString &fileName)
     \since 4.2
     \overload
 
-    Returns the absolute path of the file or directory a symlink points to,
-    or a an empty string if the object isn't a symbolic link.
+    Returns the absolute path of the file or directory a symlink (or shortcut
+    on Windows) points to, or a an empty string if the object isn't a symbolic
+    link.
 
     This name may not represent an existing file; it is only a string.
     QFile::exists() returns true if the symlink points to an existing file.
 
     \sa fileName() setFileName()
 */
-QString QFile::readLink() const
+
+QString
+QFile::readLink() const
 {
-    Q_D(const QFile);
-    if (!d->metaData.hasFlags(QFileSystemMetaData::LinkType))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::LinkType);
-    if (d->metaData.isLink()) {
-        return QFileSystemEngine::linkTarget(d->fileEntry, d->metaData);
-    }
-    return QString();
+    return fileEngine()->fileName(QAbstractFileEngine::LinkName);
 }
 
 /*!
+    \fn static QString QFile::readLink(const QString &fileName)
     \since 4.2
 
     Returns the absolute path of the file or directory referred to by the
@@ -496,15 +478,11 @@ QString QFile::readLink() const
     This name may not represent an existing file; it is only a string.
     QFile::exists() returns true if the symlink points to an existing file.
 */
-QString QFile::readLink(const QString &fileName)
+
+QString
+QFile::readLink(const QString &fileName)
 {
-    QFileSystemMetaData metaData;
-    QFileSystemEntry fileEntry(fileName);
-    QFileSystemEngine::fillMetaData(fileEntry, metaData, QFileSystemMetaData::LinkType);
-    if (metaData.isLink()) {
-        return QFileSystemEngine::linkTarget(fileEntry, metaData);
-    }
-    return QString();
+    return QFileInfo(fileName).readLink();
 }
 
 /*!
@@ -515,25 +493,23 @@ QString QFile::readLink(const QString &fileName)
 
     \sa setFileName()
 */
-bool QFile::remove()
+
+bool
+QFile::remove()
 {
     Q_D(QFile);
-    if (Q_UNLIKELY(d->fileEntry.isEmpty())) {
+    if (Q_UNLIKELY(d->fileName.isEmpty())) {
         qWarning("QFile::remove: Empty or null file name");
         return false;
     }
-    d->setError(QFile::NoError, QString());
+    unsetError();
     close();
     if(error() == QFile::NoError) {
-        int error = 0;
-        bool ret = QFileSystemEngine::removeFile(d->fileEntry, &error);
-        d->metaData.clear();
-        if (!ret) {
-            d->setError(QFile::RemoveError, qt_error_string(error));
-            return false;
+        if(fileEngine()->remove()) {
+            unsetError();
+            return true;
         }
-        d->setError(QFile::NoError, QString());
-        return true;
+        d->setError(QFile::RemoveError, d->fileEngine->errorString());
     }
     return false;
 }
@@ -547,10 +523,11 @@ bool QFile::remove()
 
     \sa remove()
 */
-bool QFile::remove(const QString &fileName)
+
+bool
+QFile::remove(const QString &fileName)
 {
-    int error = 0;
-    return QFileSystemEngine::removeFile(QFileSystemEntry(fileName), &error);
+    return QFile(fileName).remove();
 }
 
 /*!
@@ -564,15 +541,17 @@ bool QFile::remove(const QString &fileName)
 
     \sa setFileName()
 */
-bool QFile::rename(const QString &newName)
+
+bool
+QFile::rename(const QString &newName)
 {
     Q_D(QFile);
-    if (Q_UNLIKELY(d->fileEntry.isEmpty())) {
+    if (Q_UNLIKELY(d->fileName.isEmpty())) {
         qWarning("QFile::rename: Empty or null file name");
         return false;
     }
 #ifndef QT_HAVE_RENAMEAT2
-    if (QFile::exists(newName)) {
+    if (QFile(newName).exists()) {
         // ### Race condition. If a file is moved in after this, it /will/ be
         // overwritten. On Unix, the proper solution is to use hardlinks:
         // return ::link(old, new) && ::remove(old);
@@ -580,24 +559,17 @@ bool QFile::rename(const QString &newName)
         return false;
     }
 #endif
-    d->setError(QFile::NoError, QString());
+    unsetError();
     close();
     if(error() == QFile::NoError) {
-        int error = 0;
-        bool ret = QFileSystemEngine::renameFile(d->fileEntry, QFileSystemEntry(newName), &error);
-        d->metaData.clear();
-        if (!ret) {
-            d->setError(QFile::RenameError, qt_error_string(error));
-            return false;
+        if (fileEngine()->rename(newName)) {
+            unsetError();
+            // engine was able to handle the new name so we just reset it
+            d->fileEngine->setFileName(newName);
+            d->fileName = newName;
+            return true;
         }
-
-        d->setError(QFile::NoError, QString());
-        // just reset it
-        d->metaData.clear();
-        d->fd = -1;
-        d->closeFileHandle = false;
-        d->fileEntry = QFileSystemEntry(newName);
-        return true;
+        d->setError(QFile::RenameError, d->fileEngine->errorString());
     }
     return false;
 }
@@ -613,15 +585,11 @@ bool QFile::rename(const QString &newName)
 
     \sa rename()
 */
-bool QFile::rename(const QString &oldName, const QString &newName)
+
+bool
+QFile::rename(const QString &oldName, const QString &newName)
 {
-#ifndef QT_HAVE_RENAMEAT2
-    if (QFile::exists(newName)) {
-        return false;
-    }
-#endif
-    int error = 0;
-    return QFileSystemEngine::renameFile(QFileSystemEntry(oldName), QFileSystemEntry(newName), &error);
+    return QFile(oldName).rename(newName);
 }
 
 /*!
@@ -637,24 +605,26 @@ bool QFile::rename(const QString &oldName, const QString &newName)
 
     \note To create a valid link on Windows, \a linkName must have a \c{.lnk} file extension.
 
+    \note Symbian filesystem does not support links.
+
     \sa setFileName()
 */
-bool QFile::link(const QString &linkName)
+
+bool
+QFile::link(const QString &linkName)
 {
     Q_D(QFile);
-    if (Q_UNLIKELY(d->fileEntry.isEmpty())) {
+    if (Q_UNLIKELY(d->fileName.isEmpty())) {
         qWarning("QFile::link: Empty or null file name");
         return false;
     }
     QFileInfo fi(linkName);
-    int error = 0;
-    bool ret = QFileSystemEngine::createLink(d->fileEntry, QFileSystemEntry(fi.absoluteFilePath()), &error);
-    if (!ret) {
-        d->setError(QFile::RenameError, qt_error_string(error));
-        return false;
+    if(fileEngine()->link(fi.absoluteFilePath())) {
+        unsetError();
+        return true;
     }
-    d->setError(QFile::NoError, QString());
-    return true;
+    d->setError(QFile::RenameError, d->fileEngine->errorString());
+    return false;
 }
 
 /*!
@@ -667,10 +637,11 @@ bool QFile::link(const QString &linkName)
 
     \sa link()
 */
-bool QFile::link(const QString &fileName, const QString &linkName)
+
+bool
+QFile::link(const QString &fileName, const QString &linkName)
 {
-    int error = 0;
-    return QFileSystemEngine::createLink(QFileSystemEntry(fileName), QFileSystemEntry(linkName), &error);
+    return QFile(fileName).link(linkName);
 }
 
 /*!
@@ -684,23 +655,24 @@ bool QFile::link(const QString &fileName, const QString &linkName)
 
     \sa setFileName()
 */
-bool QFile::copy(const QString &newName)
+
+bool
+QFile::copy(const QString &newName)
 {
     Q_D(QFile);
-    if (Q_UNLIKELY(d->fileEntry.isEmpty())) {
+    if (Q_UNLIKELY(d->fileName.isEmpty())) {
         qWarning("QFile::copy: Empty or null file name");
         return false;
     }
 
-    d->setError(QFile::NoError, QString());
+    unsetError();
     close();
     if(error() == QFile::NoError) {
-        int error = 0;
-        if(QFileSystemEngine::copyFile(d->fileEntry, QFileSystemEntry(newName), &error)) {
-            d->setError(QFile::NoError, QString());
+        if(fileEngine()->copy(newName)) {
+            unsetError();
             return true;
         }
-        d->setError(QFile::CopyError, qt_error_string(error));
+        d->setError(QFile::CopyError, d->fileEngine->errorString());
     }
     return false;
 }
@@ -716,10 +688,11 @@ bool QFile::copy(const QString &newName)
 
     \sa rename()
 */
-bool QFile::copy(const QString &fileName, const QString &newName)
+
+bool
+QFile::copy(const QString &fileName, const QString &newName)
 {
-    int error = 0;
-    return QFileSystemEngine::copyFile(QFileSystemEntry(fileName), QFileSystemEntry(newName), &error);
+    return QFile(fileName).copy(newName);
 }
 
 /*!
@@ -733,9 +706,7 @@ bool QFile::copy(const QString &fileName, const QString &newName)
 bool QFile::isSequential() const
 {
     Q_D(const QFile);
-    if (d->doStat(QFileSystemMetaData::SequentialType))
-        return d->metaData.isSequential();
-    return true;
+    return d->fileEngine && d->fileEngine->isSequential();
 }
 
 /*!
@@ -759,91 +730,24 @@ bool QFile::open(OpenMode mode)
         qWarning("QFile::open: File (%s) already open", qPrintable(fileName()));
         return false;
     }
-    d->setError(QFile::NoError, QString());
-    if (mode & Append) {
+    if (mode & Append)
         mode |= WriteOnly;
-    }
+
+    unsetError();
     if (Q_UNLIKELY((mode & (ReadOnly | WriteOnly)) == 0)) {
-        qWarning("QFile::open: File access not specified");
+        qWarning("QIODevice::open: File access not specified");
         return false;
     }
 
-    if (Q_UNLIKELY(d->fileEntry.isEmpty())) {
-        qWarning("QFile::open: No file name specified");
-        d->setError(QFile::OpenError, QLatin1String("No file name specified"));
-        return false;
+    if (fileEngine()->open(mode)) {
+        QIODevice::open(mode);
+        return true;
     }
-
-    // Append implies WriteOnly.
-    if (mode & QFile::Append)
-        mode |= QFile::WriteOnly;
-
-    // WriteOnly implies Truncate if neither ReadOnly nor Append are sent.
-    if ((mode & QFile::WriteOnly) && !(mode & (QFile::ReadOnly | QFile::Append)))
-        mode |= QFile::Truncate;
-
-    d->metaData.clear();
-    d->fd = -1;
-
-    int flags = QT_OPEN_RDONLY;
-
-    if ((mode & QFile::ReadWrite) == QFile::ReadWrite) {
-        flags = QT_OPEN_RDWR | QT_OPEN_CREAT;
-    } else if (mode & QFile::WriteOnly) {
-        flags = QT_OPEN_WRONLY | QT_OPEN_CREAT;
-    }
-
-    if (mode & QFile::Append) {
-        flags |= QT_OPEN_APPEND;
-    } else if (mode & QFile::WriteOnly) {
-        if ((mode & QFile::Truncate) || !(mode & QFile::ReadOnly))
-            flags |= QT_OPEN_TRUNC;
-    }
-
-    if (mode & QFile::Unbuffered) {
-#ifdef O_DSYNC
-        flags |= O_DSYNC;
-#else
-        flags |= O_SYNC;
-#endif
-    }
-
-    // Try to open the file.
-    const QByteArray native = d->fileEntry.nativeFilePath();
-    d->fd = qt_safe_open(native.constData(), flags, 0666);
-
-    // On failure, return and report the error.
-    if (d->fd == -1) {
-        d->setError(errno == EMFILE ? QFile::ResourceError : QFile::OpenError,
-                    qt_error_string(errno));
-        return false;
-    }
-
-    // Refuse to open directories, EISDIR is not a thing (by standards) for
-    // non-write modes.
-    QT_STATBUF statbuf;
-    if (QT_FSTAT(d->fd, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) {
-        qt_safe_close(d->fd);
-        d->fd = -1;
-        d->setError(QFile::OpenError, QLatin1String("file to open is a directory"));
-        return false;
-    }
-
-    // Seek to the end when in Append mode.
-    if (mode & QFile::Append) {
-        if (QT_LSEEK(d->fd, 0, SEEK_END) == -1) {
-            qt_safe_close(d->fd);
-            d->fd = -1;
-            d->setError(errno == EMFILE ? QFile::ResourceError : QFile::OpenError,
-                        qt_error_string(errno));
-            return false;
-        }
-    }
-
-    d->closeFileHandle = true;
-
-    QIODevice::open(mode);
-    return true;
+    QFile::FileError err = d->fileEngine->error();
+    if(err == QFile::UnspecifiedError)
+        err = QFile::OpenError;
+    d->setError(err, d->fileEngine->errorString());
+    return false;
 }
 
 /*! \fn QFile::open(OpenMode, FILE*)
@@ -886,31 +790,26 @@ bool QFile::open(OpenMode mode)
 */
 bool QFile::open(FILE *fh, OpenMode mode, FileHandleFlags handleFlags)
 {
-    Q_D(QFile);
     if (Q_UNLIKELY(isOpen())) {
         qWarning("QFile::open: File (%s) already open", qPrintable(fileName()));
         return false;
     }
-    d->setError(QFile::NoError, QString());
-    if (mode & Append) {
+    if (mode & Append)
         mode |= WriteOnly;
-    }
+    unsetError();
     if (Q_UNLIKELY((mode & (ReadOnly | WriteOnly)) == 0)) {
         qWarning("QFile::open: File access not specified");
         return false;
     }
+    Q_D(QFile);
     if (d->openExternalFile(mode, QT_FILENO(fh), handleFlags)) {
         QIODevice::open(mode);
         if (mode & Append) {
             seek(size());
         } else {
-            const qint64 pos = (qint64)QT_FTELL(fh);
-            if (pos != -1 && !isSequential()) {
+            qint64 pos = (qint64)QT_FTELL(fh);
+            if (pos != -1)
                 seek(pos);
-            } else if (pos != -1) {
-                d->pos = pos;
-                d->devicePos = pos;
-            }
         }
         return true;
     }
@@ -951,31 +850,26 @@ bool QFile::open(FILE *fh, OpenMode mode, FileHandleFlags handleFlags)
 */
 bool QFile::open(int fd, OpenMode mode, FileHandleFlags handleFlags)
 {
-    Q_D(QFile);
     if (Q_UNLIKELY(isOpen())) {
         qWarning("QFile::open: File (%s) already open", qPrintable(fileName()));
         return false;
     }
-    d->setError(QFile::NoError, QString());
-    if (mode & Append) {
+    if (mode & Append)
         mode |= WriteOnly;
-    }
+    unsetError();
     if (Q_UNLIKELY((mode & (ReadOnly | WriteOnly)) == 0)) {
         qWarning("QFile::open: File access not specified");
         return false;
     }
+    Q_D(QFile);
     if (d->openExternalFile(mode, fd, handleFlags)) {
         QIODevice::open(mode);
         if (mode & Append) {
             seek(size());
         } else {
             const qint64 pos = (qint64)QT_LSEEK(fd, 0, SEEK_CUR);
-            if (pos != -1 && !isSequential()) {
+            if (pos != -1)
                 seek(pos);
-            } else if (pos != -1) {
-                d->pos = pos;
-                d->devicePos = pos;
-            }
         }
         return true;
     }
@@ -984,24 +878,74 @@ bool QFile::open(int fd, OpenMode mode, FileHandleFlags handleFlags)
 
 
 /*!
-    Returns the file handle of the file.
+  Returns the file handle of the file.
 
-    This is a small positive integer, suitable for use with C library
-    functions such as fdopen() and fcntl(). On systems that use file
-    descriptors for sockets (i.e. Unix systems, but not Windows) the handle
-    can be used with QSocketNotifier as well.
+  This is a small positive integer, suitable for use with C library
+  functions such as fdopen() and fcntl(). On systems that use file
+  descriptors for sockets (i.e. Unix systems, but not Windows) the handle
+  can be used with QSocketNotifier as well.
 
-    If the file is not open, or there is an error, handle() returns -1.
+  If the file is not open, or there is an error, handle() returns -1.
 
-    \sa QSocketNotifier
+  \sa QSocketNotifier
 */
+
 int QFile::handle() const
 {
     Q_D(const QFile);
-    if (!isOpen()) {
+    if (!isOpen() || !d->fileEngine)
         return -1;
+
+    return d->fileEngine->handle();
+}
+
+/*!
+    \since 4.4
+    Maps \a size bytes of the file into memory starting at \a offset.  A file
+    should be open for a map to succeed but the file does not need to stay
+    open after the memory has been mapped.  When the QFile is destroyed
+    or a new file is opened with this object, any maps that have not been
+    unmapped will automatically be unmapped.
+
+    Returns a pointer to the memory or 0 if there is an error.
+
+    \sa unmap(), QAbstractFileEngine::supportsExtension()
+ */
+uchar *QFile::map(qint64 offset, qint64 size)
+{
+    Q_D(QFile);
+    if (fileEngine()
+            && d->fileEngine->supportsExtension(QAbstractFileEngine::MapExtension)) {
+        unsetError();
+        uchar *address = d->fileEngine->map(offset, size);
+        if (address == 0)
+            d->setError(d->fileEngine->error(), d->fileEngine->errorString());
+        return address;
     }
-    return d->fd;
+    return 0;
+}
+
+/*!
+    \since 4.4
+    Unmaps the memory \a address.
+
+    Returns true if the unmap succeeds; false otherwise.
+
+    \sa map(), QAbstractFileEngine::supportsExtension()
+ */
+bool QFile::unmap(uchar *address)
+{
+    Q_D(QFile);
+    if (fileEngine()
+        && d->fileEngine->supportsExtension(QAbstractFileEngine::UnMapExtension)) {
+        unsetError();
+        const bool success = d->fileEngine->unmap(address);
+        if (!success)
+            d->setError(d->fileEngine->error(), d->fileEngine->errorString());
+        return success;
+    }
+    d->setError(PermissionsError, tr("No file engine available or engine does not support UnMapExtension"));
+    return false;
 }
 
 /*!
@@ -1024,26 +968,19 @@ int QFile::handle() const
 
     \sa size(), setFileName()
 */
+
 bool QFile::resize(qint64 sz)
 {
     Q_D(QFile);
-    if (isOpen() && QT_LSEEK(d->fd, 0, SEEK_CUR) > sz) {
+    fileEngine();
+    if (isOpen() && d->fileEngine->pos() > sz)
         seek(sz);
+    if(d->fileEngine->setSize(sz)) {
+        unsetError();
+        return true;
     }
-    int ret = 0;
-    if (d->fd != -1) {
-        Q_EINTR_LOOP(ret, QT_FTRUNCATE(d->fd, sz));
-    } else {
-        const QByteArray native = d->fileEntry.nativeFilePath();
-        Q_EINTR_LOOP(ret, QT_TRUNCATE(native.constData(), sz));
-    }
-    d->metaData.clearFlags(QFileSystemMetaData::SizeAttribute);
-    if (ret == -1) {
-        d->setError(QFile::ResizeError, qt_error_string(errno));
-        return false;
-    }
-    d->setError(QFile::NoError, QString());
-    return true;
+    d->setError(QFile::ResizeError, d->fileEngine->errorString());
+    return false;
 }
 
 /*!
@@ -1056,12 +993,10 @@ bool QFile::resize(qint64 sz)
 
     \sa resize()
 */
+
 bool QFile::resize(const QString &fileName, qint64 sz)
 {
-    const QByteArray native = QFileSystemEntry(fileName).nativeFilePath();
-    int ret = 0;
-    Q_EINTR_LOOP(ret, QT_TRUNCATE(native.constData(), sz));
-    return (ret != -1);
+    return QFile(fileName).resize(sz);
 }
 
 /*!
@@ -1070,13 +1005,11 @@ bool QFile::resize(const QString &fileName, qint64 sz)
 
     \sa setPermissions(), setFileName()
 */
+
 QFile::Permissions QFile::permissions() const
 {
-    Q_D(const QFile);
-    bool exists = d->doStat(QFileSystemMetaData::Permissions | QFileSystemMetaData::LinkType);
-    if (!exists && !d->metaData.isLink())
-        return 0;
-    return d->metaData.permissions();
+    QAbstractFileEngine::FileFlags perms = fileEngine()->fileFlags(QAbstractFileEngine::PermsMask) & QAbstractFileEngine::PermsMask;
+    return QFile::Permissions((int)perms); //ewww
 }
 
 /*!
@@ -1085,12 +1018,10 @@ QFile::Permissions QFile::permissions() const
     Returns the complete OR-ed together combination of
     QFile::Permission for \a fileName.
 */
+
 QFile::Permissions QFile::permissions(const QString &fileName)
 {
-    QFileSystemMetaData metaData;
-    QFileSystemEntry fileEntry(fileName);
-    QFileSystemEngine::fillMetaData(fileEntry, metaData, QFileSystemMetaData::Permissions | QFileSystemMetaData::LinkType);
-    return metaData.permissions();
+    return QFile(fileName).permissions();
 }
 
 /*!
@@ -1100,16 +1031,16 @@ QFile::Permissions QFile::permissions(const QString &fileName)
 
     \sa permissions(), setFileName()
 */
+
 bool QFile::setPermissions(Permissions permissions)
 {
     Q_D(QFile);
-    int error = 0;
-    if (!QFileSystemEngine::setPermissions(d->fileEntry, permissions, &error)) {
-        d->setError(QFile::PermissionsError, qt_error_string(error));
-        return false;
+    if(fileEngine()->setPermissions(permissions)) {
+        unsetError();
+        return true;
     }
-    d->setError(QFile::NoError, QString());
-    return true;
+    d->setError(QFile::PermissionsError, d->fileEngine->errorString());
+    return false;
 }
 
 /*!
@@ -1117,30 +1048,39 @@ bool QFile::setPermissions(Permissions permissions)
 
     Sets the permissions for \a fileName file to \a permissions.
 */
+
 bool QFile::setPermissions(const QString &fileName, Permissions permissions)
 {
-    int error = 0;
-    return QFileSystemEngine::setPermissions(QFileSystemEntry(fileName), permissions, &error);
+    return QFile(fileName).setPermissions(permissions);
 }
 
 /*!
     Flushes any buffered data to the file. Returns true if successful;
     otherwise returns false.
 */
+
 bool QFile::flush()
 {
     Q_D(QFile);
-    if (d->fd == -1) {
-        d->setError(QFile::WriteError, QString());
+    if (Q_UNLIKELY(!d->fileEngine)) {
+        qWarning("QFile::flush: No file engine. Is IODevice open?");
+        return false;
+    }
+
+    if (!d->fileEngine->flush()) {
+        QFile::FileError err = d->fileEngine->error();
+        if(err == QFile::UnspecifiedError)
+            err = QFile::WriteError;
+        d->setError(err, d->fileEngine->errorString());
         return false;
     }
     return true;
 }
 
 /*!
-    Calls QFile::flush() and closes the file. Errors from flush are ignored.
+  Calls QFile::flush() and closes the file. Errors from flush are ignored.
 
-    \sa QIODevice::close()
+  \sa QIODevice::close()
 */
 void QFile::close()
 {
@@ -1150,69 +1090,50 @@ void QFile::close()
     const bool flushed = flush();
     QIODevice::close();
 
-    if (d->fd == -1) {
-        d->setError(QFile::UnspecifiedError, QString());
-        return;
-    }
-
-    d->metaData.clear();
-
-    // Close the file if we created the handle.
-    if (d->closeFileHandle) {
-        const int ret = qt_safe_close(d->fd);
-
-        // We must reset these guys regardless; calling close again after a
-        // failed close causes crashes on some systems.
-        d->fd = -1;
-
-        // Report errors.
-        if (ret != 0) {
-            d->setError(QFile::UnspecifiedError, qt_error_string(errno));
-            return;
-        }
-    }
-
-    if (flushed) {
-        d->setError(QFile::NoError, QString());
-    }
+    // keep earlier error from flush
+    if (d->fileEngine->close() && flushed)
+        unsetError();
+    else if (flushed)
+        d->setError(d->fileEngine->error(), d->fileEngine->errorString());
 }
 
 /*!
-    Returns the size of the file.
+  Returns the size of the file.
 
-    For regular empty files on Unix (e.g. those in \c /proc), this function
-    returns 0; the contents of such a file are generated on demand in response
-    to you calling read().
+  For regular empty files on Unix (e.g. those in \c /proc), this function
+  returns 0; the contents of such a file are generated on demand in response
+  to you calling read().
 */
+
 qint64 QFile::size() const
 {
     Q_D(const QFile);
-    d->metaData.clear();
-    if (!d->doStat(QFileSystemMetaData::SizeAttribute))
-        return 0;
-    return d->metaData.size();
+    fileEngine()->fileFlags(QAbstractFileEngine::Refresh);
+    return d->fileEngine->size();
 }
 
 /*!
-    Returns true if the end of the file has been reached; otherwise returns
-    false.
+  Returns true if the end of the file has been reached; otherwise returns
+  false.
 
-    For regular empty files on Unix (e.g. those in \c /proc), this function
-    returns true, since the file system reports that the size of such a file is
-    0. Therefore, you should not depend on atEnd() when reading data from such a
-    file, but rather call read() until no more data can be read.
+  For regular empty files on Unix (e.g. those in \c /proc), this function
+  returns true, since the file system reports that the size of such a file is
+  0. Therefore, you should not depend on atEnd() when reading data from such a
+  file, but rather call read() until no more data can be read.
 */
+
 bool QFile::atEnd() const
 {
-    if (!isOpen()) {
+    if (!isOpen())
         return true;
-    }
 
     // Check how much is available (will re-stat file).
     return bytesAvailable() == 0;
 }
 
 /*!
+    \fn bool QFile::seek(qint64 pos)
+
     For random-access devices, this function sets the current position
     to \a pos, returning true on success, or false if an error occurred.
     For sequential devices, the default behavior is to do nothing and
@@ -1225,6 +1146,7 @@ bool QFile::atEnd() const
     previous end of file and the newly written data is UNDEFINED and
     varies between platforms and file systems.
 */
+
 bool QFile::seek(qint64 off)
 {
     Q_D(QFile);
@@ -1233,113 +1155,81 @@ bool QFile::seek(qint64 off)
         return false;
     }
 
-    if (off == d->pos && off == d->devicePos) {
+    if (off == d->pos && off == d->devicePos)
         return true; // avoid expensive flush for NOP seek to current position
-    }
 
-    if (off < 0 || off != qint64(QT_OFF_T(off))) {
-        d->setError(QFile::PositionError, QString());
+    if (!d->fileEngine->seek(off) || !QIODevice::seek(off)) {
+        QFile::FileError err = d->fileEngine->error();
+        if(err == QFile::UnspecifiedError)
+            err = QFile::PositionError;
+        d->setError(err, d->fileEngine->errorString());
         return false;
     }
-
-    if (Q_UNLIKELY(QT_LSEEK(d->fd, QT_OFF_T(off), SEEK_SET) == -1)) {
-        qWarning("QFile::seek: Cannot set file position %lld", off);
-        d->setError(QFile::PositionError, qt_error_string(errno));
-        return false;
-    }
-    if (!QIODevice::seek(off)) {
-        d->setError(QFile::PositionError, QString());
-        return false;
-    }
-    d->setError(QFile::NoError, QString());
+    unsetError();
     return true;
 }
 
 /*!
-    \reimp
+  \reimp
 */
 qint64 QFile::readLineData(char *data, qint64 maxlen)
 {
     Q_D(QFile);
-    qint64 readSoFar = 0;
-    while (readSoFar < maxlen) {
-        char c;
-        qint64 readResult = qt_safe_read(d->fd, &c, 1);
-        if (readResult <= 0)
-            return (readSoFar > 0) ? readSoFar : -1;
-        ++readSoFar;
-        *data++ = c;
-        if (c == '\n')
-            return readSoFar;
+    if (d->fileEngine->supportsExtension(QAbstractFileEngine::FastReadLineExtension)) {
+        return d->fileEngine->readLine(data, maxlen);
     }
-    return readSoFar;
+    // Fall back to QIODevice's readLine implementation if the engine
+    // cannot do it faster.
+    return QIODevice::readLineData(data, maxlen);
 }
 
 /*!
-    \reimp
+  \reimp
 */
 qint64 QFile::readData(char *data, qint64 len)
 {
     Q_D(QFile);
-    d->setError(QFile::NoError, QString());
+    unsetError();
 
-    if (len < 0) {
-        d->setError(QFile::ReadError, qt_error_string(EINVAL));
-        return -1;
+    qint64 read = d->fileEngine->read(data, len);
+    if(read < 0) {
+        QFile::FileError err = d->fileEngine->error();
+        if(err == QFile::UnspecifiedError)
+            err = QFile::ReadError;
+        d->setError(err, d->fileEngine->errorString());
     }
 
-    qint64 readBytes = 0;
-    bool eof = false;
-
-    if (d->fd != -1) {
-        ssize_t result;
-        do {
-            result = QT_READ(d->fd, data + readBytes, size_t(len - readBytes));
-        } while ((result == -1 && errno == EINTR)
-                || (result > 0 && (readBytes += result) < len));
-
-        eof = !(result == -1);
-    }
-
-    if (!eof && readBytes == 0) {
-        readBytes = -1;
-        d->setError(QFile::ReadError, qt_error_string(errno));
-    }
-
-    return readBytes;
+    return read;
 }
 
 /*!
-    \reimp
+  \reimp
 */
 qint64 QFile::writeData(const char *data, qint64 len)
 {
     Q_D(QFile);
-    d->setError(QFile::NoError, QString());
+    unsetError();
 
-    if (len < 0 || len != qint64(size_t(len))) {
-        d->setError(QFile::WriteError, qt_error_string(EINVAL));
-        return -1;
+    qint64 ret = d->fileEngine->write(data, len);
+    if(ret < 0) {
+        QFile::FileError err = d->fileEngine->error();
+        if(err == QFile::UnspecifiedError)
+            err = QFile::WriteError;
+        d->setError(err, d->fileEngine->errorString());
     }
+    return ret;
+}
 
-    qint64 writtenBytes = 0;
-
-    if (d->fd != -1) {
-        ssize_t result;
-        do {
-            result = QT_WRITE(d->fd, data + writtenBytes, size_t(len - writtenBytes));
-        } while ((result == -1 && errno == EINTR)
-                || (result > 0 && (writtenBytes += result) < len));
-    }
-
-    if (len && writtenBytes == 0) {
-        writtenBytes = -1;
-        d->setError(errno == ENOSPC ? QFile::ResourceError : QFile::WriteError, qt_error_string(errno));
-    }
-
-    d->metaData.clearFlags(QFileSystemMetaData::SizeAttribute);
-
-    return writtenBytes;
+/*!
+    \internal
+    Returns the QIOEngine for this QFile object.
+*/
+QAbstractFileEngine *QFile::fileEngine() const
+{
+    Q_D(const QFile);
+    if(!d->fileEngine)
+        d->fileEngine = QAbstractFileEngine::create(d->fileName);
+    return d->fileEngine;
 }
 
 /*!
@@ -1349,12 +1239,38 @@ qint64 QFile::writeData(const char *data, qint64 len)
     returns false, or a read/write operation returns -1, this function can
     be called to find out the reason why the operation failed.
 
-    \sa QIODevice::errorString()
+    \sa errorString(), unsetError()
 */
+
 QFile::FileError QFile::error() const
 {
     Q_D(const QFile);
     return d->error;
+}
+
+/*!
+    \since 4.9.1
+
+    Returns the file error string.
+
+    \sa error(), unsetError()
+*/
+
+QString QFile::errorString() const
+{
+    Q_D(const QFile);
+    return d->errorString;
+}
+
+/*!
+    Sets the file's error to QFile::NoError.
+
+    \sa error()
+*/
+void QFile::unsetError()
+{
+    Q_D(QFile);
+    d->setError(QFile::NoError);
 }
 
 #ifndef QT_NO_QOBJECT

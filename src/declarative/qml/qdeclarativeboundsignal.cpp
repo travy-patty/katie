@@ -116,7 +116,7 @@ void QDeclarativeBoundSignal::disconnect()
 {
     QMetaObject::disconnect(m_scope, m_signal.methodIndex(), this, evaluateIdx);
     QObjectPrivate * const priv = QObjectPrivate::get(m_scope);
-    QStdVector<char> signalSignature;
+    QVarLengthArray<char> signalSignature;
     QObjectPrivate::signalSignature(m_signal, &signalSignature);
     priv->disconnectNotify(signalSignature.constData());
 }

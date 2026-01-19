@@ -1,4 +1,4 @@
-# Copyright (C) 2015 Ivailo Monev <xakepa10@gmail.com>
+# Copyright (C) 2015, Ivailo Monev, <xakepa10@gmail.com>
 # Redistribution and use is allowed according to the terms of the BSD license.
 
 # UNIFDEF_EXECUTABLE and HEADERS_DIRECTORY origin from the macro call
@@ -9,6 +9,7 @@ file(GLOB_RECURSE headers "${headers_directory}/*.h")
 set(unifdef_arguments
     # bootstrap
     -UQT_BOOTSTRAPPED
+    -UQT_MOC
     # not supported
     -UQT_NO_QOBJECT
     -UQT_NO_COMPRESS
@@ -38,8 +39,10 @@ set(unifdef_arguments
     -UKtDeclarative_EXPORTS
     -UKtXml_EXPORTS
     -UKtScript_EXPORTS
+    -UKtScriptTools_EXPORTS
     -UKtDBus_EXPORTS
     -UKtUiTools_EXPORTS
+    -UKtDesigner_EXPORTS
 )
 
 message(STATUS "Optimizing header in: ${headers_directory}")

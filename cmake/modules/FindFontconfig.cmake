@@ -1,14 +1,15 @@
-# Try to find Fontconfig, once done this will define:
+# - Try to find Fontconfig
+# Once done this will define
 #
 #  FONTCONFIG_FOUND - system has Fontconfig
 #  FONTCONFIG_INCLUDES - the Fontconfig include directory
 #  FONTCONFIG_LIBRARIES - the libraries needed to use Fontconfig
 #
-# Copyright (C) 2015 Ivailo Monev <xakepa10@gmail.com>
+# Copyright (C) 2015, Ivailo Monev, <xakepa10@gmail.com>
 #
 # Redistribution and use is allowed according to the terms of the BSD license.
 
-find_package(PkgConfig REQUIRED)
+include(FindPkgConfig)
 include(FindPackageHandleStandardArgs)
 
 pkg_check_modules(PC_FONTCONFIG QUIET fontconfig)

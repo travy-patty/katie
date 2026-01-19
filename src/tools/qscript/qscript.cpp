@@ -42,6 +42,7 @@
 #include <QtCore/QStringList>
 #include <QtGui/QApplication>
 #include <QtScript/QScriptEngine>
+#include <QtScriptTools/QScriptEngineDebugger>
 
 #include <stdlib.h>
 
@@ -136,6 +137,7 @@ int main(int argc, char *argv[])
 {
     QApplication *app = new QApplication(argc, argv);
     QScriptEngine *eng = new QScriptEngine(app);
+    QScriptEngineDebugger *debugger = nullptr;
 
     QScriptValue globalObject = eng->globalObject();
 
@@ -157,7 +159,12 @@ int main(int argc, char *argv[])
     while (const char *arg = *argv++) {
         QString fn = QString::fromLocal8Bit(arg);
 
-        if (fn == QLatin1String("-i")) {
+        if (fn == QLatin1String("-d")) {
+            debugger = new QScriptEngineDebugger(app);
+            debugger->attachTo(eng);
+            debugger->setAutoShowStandardWindow(true);
+            continue;
+        } else if (fn == QLatin1String("-i")) {
             interactive(eng);
             break;
         }
@@ -190,7 +197,7 @@ int main(int argc, char *argv[])
             continue;
 
         QScriptValue r = eng->evaluate(QString::fromLocal8Bit(contents), fn, lineNumber);
-        if (eng->hasUncaughtException()) {
+        if (!debugger && eng->hasUncaughtException()) {
             QStringList backtrace = eng->uncaughtExceptionBacktrace();
             fprintf (stderr, "    %s\n%s\n\n", qPrintable(r.toString()),
                      qPrintable(backtrace.join(QLatin1String("\n"))));
@@ -198,6 +205,12 @@ int main(int argc, char *argv[])
         }
     }
 
+    // do not exit until the debugger has been closed
+    if (debugger && eng->hasUncaughtException()) {
+        app->processEvents();
+    }
+
+    delete debugger;
     delete eng;
     delete app;
 

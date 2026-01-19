@@ -30,6 +30,7 @@
 #include <QApplication>
 #include <QFontMetrics>
 #include <QPainter>
+#include <QTextBoundaryFinder>
 #include "qstyle.h"
 
 #ifndef QT_NO_LINEEDIT
@@ -91,7 +92,7 @@ void QDeclarativeTextInput::setText(const QString &s)
 
     Sets the family name of the font.
 
-    The family name is case insensitive and may optionally include a foundry name, e.g. "FreeSans [GNU]".
+    The family name is case insensitive and may optionally include a foundry name, e.g. "Helvetica [Cronyx]".
     If the family is available from more than one foundry and the foundry isn't specified, an arbitrary foundry is chosen.
     If the family isn't available a family will be set using the font matching algorithm.
 */
@@ -152,6 +153,43 @@ void QDeclarativeTextInput::setText(const QString &s)
 
     Using this function makes the font device dependent.
     Use \c pointSize to set the size of the font in a device independent manner.
+*/
+
+/*!
+    \qmlproperty real TextInput::font.letterSpacing
+
+    Sets the letter spacing for the font.
+
+    Letter spacing changes the default spacing between individual letters in the font.
+    A positive value increases the letter spacing by the corresponding pixels; a negative value decreases the spacing.
+*/
+
+/*!
+    \qmlproperty real TextInput::font.wordSpacing
+
+    Sets the word spacing for the font.
+
+    Word spacing changes the default spacing between individual words.
+    A positive value increases the word spacing by a corresponding amount of pixels,
+    while a negative value decreases the inter-word spacing accordingly.
+*/
+
+/*!
+    \qmlproperty enumeration TextInput::font.capitalization
+
+    Sets the capitalization for the text.
+
+    \list
+    \o Font.MixedCase - This is the normal text rendering option where no capitalization change is applied.
+    \o Font.AllUppercase - This alters the text to be rendered in all uppercase type.
+    \o Font.AllLowercase	 - This alters the text to be rendered in all lowercase type.
+    \o Font.SmallCaps -	This alters the text to be rendered in small-caps type.
+    \o Font.Capitalize - This alters the text to be rendered with the first character of each word as an uppercase character.
+    \endlist
+
+    \qml
+    TextInput { text: "Hello"; font.capitalization: Font.AllLowercase }
+    \endqml
 */
 
 QFont QDeclarativeTextInput::font() const
@@ -347,6 +385,8 @@ bool QDeclarativeTextInputPrivate::determineHorizontalAlignment()
     if (hAlignImplicit) {
         // if no explicit alignment has been set, follow the natural layout direction of the text
         QString text = control->text();
+        if (text.isEmpty())
+            text = control->preeditAreaText();
         bool isRightToLeft = text.isEmpty()
                 ? QApplication::keyboardInputDirection() == Qt::RightToLeft
                 : text.isRightToLeft();
@@ -907,6 +947,8 @@ void QDeclarativeTextInput::createCursor()
 QRectF QDeclarativeTextInput::positionToRectangle(int pos) const
 {
     Q_D(const QDeclarativeTextInput);
+    if (pos > d->control->cursorPosition())
+        pos += d->control->preeditAreaText().length();
     return QRectF(d->control->cursorToX(pos)-d->hscroll,
         0.0,
         d->control->cursorWidth(),
@@ -943,7 +985,10 @@ int QDeclarativeTextInput::positionAt(int x, CursorPosition position) const
     int pos = d->control->xToPos(x + d->hscroll, QTextLine::CursorPosition(position));
     const int cursor = d->control->cursor();
     if (pos > cursor) {
-        pos = pos > cursor ? pos : cursor;
+        const int preeditLength = d->control->preeditAreaText().length();
+        pos = pos > cursor + preeditLength
+                ? pos - preeditLength
+                : cursor;
     }
     return pos;
 }
@@ -1120,7 +1165,8 @@ int QDeclarativeTextInputPrivate::calculateTextWidth()
 void QDeclarativeTextInputPrivate::updateHorizontalScroll()
 {
     Q_Q(QDeclarativeTextInput);
-    int cix = qRound(control->cursorToX(control->cursor()));
+    const int preeditLength = control->preeditAreaText().length();
+    int cix = qRound(control->cursorToX(control->cursor() + preeditLength));
     QRect br(q->boundingRect().toRect());
     int widthUsed = calculateTextWidth();
 
@@ -1150,6 +1196,14 @@ void QDeclarativeTextInputPrivate::updateHorizontalScroll()
             // text doesn't fit, text document is to the left of br; align
             // right
             hscroll = widthUsed - br.width() + 1;
+        }
+        if (preeditLength > 0) {
+            // check to ensure long pre-edit text doesn't push the cursor
+            // off to the left
+             cix = qRound(control->cursorToX(
+                     control->cursor() + qMax(0, control->preeditCursor() - 1)));
+             if (cix < hscroll)
+                 hscroll = cix;
         }
     } else {
         switch (effectiveHAlign) {
@@ -1452,10 +1506,56 @@ void QDeclarativeTextInput::moveCursorSelection(int position)
 void QDeclarativeTextInput::moveCursorSelection(int pos, SelectionMode mode)
 {
     Q_D(QDeclarativeTextInput);
+
     if (mode == SelectCharacters) {
         d->control->moveCursor(pos, true);
     } else if (pos != d->control->cursor()){
-        d->control->selectWordAtPos(pos);
+        const int cursor = d->control->cursor();
+        int anchor;
+        if (!d->control->hasSelectedText())
+            anchor = d->control->cursor();
+        else if (d->control->selectionStart() == d->control->cursor())
+            anchor = d->control->selectionEnd();
+        else
+            anchor = d->control->selectionStart();
+
+        if (anchor < pos || (anchor == pos && cursor < pos)) {
+            const QString text = d->control->text();
+            QTextBoundaryFinder finder(QTextBoundaryFinder::Word, text);
+            finder.setPosition(anchor);
+
+            const QTextBoundaryFinder::BoundaryReasons reasons = finder.boundaryReasons();
+            if (anchor < text.length() && (!(reasons & QTextBoundaryFinder::StartWord)
+                    || ((reasons & QTextBoundaryFinder::EndWord) && anchor > cursor))) {
+                finder.toPreviousBoundary();
+            }
+            anchor = finder.position() != -1 ? finder.position() : 0;
+
+            finder.setPosition(pos);
+            if (pos > 0 && !finder.boundaryReasons())
+                finder.toNextBoundary();
+            const int cursor = finder.position() != -1 ? finder.position() : text.length();
+
+            d->control->setSelection(anchor, cursor - anchor);
+        } else if (anchor > pos || (anchor == pos && cursor > pos)) {
+            const QString text = d->control->text();
+            QTextBoundaryFinder finder(QTextBoundaryFinder::Word, text);
+            finder.setPosition(anchor);
+
+            const QTextBoundaryFinder::BoundaryReasons reasons = finder.boundaryReasons();
+            if (anchor > 0 && (!(reasons & QTextBoundaryFinder::EndWord)
+                    || ((reasons & QTextBoundaryFinder::StartWord) && anchor < cursor))) {
+                finder.toNextBoundary();
+            }
+            anchor = finder.position() != -1 ? finder.position() : text.length();
+
+            finder.setPosition(pos);
+            if (pos < text.length() && !finder.boundaryReasons())
+                 finder.toPreviousBoundary();
+            const int cursor = finder.position() != -1 ? finder.position() : 0;
+
+            d->control->setSelection(anchor, cursor - anchor);
+        }
     }
 }
 
@@ -1571,6 +1671,25 @@ void QDeclarativeTextInput::focusInEvent(QFocusEvent *event)
         }
     }
     QDeclarativePaintedItem::focusInEvent(event);
+}
+
+/*!
+    \qmlproperty bool TextInput::inputMethodComposing
+
+    \since QtQuick 1.1
+
+    This property holds whether the TextInput has partial text input from an
+    input method.
+
+    While it is composing an input method may rely on mouse or key events from
+    the TextInput to edit or commit the partial text.  This property can be
+    used to determine when to disable events handlers that may interfere with
+    the correct operation of an input method.
+*/
+bool QDeclarativeTextInput::isInputMethodComposing() const
+{
+    Q_D(const QDeclarativeTextInput);
+    return d->control->preeditAreaText().length() > 0;
 }
 
 void QDeclarativeTextInputPrivate::init()

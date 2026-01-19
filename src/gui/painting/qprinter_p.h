@@ -59,7 +59,7 @@ public:
         : printEngine(0)
         , paintEngine(0)
         , q_ptr(printer)
-        , options(QAbstractPrintDialog::PrintPageRange |
+        , options(QAbstractPrintDialog::PrintToFile | QAbstractPrintDialog::PrintPageRange |
                 QAbstractPrintDialog::PrintCollateCopies | QAbstractPrintDialog::PrintShowPageSize)
         , printRange(QAbstractPrintDialog::AllPages)
         , minPage(1)
@@ -85,6 +85,8 @@ public:
 
     void addToManualSetList(QPrintEngine::PrintEnginePropertyKey key);
 
+    QPrinter::PrinterMode printerMode;
+    QPrinter::OutputFormat outputFormat;
     QPrintEngine *printEngine;
     QPaintEngine *paintEngine;
 

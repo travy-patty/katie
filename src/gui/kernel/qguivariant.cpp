@@ -44,6 +44,8 @@
 #include "qvector2d.h"
 #include "qvector3d.h"
 #include "qvector4d.h"
+#include "qquaternion.h"
+
 #include "qvariant_p.h"
 
 QT_BEGIN_NAMESPACE
@@ -51,7 +53,198 @@ QT_BEGIN_NAMESPACE
 
 Q_CORE_EXPORT const QVariant::Handler *qcoreVariantHandler();
 
-static bool isNull(const QVariantPrivate *d)
+static void construct(QVariant::Private *x, const void *copy)
+{
+    switch (x->type) {
+    case QVariant::Bitmap:
+        v_construct<QBitmap>(x, copy);
+        break;
+    case QVariant::Region:
+        v_construct<QRegion>(x, copy);
+        break;
+    case QVariant::Polygon:
+        v_construct<QPolygon>(x, copy);
+        break;
+    case QVariant::Font:
+        v_construct<QFont>(x, copy);
+        break;
+    case QVariant::Pixmap:
+        v_construct<QPixmap>(x, copy);
+        break;
+    case QVariant::Image:
+        v_construct<QImage>(x, copy);
+        break;
+    case QVariant::Brush:
+        v_construct<QBrush>(x, copy);
+        break;
+    case QVariant::Color:
+        v_construct<QColor>(x, copy);
+        break;
+    case QVariant::Palette:
+        v_construct<QPalette>(x, copy);
+        break;
+#ifndef QT_NO_ICON
+    case QVariant::Icon:
+        v_construct<QIcon>(x, copy);
+        break;
+#endif
+    case QVariant::Matrix:
+        v_construct<QMatrix>(x, copy);
+        break;
+    case QVariant::Transform:
+        v_construct<QTransform>(x, copy);
+        break;
+    case QVariant::TextFormat:
+        v_construct<QTextFormat>(x, copy);
+        break;
+    case QVariant::TextLength:
+        v_construct<QTextLength>(x, copy);
+        break;
+#ifndef QT_NO_SHORTCUT
+    case QVariant::KeySequence:
+        v_construct<QKeySequence>(x, copy);
+        break;
+#endif
+    case QVariant::Pen:
+        v_construct<QPen>(x, copy);
+        break;
+    case QVariant::SizePolicy:
+        v_construct<QSizePolicy>(x, copy);
+        break;
+#ifndef QT_NO_CURSOR
+    case QVariant::Cursor:
+        v_construct<QCursor>(x, copy);
+        break;
+#endif
+#ifndef QT_NO_MATRIX4X4
+    case QVariant::Matrix4x4:
+        v_construct<QMatrix4x4>(x, copy);
+        break;
+#endif
+#ifndef QT_NO_VECTOR2D
+    case QVariant::Vector2D:
+        v_construct<QVector2D>(x, copy);
+        break;
+#endif
+#ifndef QT_NO_VECTOR3D
+    case QVariant::Vector3D:
+        v_construct<QVector3D>(x, copy);
+        break;
+#endif
+#ifndef QT_NO_VECTOR4D
+    case QVariant::Vector4D:
+        v_construct<QVector4D>(x, copy);
+        break;
+#endif
+#ifndef QT_NO_QUATERNION
+    case QVariant::Quaternion:
+        v_construct<QQuaternion>(x, copy);
+        break;
+#endif
+    default:
+        qcoreVariantHandler()->construct(x, copy);
+        return;
+    }
+    x->is_null = !copy;
+}
+
+static void clear(QVariant::Private *d)
+{
+    switch (d->type) {
+    case QVariant::Bitmap:
+        v_clear<QBitmap>(d);
+        break;
+    case QVariant::Cursor:
+        v_clear<QCursor>(d);
+        break;
+    case QVariant::Region:
+        v_clear<QRegion>(d);
+        break;
+    case QVariant::Polygon:
+        v_clear<QPolygon>(d);
+        break;
+    case QVariant::Font:
+        v_clear<QFont>(d);
+        break;
+    case QVariant::Pixmap:
+        v_clear<QPixmap>(d);
+        break;
+    case QVariant::Image:
+        v_clear<QImage>(d);
+        break;
+    case QVariant::Brush:
+        v_clear<QBrush>(d);
+        break;
+    case QVariant::Color:
+        v_clear<QColor>(d);
+        break;
+    case QVariant::Palette:
+        v_clear<QPalette>(d);
+        break;
+#ifndef QT_NO_ICON
+    case QVariant::Icon:
+        v_clear<QIcon>(d);
+        break;
+#endif
+    case QVariant::Matrix:
+        v_clear<QMatrix>(d);
+        break;
+    case QVariant::Transform:
+        v_clear<QTransform>(d);
+        break;
+    case QVariant::TextFormat:
+        v_clear<QTextFormat>(d);
+        break;
+    case QVariant::TextLength:
+        v_clear<QTextLength>(d);
+        break;
+    case QVariant::SizePolicy:
+        v_clear<QSizePolicy>(d);
+        break;
+#ifndef QT_NO_SHORTCUT
+    case QVariant::KeySequence:
+        v_clear<QKeySequence>(d);
+        break;
+#endif
+    case QVariant::Pen:
+        v_clear<QPen>(d);
+        break;
+#ifndef QT_NO_MATRIX4X4
+    case QVariant::Matrix4x4:
+        v_clear<QMatrix4x4>(d);
+        break;
+#endif
+#ifndef QT_NO_VECTOR2D
+    case QVariant::Vector2D:
+        v_clear<QVector2D>(d);
+        break;
+#endif
+#ifndef QT_NO_VECTOR3D
+    case QVariant::Vector3D:
+        v_clear<QVector3D>(d);
+        break;
+#endif
+#ifndef QT_NO_VECTOR4D
+    case QVariant::Vector4D:
+        v_clear<QVector4D>(d);
+        break;
+#endif
+#ifndef QT_NO_QUATERNION
+    case QVariant::Quaternion:
+        v_clear<QVector4D>(d);
+        break;
+#endif
+    default:
+        qcoreVariantHandler()->clear(d);
+        return;
+    }
+
+    d->type = QVariant::Invalid;
+    d->is_null = true;
+    d->is_shared = false;
+}
+
+static bool isNull(const QVariant::Private *d)
 {
     switch(d->type) {
     case QVariant::Bitmap:
@@ -98,13 +291,17 @@ static bool isNull(const QVariantPrivate *d)
     case QVariant::Vector4D:
         return v_cast<QVector4D>(d)->isNull();
 #endif
+#ifndef QT_NO_QUATERNION
+    case QVariant::Quaternion:
+        return v_cast<QQuaternion>(d)->isNull();
+#endif
     default:
         return qcoreVariantHandler()->isNull(d);
     }
     return d->is_null;
 }
 
-static bool compare(const QVariantPrivate *a, const QVariantPrivate *b)
+static bool compare(const QVariant::Private *a, const QVariant::Private *b)
 {
     Q_ASSERT(a->type == b->type);
     switch(a->type) {
@@ -167,22 +364,19 @@ static bool compare(const QVariantPrivate *a, const QVariantPrivate *b)
     case QVariant::Vector4D:
         return *v_cast<QVector4D>(a) == *v_cast<QVector4D>(b);
 #endif
+#ifndef QT_NO_QUATERNION
+    case QVariant::Quaternion:
+        return *v_cast<QQuaternion>(a) == *v_cast<QQuaternion>(b);
+#endif
     default:
         break;
     }
     return qcoreVariantHandler()->compare(a, b);
 }
 
-static bool convert(const QVariantPrivate *d, int t,
+static bool convert(const QVariant::Private *d, int t,
                  void *result, bool *ok)
 {
-    if (!d) {
-        if (ok) {
-            *ok = false;
-        }
-        return false;
-    }
-
     switch (t) {
     case QVariant::ByteArray: {
         if (d->type == QVariant::Color) {
@@ -295,7 +489,7 @@ static bool convert(const QVariantPrivate *d, int t,
             *seq = QKeySequence(*v_cast<QString>(d));
             return true;
         } else if (d->type == QVariant::Int) {
-            *seq = QKeySequence(*v_cast<int>(d));
+            *seq = QKeySequence(d->data.i);
             return true;
         }
         break;
@@ -385,6 +579,11 @@ static void streamDebug(QDebug dbg, const QVariant &v)
         dbg.nospace() << qvariant_cast<QVector4D>(v);
         break;
 #endif
+#ifndef QT_NO_QUATERNION
+    case QVariant::Quaternion:
+        dbg.nospace() << qvariant_cast<QQuaternion>(v);
+        break;
+#endif
     default:
         qcoreVariantHandler()->debugStream(dbg, v);
         break;
@@ -393,7 +592,13 @@ static void streamDebug(QDebug dbg, const QVariant &v)
 #endif
 
 const QVariant::Handler qt_gui_variant_handler = {
+    construct,
+    clear,
     isNull,
+#ifndef QT_NO_DATASTREAM
+    0,
+    0,
+#endif
     compare,
     convert,
 #if !defined(QT_NO_DEBUG_STREAM) && !defined(Q_BROKEN_DEBUG_STREAM)
@@ -470,6 +675,9 @@ Q_DECL_METATYPE_HELPER(QVector3D)
 #ifndef QT_NO_VECTOR4D
 Q_DECL_METATYPE_HELPER(QVector4D)
 #endif
+#ifndef QT_NO_QUATERNION
+Q_DECL_METATYPE_HELPER(QQuaternion)
+#endif
 
 #ifdef QT_NO_DATASTREAM
 #  define Q_IMPL_METATYPE_HELPER(TYPE) \
@@ -534,6 +742,11 @@ static const QMetaTypeGuiHelper qVariantGuiHelper[] = {
     Q_IMPL_METATYPE_HELPER(QVector4D),
 #else
     {0, 0, 0, 0},
+#endif
+#ifndef QT_NO_QUATERNION
+    Q_IMPL_METATYPE_HELPER(QQuaternion)
+#else
+    {0, 0, 0, 0}
 #endif
 };
 

@@ -21,6 +21,7 @@
 
 #include "qplatformdefs.h"
 #include "qabstracteventdispatcher.h"
+#include "qaccessible.h"
 #include "qapplication.h"
 #include "qclipboard.h"
 #include "qcursor.h"
@@ -40,6 +41,7 @@
 #include "qvariant.h"
 #include "qwidget.h"
 #include "qdnd_p.h"
+#include "qcolormap.h"
 #include "qdebug.h"
 #include "qstylesheetstyle_p.h"
 #include "qstyle_p.h"
@@ -67,6 +69,16 @@
 
 //#define ALIEN_DEBUG
 
+
+static void initResources()
+{
+    Q_INIT_RESOURCE(qstyle);
+    Q_INIT_RESOURCE(qmessagebox);
+#if !defined(QT_NO_PRINTDIALOG)
+    Q_INIT_RESOURCE(qprintdialog);
+#endif
+}
+
 QT_BEGIN_NAMESPACE
 
 Q_CORE_EXPORT void qt_call_post_routines();
@@ -78,13 +90,12 @@ bool QApplicationPrivate::autoSipEnabled = true;
 
 QApplicationPrivate::QApplicationPrivate(int &argc, char **argv)
     : QCoreApplicationPrivate(argc, argv)
-#ifndef QT_NO_SESSIONMANAGER
-    , session_manager(nullptr)
-    , is_session_restored(false)
-#endif
-
 {
     QCoreApplicationPrivate::app_type = QCoreApplication::Gui;
+
+#ifndef QT_NO_SESSIONMANAGER
+    is_session_restored = false;
+#endif
 
     quitOnLastWindowClosed = true;
 
@@ -174,7 +185,9 @@ QApplicationPrivate::~QApplicationPrivate()
 
         \row
         \o  System settings
-        \o  cursorFlashTime(),
+        \o  desktopSettingsAware(),
+            setDesktopSettingsAware(),
+            cursorFlashTime(),
             setCursorFlashTime(),
             doubleClickInterval(),
             setDoubleClickInterval(),
@@ -311,11 +324,14 @@ QIcon *QApplicationPrivate::app_icon = 0;
 QWidget *QApplicationPrivate::focus_widget = 0;        // has keyboard input focus
 QWidget *QApplicationPrivate::hidden_focus_widget = 0; // will get keyboard input focus after show()
 QWidget *QApplicationPrivate::active_window = 0;        // toplevel with keyboard focus
+bool QApplicationPrivate::obey_desktop_settings = true;        // use winsys resources
 int QApplicationPrivate::cursor_flash_time = 1000;        // text caret flash time
 int QApplicationPrivate::mouse_double_click_time = 400;        // mouse dbl click limit
 int QApplicationPrivate::keyboard_input_time = 400; // keyboard input interval
 #ifndef QT_NO_WHEELEVENT
 int QApplicationPrivate::wheel_scroll_lines = 3;         // number of lines to scroll
+#else
+int QApplicationPrivate::wheel_scroll_lines = 0;
 #endif
 bool qt_in_tab_key_event = false;
 static int drag_time = 500;
@@ -323,8 +339,12 @@ static int drag_distance = 4;
 static Qt::LayoutDirection layout_direction = Qt::LeftToRight;
 QSize QApplicationPrivate::app_strut = QSize(0,0); // no default application strut
 bool QApplicationPrivate::animate_ui = true;
+bool QApplicationPrivate::animate_menu = false;
 bool QApplicationPrivate::fade_menu = false;
+bool QApplicationPrivate::animate_combo = false;
+bool QApplicationPrivate::animate_tooltip = false;
 bool QApplicationPrivate::fade_tooltip = false;
+bool QApplicationPrivate::animate_toolbox = false;
 
 static bool force_reverse = false;
 
@@ -451,6 +471,16 @@ void QApplicationPrivate::process_cmdline()
         \o  -geometry \e geometry, sets the client geometry of the first window
             that is shown.
         \o  -title \e title, sets the application title.
+        \o  -visual \c TrueColor, forces the application to use a TrueColor
+            visual on an 8-bit display.
+        \o  -ncols \e count, limits the number of colors allocated in the color
+            cube on an 8-bit display, if the application is using the
+            QApplication::ManyColor color specification. If \e count is 216
+            then a 6x6x6 color cube is used (i.e. 6 levels of red, 6 of green,
+            and 6 of blue); for other values, a cube approximately proportional
+            to a 2x3x1 cube is used.
+        \o  -cmap, causes the application to install a private color map on an
+            8-bit display.
     \endlist
 
     \section1 X11 Notes
@@ -485,6 +515,8 @@ QApplication::QApplication(int &argc, char **argv)
 */
 void QApplicationPrivate::construct(Display *dpy, Qt::HANDLE visual, Qt::HANDLE cmap)
 {
+    initResources();
+
     process_cmdline();
 
     // Must be called before initializing
@@ -693,9 +725,10 @@ QApplication::~QApplication()
 
 #ifndef QT_NO_SESSIONMANAGER
     delete d->session_manager;
-    d->session_manager = nullptr;
+    d->session_manager = 0;
 #endif //QT_NO_SESSIONMANAGER
 
+    QApplicationPrivate::obey_desktop_settings = true;
     QApplicationPrivate::cursor_flash_time = 1000;
     QApplicationPrivate::mouse_double_click_time = 400;
     QApplicationPrivate::keyboard_input_time = 400;
@@ -705,7 +738,10 @@ QApplication::~QApplication()
     layout_direction = Qt::LeftToRight;
     QApplicationPrivate::app_strut = QSize(0, 0);
     QApplicationPrivate::animate_ui = true;
+    QApplicationPrivate::animate_menu = false;
     QApplicationPrivate::fade_menu = false;
+    QApplicationPrivate::animate_combo = false;
+    QApplicationPrivate::animate_tooltip = false;
     QApplicationPrivate::fade_tooltip = false;
 }
 
@@ -902,7 +938,7 @@ QStyle *QApplication::style()
     \warning Qt style sheets are currently not supported for custom QStyle
     subclasses. We plan to address this in some future release.
 
-    \sa style(), QStyle, setPalette()
+    \sa style(), QStyle, setPalette(), desktopSettingsAware()
 */
 void QApplication::setStyle(QStyle *style)
 {
@@ -996,7 +1032,8 @@ void QApplication::setStyle(QStyle *style)
     Requests a QStyle object for \a style from the QStyleFactory.
 
     The string must be one of the QStyleFactory::keys(), typically one of
-    "cleanlooks" or "windows". Style names are case insensitive.
+    "windows", "motif", "cde", "plastique", "windowsxp", or "macintosh". Style
+    names are case insensitive.
 
     Returns 0 if an unknown \a style is passed, otherwise the QStyle object
     returned is set as the application's GUI style.
@@ -1181,10 +1218,27 @@ void QApplication::setPalette(const QPalette &palette, const char* className)
 
 void QApplicationPrivate::setSystemPalette(const QPalette &pal)
 {
+    QPalette adjusted;
+
+#if 0
+    // adjust the system palette to avoid dithering
+    QColormap cmap = QColormap::instance();
+    if (cmap.depths() > 4 && cmap.depths() < 24) {
+        for (int g = 0; g < QPalette::NColorGroups; g++)
+            for (int i = 0; i < QPalette::NColorRoles; i++) {
+                QColor color = pal.color((QPalette::ColorGroup)g, (QPalette::ColorRole)i);
+                color = cmap.colorAt(cmap.pixel(color));
+                adjusted.setColor((QPalette::ColorGroup)g, (QPalette::ColorRole) i, color);
+            }
+    }
+#else
+    adjusted = pal;
+#endif
+
     if (!sys_pal)
-        sys_pal = new QPalette(pal);
+        sys_pal = new QPalette(adjusted);
     else
-        *sys_pal = pal;
+        *sys_pal = adjusted;
 
 
     if (!QApplicationPrivate::set_pal)
@@ -1200,7 +1254,7 @@ QFont QApplication::font()
 {
     QMutexLocker locker(applicationFontMutex());
     if (!QApplicationPrivate::app_font) {
-        QApplicationPrivate::app_font = new QFont(QFont::lastResortFamily());
+        QApplicationPrivate::app_font = new QFont(QLatin1String("Helvetica"));
     }
     return *QApplicationPrivate::app_font;
 }
@@ -1576,6 +1630,18 @@ void QApplication::aboutQt()
     through QFocusEvent.
 
     \sa QWidget::setFocus(), QWidget::clearFocus(), Qt::FocusReason
+*/
+
+/*!
+    \since 4.5
+    \fn void QApplication::fontDatabaseChanged()
+
+    This signal is emitted when application fonts are loaded or removed.
+
+    \sa QFontDatabase::addApplicationFont(),
+    QFontDatabase::addApplicationFontFromData(),
+    QFontDatabase::removeAllApplicationFonts(),
+    QFontDatabase::removeApplicationFont()
 */
 
 #ifndef QT_NO_TRANSLATION
@@ -2358,6 +2424,33 @@ QClipboard *QApplication::clipboard()
 #endif // QT_NO_CLIPBOARD
 
 /*!
+    Sets whether Qt should use the system's standard colors, fonts, etc., to
+    \a on. By default, this is true.
+
+    This function must be called before creating the QApplication object, like
+    this:
+
+    \snippet doc/src/snippets/code/src_gui_kernel_qapplication.cpp 6
+
+    \sa desktopSettingsAware()
+*/
+void QApplication::setDesktopSettingsAware(bool on)
+{
+    QApplicationPrivate::obey_desktop_settings = on;
+}
+
+/*!
+    Returns true if Qt is set to use the system's standard colors, fonts, etc.;
+    otherwise returns false. The default is true.
+
+    \sa setDesktopSettingsAware()
+*/
+bool QApplication::desktopSettingsAware()
+{
+    return QApplicationPrivate::obey_desktop_settings;
+}
+
+/*!
     Returns the current state of the modifier keys on the keyboard. The current
     state is updated sychronously as the event queue is emptied of events that
     will spontaneously change the keyboard state (QEvent::KeyPress and
@@ -2810,6 +2903,43 @@ void QApplication::changeOverrideCursor(const QCursor &cursor)
     Use changeOverrideCursor(\a cursor) (if \a replace is true) or
     setOverrideCursor(\a cursor) (if \a replace is false).
 */
+
+/*!
+    Enters the main event loop and waits until exit() is called, then returns
+    the value that was set to exit() (which is 0 if exit() is called via
+    quit()).
+
+    It is necessary to call this function to start event handling. The main
+    event loop receives events from the window system and dispatches these to
+    the application widgets.
+
+    Generally, no user interaction can take place before calling exec(). As a
+    special case, modal widgets like QMessageBox can be used before calling
+    exec(), because modal widgets call exec() to start a local event loop.
+
+    To make your application perform idle processing, i.e., executing a special
+    function whenever there are no pending events, use a QTimer with 0 timeout.
+    More advanced idle processing schemes can be achieved using processEvents().
+
+    We recommend that you connect clean-up code to the
+    \l{QCoreApplication::}{aboutToQuit()} signal, instead of putting it in your
+    application's \c{main()} function. This is because, on some platforms the
+    QApplication::exec() call may not return. For example, on the Windows
+    platform, when the user logs off, the system terminates the process after Qt
+    closes all top-level windows. Hence, there is \e{no guarantee} that the
+    application will have time to exit its event loop and execute code at the
+    end of the \c{main()} function, after the QApplication::exec() call.
+
+    \sa quitOnLastWindowClosed, quit(), exit(), processEvents(),
+        QCoreApplication::exec()
+*/
+int QApplication::exec()
+{
+#ifndef QT_NO_ACCESSIBILITY
+    QAccessible::setRootObject(qApp);
+#endif
+    return QCoreApplication::exec();
+}
 
 /*! \reimp
  */
@@ -3659,6 +3789,30 @@ void QApplicationPrivate::emitLastWindowClosed()
     Use \l CustomColor instead.
 */
 
+
+/*!
+    \fn void QApplication::alert(QWidget *widget, int msec)
+    \since 4.3
+
+    Causes an alert to be shown for \a widget if the window is not the active
+    window. The alert is shown for \a msec miliseconds. If \a msec is zero (the
+    default), then the alert is shown indefinitely until the window becomes
+    active again.
+
+    Currently this function does nothing on Qt for Embedded Linux.
+
+    On Mac OS X, this works more at the application level and will cause the
+    application icon to bounce in the dock.
+
+    On Windows, this causes the window's taskbar entry to flash for a time. If
+    \a msec is zero, the flashing will stop and the taskbar entry will turn a
+    different color (currently orange).
+
+    On X11, this will cause the window to be marked as "demands attention", the
+    window must not be hidden (i.e. not have hide() called on it, but be
+    visible in some sort of way) in order for this to work.
+*/
+
 /*!
     \property QApplication::cursorFlashTime
     \brief the text cursor's flash (blink) time in milliseconds
@@ -3719,7 +3873,7 @@ void QApplicationPrivate::emitLastWindowClosed()
     \note All effects are disabled on screens running at less than 16-bit color
     depth.
 
-    \sa isEffectEnabled(), Qt::UIEffect
+    \sa isEffectEnabled(), Qt::UIEffect, setDesktopSettingsAware()
 */
 
 /*!
@@ -3727,7 +3881,8 @@ void QApplicationPrivate::emitLastWindowClosed()
 
     Returns true if \a effect is enabled; otherwise returns false.
 
-    By default, Katie will try to use the desktop settings.
+    By default, Qt will try to use the desktop settings. To prevent this, call
+    setDesktopSettingsAware(false).
 
     \note All effects are disabled on screens running at less than 16-bit color
     depth.

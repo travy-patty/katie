@@ -2016,6 +2016,10 @@ static const char *eventClassName(QEvent::Type t)
     case QEvent::MouseButtonRelease:
     case QEvent::MouseButtonDblClick:
     case QEvent::MouseMove:
+    case QEvent::NonClientAreaMouseMove:
+    case QEvent::NonClientAreaMouseButtonPress:
+    case QEvent::NonClientAreaMouseButtonRelease:
+    case QEvent::NonClientAreaMouseButtonDblClick:
         return "QMouseEvent";
     case QEvent::DragEnter:
         return "QDragEnterEvent";
@@ -2151,100 +2155,100 @@ QDebug operator<<(QDebug dbg, const QEvent *e) {
     case QEvent::MouseButtonPress:
     case QEvent::MouseMove:
     case QEvent::MouseButtonRelease:
-    case QEvent::MouseButtonDblClick: {
+    case QEvent::MouseButtonDblClick:
+    case QEvent::NonClientAreaMouseButtonPress:
+    case QEvent::NonClientAreaMouseMove:
+    case QEvent::NonClientAreaMouseButtonRelease:
+    case QEvent::NonClientAreaMouseButtonDblClick:
+    {
         const QMouseEvent *me = static_cast<const QMouseEvent*>(e);
         const Qt::MouseButton button = me->button();
         const Qt::MouseButtons buttons = me->buttons();
         dbg << "QMouseEvent(" << eventTypeName(type);
-        if (type != QEvent::MouseMove)
+        if (type != QEvent::MouseMove && type != QEvent::NonClientAreaMouseMove)
             dbg << ", " << mouseButtonToString(button);
         if (buttons && button != buttons)
             dbg << ", buttons=" << mouseButtonsToString(buttons).constData();
         if (const int mods = int(me->modifiers()))
-            dbg << ", modifiers=0x" << QByteArray::number(mods, 16);
+            dbg << ", modifiers=0x" << hex << mods << dec;
         dbg << ')';
-        break;
     }
+        break;
 #  ifndef QT_NO_WHEELEVENT
     case QEvent::Wheel: {
         const QWheelEvent *we = static_cast<const QWheelEvent *>(e);
         dbg << "QWheelEvent(" << "delta=" << we->delta() << ", pos=" << we->pos()
             << ", orientation=" << we->orientation() << ')';
-        break;
     }
+        break;
 #  endif // !QT_NO_WHEELEVENT
     case QEvent::KeyPress:
     case QEvent::KeyRelease:
-    case QEvent::ShortcutOverride: {
+    case QEvent::ShortcutOverride:
+    {
         const QKeyEvent *ke = static_cast<const QKeyEvent *>(e);
         dbg << "QKeyEvent("  << eventTypeName(type)
-            << ", key=0x" << QByteArray::number(ke->key(), 16);
+            << ", key=0x" << hex << ke->key() << dec;
         if (const int mods = ke->modifiers())
-            dbg << ", modifiers=0x" << QByteArray::number(mods, 16);
+            dbg << ", modifiers=0x" << hex << mods << dec;
         if (!ke->text().isEmpty())
             dbg << ", text=" << ke->text();
         if (ke->isAutoRepeat())
             dbg << ", autorepeat, count=" << ke->count();
         dbg << ')';
-        break;
     }
+        break;
     case QEvent::Shortcut: {
         const QShortcutEvent *se = static_cast<const QShortcutEvent *>(e);
         dbg << "QShortcutEvent(" << se->key().toString() << ", id=" << se->shortcutId();
         if (se->isAmbiguous())
             dbg << ", ambiguous";
         dbg << ')';
-        break;
     }
+        break;
     case QEvent::FocusIn:
-    case QEvent::FocusOut: {
+    case QEvent::FocusOut:
         dbg << "QFocusEvent(" << eventTypeName(type) << ", "
             << static_cast<const QFocusEvent *>(e)->reason() << ')';
         break;
-    }
     case QEvent::Move: {
         const QMoveEvent *me = static_cast<const QMoveEvent *>(e);
         dbg << "QMoveEvent(" << me->pos();
         if (!me->spontaneous())
             dbg << ", non-spontaneous";
         dbg << ')';
-         break;
     }
+         break;
     case QEvent::Resize: {
         const QResizeEvent *re = static_cast<const QResizeEvent *>(e);
         dbg << "QResizeEvent(" << re->size();
         if (!re->spontaneous())
             dbg << ", non-spontaneous";
         dbg << ')';
-        break;
     }
+        break;
 #  ifndef QT_NO_DRAGANDDROP
     case QEvent::DragEnter:
     case QEvent::DragMove:
-    case QEvent::Drop: {
+    case QEvent::Drop:
         formatDropEvent(dbg, static_cast<const QDropEvent *>(e));
         break;
-    }
 #  endif // !QT_NO_DRAGANDDROP
     case QEvent::ChildAdded:
     case QEvent::ChildPolished:
-    case QEvent::ChildRemoved: {
+    case QEvent::ChildRemoved:
         dbg << "QChildEvent(" << eventTypeName(type) << ", " << (static_cast<const QChildEvent*>(e))->child() << ')';
         break;
-    }
-    case QEvent::ContextMenu: {
+    case QEvent::ContextMenu:
         dbg << "QContextMenuEvent(" << static_cast<const QContextMenuEvent *>(e)->pos() << ')';
         break;
-    }
-    case QEvent::Timer: {
+    case QEvent::Timer:
         dbg << "QTimerEvent(id=" << static_cast<const QTimerEvent *>(e)->timerId() << ')';
         break;
-    }
-    default: {
+    default:
         dbg << eventClassName(type) << '(' << eventTypeName(type) << ", "
             << (const void *)e << ", type = " << e->type() << ')';
         break;
-    }
     }
     dbg.maybeSpace();
     return dbg;

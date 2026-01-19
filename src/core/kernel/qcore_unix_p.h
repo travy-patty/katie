@@ -43,11 +43,6 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <errno.h>
-#include <signal.h>
-
-#ifdef QT_HAVE_FLOCK
-#  include <sys/file.h>
-#endif
 
 #define Q_EINTR_LOOP(var, cmd)                                \
     do {                                                      \
@@ -68,7 +63,6 @@ QT_BEGIN_NAMESPACE
 
 class Q_CORE_EXPORT QStatInfo {
 public:
-    QStatInfo();
     QStatInfo(const QString &path, const bool listdir = false);
     QStatInfo(const QStatInfo &other);
 
@@ -105,20 +99,8 @@ private:
     time_t m_mtime;
     off_t m_size;
     QList<QStatInfo> m_entries;
-    QString m_path;
-    QByteArray m_native;
+    QByteArray m_path;
 };
-
-static inline bool qt_lock_fd(int fd, const bool forread)
-{
-#ifdef QT_HAVE_FLOCK
-    if (forread) {
-        return (::flock(fd, LOCK_SH) == 0);
-    }
-    return (::flock(fd, LOCK_EX) == 0);
-#endif // QT_HAVE_FLOCK
-    return false;
-}
 
 // Internal operator functions for timevals
 inline timeval &normalizedTimeval(timeval &t)
@@ -320,13 +302,15 @@ static inline pid_t qt_safe_waitpid(pid_t pid, int *status, int options)
 }
 
 // don't call ::poll, call qt_safe_poll
-static inline int qt_safe_poll(struct pollfd *fds, const int timeout)
+static inline int qt_safe_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
     int ret;
-    Q_EINTR_LOOP(ret, ::poll(fds, 1, timeout));
-    if ((fds->revents & POLLERR) != 0 || (fds->revents & POLLHUP) != 0 || (fds->revents & POLLNVAL) != 0) {
-        // select() compat
-        return -1;
+    Q_EINTR_LOOP(ret, ::poll(fds, nfds, timeout));
+    for (nfds_t i = 0; i < nfds; i++) {
+        if ((fds[i].revents & POLLERR) != 0 || (fds[i].revents & POLLHUP) != 0 || (fds[i].revents & POLLNVAL) != 0) {
+            // select() compat
+            return -1;
+        }
     }
     return ret;
 }

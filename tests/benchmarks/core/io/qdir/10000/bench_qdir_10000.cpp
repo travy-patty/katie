@@ -132,7 +132,7 @@ private slots:
         DIR *dir = QT_OPENDIR(qPrintable(testdir.absolutePath()));
         QVERIFY(dir);
 
-        QVERIFY(!::chdir(qPrintable(testdir.absolutePath())));
+        QVERIFY(!QT_CHDIR(qPrintable(testdir.absolutePath())));
         QBENCHMARK {
             QT_DIRENT *item = QT_READDIR(dir);
             while (item) {

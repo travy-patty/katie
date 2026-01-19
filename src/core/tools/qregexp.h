@@ -32,7 +32,6 @@ QT_BEGIN_NAMESPACE
 
 struct QRegExpPrivate;
 class QStringList;
-class QDebug;
 
 class Q_CORE_EXPORT QRegExp
 {
@@ -57,8 +56,10 @@ public:
     QRegExp(const QRegExp &rx);
     ~QRegExp();
     QRegExp &operator=(const QRegExp &rx);
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QRegExp &operator=(QRegExp &&other)
     { qSwap(priv,other.priv); return *this; }
+#endif
     inline void swap(QRegExp &other) { qSwap(priv, other.priv); }
 
     bool operator==(const QRegExp &rx) const;
@@ -102,11 +103,8 @@ Q_CORE_EXPORT QDataStream &operator<<(QDataStream &out, const QRegExp &regExp);
 Q_CORE_EXPORT QDataStream &operator>>(QDataStream &in, QRegExp &regExp);
 #endif
 
-#ifndef QT_NO_DEBUG_STREAM
-Q_CORE_EXPORT QDebug operator<<(QDebug, const QRegExp &);
-#endif
-
 QT_END_NAMESPACE
+
 
 #endif // QT_NO_REGEXP
 

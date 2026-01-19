@@ -36,6 +36,7 @@
 #include "qthreadpool.h"
 #include "qstandardpaths.h"
 #include "qelapsedtimer.h"
+#include "qvarlengtharray.h"
 #include "qscopedpointer.h"
 #include "qlibraryinfo.h"
 #include "qthread_p.h"
@@ -43,11 +44,8 @@
 #include "qfactoryloader_p.h"
 #include "qlocale_p.h"
 #include "qeventdispatcher_unix_p.h"
-#include "qstdcontainers_p.h"
-#include "qcorecommon_p.h"
 
 #include <stdlib.h>
-#include <errno.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -73,58 +71,76 @@ bool QCoreApplicationPrivate::checkInstance(const char *function)
     return true;
 }
 
-typedef QStdVector<QtCleanUpFunction> QVFuncList;
-Q_GLOBAL_STATIC(QVFuncList, qGlobalCleanupList)
-static std::recursive_mutex qGlobalApplicationMutex;
+typedef QList<QtCleanUpFunction> QVFuncList;
+Q_GLOBAL_STATIC(QVFuncList, postRList)
 
 void qAddPostRoutine(QtCleanUpFunction p)
 {
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-    QVFuncList *list = qGlobalCleanupList();
+    QVFuncList *list = postRList();
+    if (!list)
+        return;
     list->prepend(p);
 }
 
 void qRemovePostRoutine(QtCleanUpFunction p)
 {
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-    QVFuncList *list = qGlobalCleanupList();
+    QVFuncList *list = postRList();
+    if (!list)
+        return;
     list->removeAll(p);
 }
 
 void Q_CORE_EXPORT qt_call_post_routines()
 {
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-    QVFuncList *list = qGlobalCleanupList();
-    while (!list->isEmpty()) {
-        QtCleanUpFunction vfunc = list->takeFirst();
-        vfunc();
-    }
+    QVFuncList *list = postRList();
+    if (!list)
+        return;
+    while (!list->isEmpty())
+        (list->takeFirst())();
 }
 
-Q_AUTOTEST_EXPORT uint qGlobalPostedEventsCount()
-{
-    QThreadData *currentThreadData = QThreadData::current();
-    return currentThreadData->postEventList.size() - currentThreadData->postEventList.startOffset;
-}
 
 // app starting up if false
 bool QCoreApplicationPrivate::is_app_running = false;
  // app closing down if true
 bool QCoreApplicationPrivate::is_app_closing = false;
 
+/*
+  Create an instance of Katie.conf. This ensures that the settings will not
+  be thrown out of QSetting's cache for unused settings.
+  */
+#ifndef QT_NO_SETTINGS
+Q_GLOBAL_STATIC_WITH_ARGS(QSettings, staticKatieConf, (QLatin1String("Katie"), QSettings::NativeFormat))
+
+QSettings *QCoreApplicationPrivate::staticConf()
+{
+    return staticKatieConf();
+}
+#endif
+
 QCoreApplication *QCoreApplication::self = 0;
 std::bitset<Qt::AA_AttributeCount> QCoreApplicationPrivate::attribs;
 QCoreApplication::Type QCoreApplicationPrivate::app_type = QCoreApplication::Tty;
 
-struct QCoreApplicationData
-{
+struct QCoreApplicationData {
+    QCoreApplicationData() {
+#ifndef QT_NO_LIBRARY
+        app_libpaths = 0;
+#endif
+    }
+    ~QCoreApplicationData() {
+#ifndef QT_NO_LIBRARY
+        delete app_libpaths;
+#endif
+    }
+
     QString orgName, orgDomain, application;
     QString applicationVersion;
 
 #ifndef QT_NO_LIBRARY
-    QStringList app_librarypaths;
-    QStringList app_pluginpaths;
+    QStringList *app_libpaths;
 #endif
+
 };
 
 Q_GLOBAL_STATIC(QCoreApplicationData, coreappdata)
@@ -329,12 +345,9 @@ void QCoreApplication::init()
         d->threadData->eventDispatcher->moveToThread(d->threadData->thread);
 
 #if !defined(QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
-    // make sure that library and plugin paths are initialized
-    if (coreappdata()->app_librarypaths.isEmpty()) {
+    if (!coreappdata()->app_libpaths) {
+        // make sure that library paths is initialized
         libraryPaths();
-    }
-    if (coreappdata()->app_pluginpaths.isEmpty()) {
-        pluginPaths();
     }
 #endif
 
@@ -357,16 +370,21 @@ QCoreApplication::~QCoreApplication()
     QCoreApplicationPrivate::is_app_closing = true;
     QCoreApplicationPrivate::is_app_running = false;
 
-#if !defined(QT_NO_THREAD)
+#if !defined(QT_NO_THREAD) && !defined(QT_NO_CONCURRENT)
     // Synchronize and stop the global thread pool threads.
-    QThreadPool *globalThreadPool = QThreadPool::globalInstance();
+    QThreadPool *globalThreadPool = 0;
+    QT_TRY {
+        globalThreadPool = QThreadPool::globalInstance();
+    } QT_CATCH (...) {
+        // swallow the exception, since destructors shouldn't throw
+    }
     if (globalThreadPool)
         globalThreadPool->waitForDone();
 #endif
 
 #ifndef QT_NO_LIBRARY
-    coreappdata()->app_librarypaths.clear();
-    coreappdata()->app_pluginpaths.clear();
+    delete coreappdata()->app_libpaths;
+    coreappdata()->app_libpaths = 0;
 #endif
 }
 
@@ -418,6 +436,13 @@ bool QCoreApplication::testAttribute(Qt::ApplicationAttribute attribute)
 */
 bool QCoreApplication::notifyInternal(QObject *receiver, QEvent *event)
 {
+    // only script debugger uses the callbacks
+    bool result = false;
+    void *cbdata[] = { receiver, event, &result };
+    if (Q_UNLIKELY(QInternal::activateCallbacks(cbdata))) {
+        return result;
+    }
+
     // Qt enforces the rule that events can only be sent to objects in
     // the current thread, so receiver->d_func()->threadData is
     // equivalent to QThreadData::current(), just without the function
@@ -426,7 +451,13 @@ bool QCoreApplication::notifyInternal(QObject *receiver, QEvent *event)
     QThreadData *threadData = d->threadData;
     ++threadData->loopLevel;
 
-    bool returnValue = notify(receiver, event);
+    bool returnValue;
+    QT_TRY {
+        returnValue = notify(receiver, event);
+    } QT_CATCH (...) {
+        --threadData->loopLevel;
+        QT_RETHROW;
+    }
 
     --threadData->loopLevel;
     return returnValue;
@@ -651,7 +682,14 @@ void QCoreApplication::processEvents(QEventLoop::ProcessEventsFlags flags, int m
     be achieved using processEvents().
 
     We recommend that you connect clean-up code to the
-    \l{QCoreApplication::}{aboutToQuit()} signal.
+    \l{QCoreApplication::}{aboutToQuit()} signal, instead of putting it in
+    your application's \c{main()} function because on some platforms the
+    QCoreApplication::exec() call may not return. For example, on Windows
+    when the user logs off, the system terminates the process after Qt
+    closes all top-level windows. Hence, there is no guarantee that the
+    application will have time to exit its event loop and execute code at
+    the end of the \c{main()} function after the QCoreApplication::exec()
+    call.
 
     \sa quit(), exit(), processEvents(), QApplication::exec()
 */
@@ -985,7 +1023,21 @@ void QCoreApplicationPrivate::sendPostedEvents(QObject *receiver, int event_type
 
         locker.unlock();
         // after all that work, it's time to deliver the event.
-        QCoreApplication::sendEvent(r, e);
+        QT_TRY {
+            QCoreApplication::sendEvent(r, e);
+        } QT_CATCH (...) {
+            delete e;
+            locker.relock();
+
+            // since we were interrupted, we need another pass to make sure we clean everything up
+            data->canWait = false;
+
+            // uglehack: copied from below
+            --data->postEventList.recursion;
+            if (!data->postEventList.recursion && !data->canWait && data->eventDispatcher)
+                data->eventDispatcher->wakeUp();
+            QT_RETHROW;              // rethrow
+        }
 
         delete e;
         locker.relock();
@@ -1060,7 +1112,7 @@ void QCoreApplication::removePostedEvents(QObject *receiver, int eventType)
 
     //we will collect all the posted events for the QObject
     //and we'll delete after the mutex was unlocked
-    QStdVector<QEvent*> events;
+    QVarLengthArray<QEvent*> events;
     int n = data->postEventList.size();
     int j = 0;
 
@@ -1159,7 +1211,9 @@ bool QCoreApplication::event(QEvent *e)
     This enum type defines the 8-bit encoding of character string
     arguments to translate():
 
-    \value CodecForTr  US-ASCII.
+    \value CodecForTr  The encoding specified by
+                       QTextCodec::codecForTr() (Latin-1 if none has
+                       been set).
     \value UnicodeUTF8  UTF-8.
     \value DefaultCodec  (Obsolete) Use CodecForTr instead.
 
@@ -1227,17 +1281,16 @@ void QCoreApplication::quit()
 
 void QCoreApplication::installTranslator(QTranslator *translationFile)
 {
-    if (!translationFile || translationFile->isEmpty()) {
+    if (!translationFile)
         return;
-    }
 
-    if (!QCoreApplicationPrivate::checkInstance("installTranslator")) {
+    if (!QCoreApplicationPrivate::checkInstance("installTranslator"))
         return;
-    }
-
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
     QCoreApplicationPrivate *d = self->d_func();
     d->translators.prepend(translationFile);
+
+    if (translationFile->isEmpty())
+        return;
 
     QEvent ev(QEvent::LanguageChange);
     QCoreApplication::sendEvent(self, &ev);
@@ -1253,15 +1306,10 @@ void QCoreApplication::installTranslator(QTranslator *translationFile)
 
 void QCoreApplication::removeTranslator(QTranslator *translationFile)
 {
-    if (!translationFile) {
+    if (!translationFile)
         return;
-    }
-
-    if (!QCoreApplicationPrivate::checkInstance("removeTranslator")) {
+    if (!QCoreApplicationPrivate::checkInstance("removeTranslator"))
         return;
-    }
-
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
     QCoreApplicationPrivate *d = self->d_func();
     if (d->translators.removeAll(translationFile) && !self->closingDown()) {
         QEvent ev(QEvent::LanguageChange);
@@ -1303,7 +1351,7 @@ void QCoreApplication::removeTranslator(QTranslator *translationFile)
     so will most likely result in crashes or other undesirable
     behavior.
 
-    \sa QObject::tr() installTranslator()
+    \sa QObject::tr() installTranslator() QTextCodec::codecForTr()
 */
 
 
@@ -1320,10 +1368,15 @@ QString QCoreApplication::translate(const char *context, const char *sourceText,
         }
     }
 
-    if (encoding == UnicodeUTF8) {
+#ifdef QT_NO_TEXTCODEC
+    Q_UNUSED(encoding)
+#else
+    if (encoding == UnicodeUTF8)
         return QString::fromUtf8(sourceText);
-    }
-    return QString::fromAscii(sourceText);
+    else if (QTextCodec::codecForTr())
+        return QTextCodec::codecForTr()->toUnicode(sourceText);
+#endif
+    return QString::fromLatin1(sourceText);
 }
 #endif // QT_NO_TRANSLATION
 
@@ -1552,12 +1605,6 @@ QString QCoreApplication::applicationName()
 {
     QString name = coreappdata()->application;
 
-#ifdef QT_HAVE_PROGRAM_INVOCATION_SHORT_NAME
-    if (name.isEmpty()) {
-        name = QString::fromLocal8Bit(program_invocation_short_name);
-    }
-#endif
-
 #ifdef QT_HAVE_GETPROGNAME
     if (name.isEmpty()) {
         name = QString::fromLocal8Bit(::getprogname());
@@ -1605,46 +1652,64 @@ QString QCoreApplication::applicationVersion()
 }
 
 #ifndef QT_NO_LIBRARY
+Q_GLOBAL_STATIC(QMutex, qGlobalLibraryPathMutex);
+
 /*!
     Returns a list of paths that the application will search when
     dynamically loading libraries.
 
-    Katie provides default library paths, but they can also be set using
-    a \l{Using Katie.json}{Katie.json} file. Paths specified in this file
+    Qt provides default library paths, but they can also be set using
+    a \l{Using qt.conf}{qt.conf} file. Paths specified in this file
     will override default values.
 
-    This list will include the installation directory for libraries if
-    it exists (the default installation directory for libraries is \c
-    INSTALL/lib, where \c INSTALL is the directory where Katie was
-    installed). The colon separated entries of the LD_LIBRARY_PATH
-    environment variable are also added.
+    This list will include the installation directory for plugins if
+    it exists (the default installation directory for plugins is \c
+    INSTALL/plugins, where \c INSTALL is the directory where Qt was
+    installed).  The directory of the application executable (NOT the
+    working directory) is always added, as well as the colon separated
+    entries of the QT_PLUGIN_PATH environment variable.
 
-    \sa setLibraryPaths(), addLibraryPath(), removeLibraryPath(), QLibrary
+    If you want to iterate over the list, you can use the \l foreach
+    pseudo-keyword:
+
+    \snippet doc/src/snippets/code/src_corelib_kernel_qcoreapplication.cpp 2
+
+    \sa setLibraryPaths(), addLibraryPath(), removeLibraryPath(), QLibrary,
+        {How to Create Qt Plugins}
 */
 QStringList QCoreApplication::libraryPaths()
 {
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
+    QMutexLocker locker(qGlobalLibraryPathMutex());
+    if (!coreappdata()->app_libpaths) {
+        QStringList *app_libpaths = coreappdata()->app_libpaths = new QStringList;
 
-    if (coreappdata()->app_librarypaths.isEmpty()) {
-        const QString installPathLibraries = QLibraryInfo::location(QLibraryInfo::LibrariesPath);
-        if (QDir(installPathLibraries).exists()
-            && !coreappdata()->app_librarypaths.contains(installPathLibraries)) {
-            coreappdata()->app_librarypaths.append(installPathLibraries);
+        QString installPathPlugins = QLibraryInfo::location(QLibraryInfo::PluginsPath);
+        if (QDir(installPathPlugins).exists()
+            && !app_libpaths->contains(installPathPlugins)) {
+            app_libpaths->append(installPathPlugins);
+        }
+
+        installPathPlugins = QLibraryInfo::location(QLibraryInfo::LibrariesPath);
+        if (QDir(installPathPlugins).exists()
+            && !app_libpaths->contains(installPathPlugins)) {
+                app_libpaths->append(installPathPlugins);
+        }
+
+        const QByteArray libPathEnv = qgetenv("QT_PLUGIN_PATH");
+        if (!libPathEnv.isEmpty()) {
+            const QStringList paths = QString::fromLatin1(libPathEnv.constData()).split(QLatin1Char(':'), QString::SkipEmptyParts);
+            foreach (const QString &it, paths) {
+                QString canonicalPath = QDir(it).canonicalPath();
+                if (!app_libpaths->contains(canonicalPath)) {
+                    app_libpaths->append(canonicalPath);
+                }
+            }
         }
     }
-
-    foreach (const QString &it, qGetEnvList("LD_LIBRARY_PATH")) {
-        const QString canonicalPath = QDir(it).canonicalPath();
-        if (canonicalPath.isEmpty()) {
-            continue;
-        }
-        if (!coreappdata()->app_librarypaths.contains(canonicalPath)) {
-            coreappdata()->app_librarypaths.append(canonicalPath);
-        }
-    }
-
-    return coreappdata()->app_librarypaths;
+    return *(coreappdata()->app_libpaths);
 }
+
+
 
 /*!
 
@@ -1652,12 +1717,20 @@ QStringList QCoreApplication::libraryPaths()
     \a paths. All existing paths will be deleted and the path list
     will consist of the paths given in \a paths.
 
+    In Symbian this function is only useful for setting paths for
+    finding Qt extension plugin stubs, since the OS can only
+    load libraries from the \c{/sys/bin} directory.
+
     \sa libraryPaths(), addLibraryPath(), removeLibraryPath(), QLibrary
  */
 void QCoreApplication::setLibraryPaths(const QStringList &paths)
 {
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-    coreappdata()->app_librarypaths = paths;
+    QMutexLocker locker(qGlobalLibraryPathMutex());
+    if (!coreappdata()->app_libpaths)
+        coreappdata()->app_libpaths = new QStringList;
+    *(coreappdata()->app_libpaths) = paths;
+    locker.unlock();
+    QFactoryLoader::refreshAll();
 }
 
 /*!
@@ -1665,21 +1738,27 @@ void QCoreApplication::setLibraryPaths(const QStringList &paths)
   it is searched for libraries first. If \a path is empty or already in the
   path list, the path list is not changed.
 
+  The default path list consists of a single entry, the installation
+  directory for plugins.  The default installation directory for plugins
+  is \c INSTALL/plugins, where \c INSTALL is the directory where Qt was
+  installed.
+
   \sa removeLibraryPath(), libraryPaths(), setLibraryPaths()
  */
 void QCoreApplication::addLibraryPath(const QString &path)
 {
-    const QString canonicalPath = QDir(path).canonicalPath();
-    if (canonicalPath.isEmpty()) {
+    if (path.isEmpty())
         return;
-    }
 
     // make sure that library paths is initialized
     libraryPaths();
 
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-    if (!coreappdata()->app_librarypaths.contains(canonicalPath)) {
-        coreappdata()->app_librarypaths.prepend(canonicalPath);
+    QMutexLocker locker(qGlobalLibraryPathMutex());
+    QString canonicalPath = QDir(path).canonicalPath();
+    if (!coreappdata()->app_libpaths->contains(canonicalPath)) {
+        coreappdata()->app_libpaths->prepend(canonicalPath);
+        locker.unlock();
+        QFactoryLoader::refreshAll();
     }
 }
 
@@ -1691,117 +1770,19 @@ void QCoreApplication::addLibraryPath(const QString &path)
 */
 void QCoreApplication::removeLibraryPath(const QString &path)
 {
-    const QString canonicalPath = QDir(path).canonicalPath();
-    if (canonicalPath.isEmpty()) {
+    if (path.isEmpty())
         return;
-    }
 
     // make sure that library paths is initialized
     libraryPaths();
 
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-    coreappdata()->app_librarypaths.removeAll(canonicalPath);
-}
-
-/*!
-    Returns a list of paths that the application will search when
-    dynamically loading plugins.
-
-    This list will include the installation directory for plugins if
-    it exists (the default installation directory for plugins is \c
-    INSTALL/plugins, where \c INSTALL is the directory where Katie was
-    installed). The colon separated entries of the QT_PLUGIN_PATH
-    environment variable are also added.
-
-    \sa setPluginPaths(), addPluginPath(), removePluginPath(),
-        QPluginLoader, {How to Create Katie Plugins}
-*/
-QStringList QCoreApplication::pluginPaths()
-{
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-
-    if (coreappdata()->app_pluginpaths.isEmpty()) {
-        const QString installPathPlugins = QLibraryInfo::location(QLibraryInfo::PluginsPath);
-        if (QDir(installPathPlugins).exists()
-            && !coreappdata()->app_pluginpaths.contains(installPathPlugins)) {
-            coreappdata()->app_pluginpaths.append(installPathPlugins);
-        }
-    }
-
-    foreach (const QString &it, qGetEnvList("QT_PLUGIN_PATH")) {
-        const QString canonicalPath = QDir(it).canonicalPath();
-        if (canonicalPath.isEmpty()) {
-            continue;
-        }
-        if (!coreappdata()->app_pluginpaths.contains(canonicalPath)) {
-            coreappdata()->app_pluginpaths.append(canonicalPath);
-        }
-    }
-
-    return coreappdata()->app_pluginpaths;
-}
-
-/*!
-
-    Sets the list of directories to search when loading plugins to
-    \a paths. All existing paths will be deleted and the path list
-    will consist of the paths given in \a paths.
-
-    \sa pluginPaths(), addPluginPath(), removePluginPath(), QLibrary
- */
-void QCoreApplication::setPluginPaths(const QStringList &paths)
-{
-    {
-        std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-        coreappdata()->app_pluginpaths = paths;
-    }
+    QMutexLocker locker(qGlobalLibraryPathMutex());
+    QString canonicalPath = QDir(path).canonicalPath();
+    coreappdata()->app_libpaths->removeAll(canonicalPath);
     QFactoryLoader::refreshAll();
 }
 
-/*!
-  Prepends \a path to the beginning of the plugin path list, ensuring that
-  it is searched for plugins first. If \a path is empty or already in the
-  path list, the path list is not changed.
 
-  \sa removePluginPath(), pluginPaths(), setPluginPaths()
- */
-void QCoreApplication::addPluginPath(const QString &path)
-{
-    const QString canonicalPath = QDir(path).canonicalPath();
-    if (canonicalPath.isEmpty()) {
-        return;
-    }
-
-    // make sure that plugin paths is initialized
-    pluginPaths();
-
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-    if (!coreappdata()->app_pluginpaths.contains(canonicalPath)) {
-        coreappdata()->app_pluginpaths.prepend(canonicalPath);
-        QFactoryLoader::refreshAll();
-    }
-}
-
-/*!
-    Removes \a path from the plugin path list. If \a path is empty or not
-    in the path list, the list is not changed.
-
-    \sa addPluginPath(), pluginPaths(), setPluginPaths()
-*/
-void QCoreApplication::removePluginPath(const QString &path)
-{
-    const QString canonicalPath = QDir(path).canonicalPath();
-    if (canonicalPath.isEmpty()) {
-        return;
-    }
-
-    // make sure that plugin paths is initialized
-    pluginPaths();
-
-    std::lock_guard<std::recursive_mutex> locker(qGlobalApplicationMutex);
-    coreappdata()->app_pluginpaths.removeAll(canonicalPath);
-    QFactoryLoader::refreshAll();
-}
 #endif //QT_NO_LIBRARY
 
 /*!

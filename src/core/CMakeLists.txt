@@ -1,15 +1,17 @@
 # add_definitions()
 set(EXTRA_CORE_LIBS
     ${ICU_LIBRARIES}
+    ${ZSTD_LIBRARIES}
     ${JANSSON_LIBRARIES}
-    ${DEFLATE_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
     # libm should be present by default becaue this is C++
     m
 )
 
 set(CORE_PUBLIC_HEADERS
+    QVarLengthArray
     QList
+    QSystemSemaphore
     QProcess
     QBuffer
     QStringMatcher
@@ -18,21 +20,27 @@ set(CORE_PUBLIC_HEADERS
     QHash
     QLibrary
     QObjectCleanupHandler
+    QAbstractFileEngine
     QTranslator
+    QFuture
     QWaitCondition
     QMimeData
+    QtConcurrentMap
     QBitArray
     QChar
     QMap
     QTextStream
     QDebug
+    QContiguousCache
     QFileInfo
+    QFutureInterface
     QDateTime
     QThreadPool
     QSettings
     QStandardPaths
     QPlugin
     QPluginLoader
+    QFSFileEngine
     QLine
     QIODevice
     QPair
@@ -40,18 +48,23 @@ set(CORE_PUBLIC_HEADERS
     QByteArray
     QSharedData
     QPointer
+    QtConcurrentRun
     QSignalMapper
     QEventLoop
     QDataStream
     QScopedValueRollback
+    QUuid
     QAbstractItemModel
     QTextBoundaryFinder
     QTimer
     QElapsedTimer
     QUrl
+    QFutureWatcher
     QVector
     QLibraryInfo
+    QLinkedList
     QSemaphore
+    QFutureSynchronizer
     QStack
     QTemporaryFile
     QQueue
@@ -59,6 +72,8 @@ set(CORE_PUBLIC_HEADERS
     QMargins
     QByteArrayMatcher
     QDirIterator
+    QSharedMemory
+    QReadWriteLock
     QFileSystemWatcher
     QSharedPointer
     QSize
@@ -68,13 +83,16 @@ set(CORE_PUBLIC_HEADERS
     QMetaObject
     QDir
     QObject
+    QFactoryInterface
     QString
     QLocale
     QMetaType
     QVariant
     QFile
+    QtConcurrentFilter
     QCache
     QAbstractEventDispatcher
+    QResource
     QRunnable
     QTimeLine
     QTextCodec
@@ -91,19 +109,46 @@ include_directories(
     ${CMAKE_BINARY_DIR}/privateinclude
     ${CMAKE_BINARY_DIR}/include/QtCore
     ${ICU_INCLUDES}
+    ${ZSTD_INCLUDES}
     ${JANSSON_INCLUDES}
-    ${DEFLATE_INCLUDES}
 )
 
 set(CORE_HEADERS
-    ${CMAKE_CURRENT_SOURCE_DIR}/codecs/qtextcodec.h
     ${CMAKE_CURRENT_SOURCE_DIR}/codecs/qtextcodec_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/codecs/qtextcodec.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/codecs/qicucodec_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfuture.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfutureinterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfuturesynchronizer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfuturewatcher.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qrunnable.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentcompilertest.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentexception.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentfilter.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentfilterkernel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentfunctionwrappers.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentiteratekernel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentmap.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentmapkernel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentmedian.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentreducekernel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentresultstore.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentrun.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentrunbase.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentstoredfunctioncall.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentthreadengine.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qthreadpool.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfutureinterface_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfuturewatcher_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qthreadpool_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/global/qendian.h
     ${CMAKE_CURRENT_SOURCE_DIR}/global/qglobal.h
     ${CMAKE_CURRENT_SOURCE_DIR}/global/qlibraryinfo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/global/qnamespace.h
     ${CMAKE_CURRENT_SOURCE_DIR}/global/qnumeric.h
     ${CMAKE_CURRENT_SOURCE_DIR}/global/qplatformdefs.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qabstractfileengine.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qabstractfileengine_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qbuffer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qdatastream.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qdataurl_p.h
@@ -116,17 +161,25 @@ set(CORE_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfileinfo_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qiodevice.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qiodevice_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qnoncontiguousbytedevice_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qprocess.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qprocess_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qtextstream.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qtemporaryfile.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qresource.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qresource_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qresource_iterator_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qurl.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qtldurl_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qsettings.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qsettings_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qstandardpaths.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qfsfileengine.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qfsfileengine_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qfsfileengine_iterator_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystemwatcher.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystemwatcher_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystemwatcher_unix_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystementry_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystemengine_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystemmetadata_p.h
@@ -155,29 +208,35 @@ set(CORE_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qvariant_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qmetaobject_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qobject_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qsharedmemory.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qsharedmemory_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qsystemsemaphore.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qsystemsemaphore_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qmath.h
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qcore_unix_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qeventdispatcher_unix_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qfactoryinterface.h
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qpluginloader.h
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qlibrary.h
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qlibrary_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qplugin.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugin/quuid.h
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qfactoryloader_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qmutex.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/thread/qreadwritelock.h
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qsemaphore.h
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qthread.h
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qwaitcondition.h
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qatomic.h
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qmutexpool_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qorderedmutexlocker_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/thread/qreadwritelock_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qthread_p.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/thread/qrunnable.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/thread/qthreadpool.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/thread/qthreadpool_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qalgorithms.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qbitarray.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qbytearray.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qbytearraymatcher.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/qbytedata_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qcache.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qchar.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qcontainerfwd.h
@@ -187,6 +246,7 @@ set(CORE_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qhash.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qjsondocument.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qline.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/qlinkedlist.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qlist.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qlocale.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qlocale_p.h
@@ -194,6 +254,7 @@ set(CORE_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qlocale_data_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qmap.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qmargins.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/qcontiguouscache.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qpoint.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qqueue.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qrect.h
@@ -213,6 +274,7 @@ set(CORE_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qtextboundaryfinder.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qtimeline.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qelapsedtimer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/qvarlengtharray.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qvector.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qiterator.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qpair.h
@@ -222,9 +284,23 @@ set(CORE_HEADERS
 
 set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/codecs/qtextcodec.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/codecs/qicucodec.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfuture.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfutureinterface.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfuturesynchronizer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qfuturewatcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qrunnable.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentfilter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentmap.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentresultstore.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentthreadengine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentiteratekernel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qtconcurrentexception.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/concurrent/qthreadpool.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/global/qglobal.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/global/qlibraryinfo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/global/qt_error_string.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qabstractfileengine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qbuffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qdatastream.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qdataurl.cpp
@@ -235,14 +311,21 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfile.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfileinfo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qiodevice.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qnoncontiguousbytedevice.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qprocess.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qtextstream.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qtemporaryfile.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qresource.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qresource_iterator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qurl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qsettings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qstandardpaths.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qfsfileengine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qfsfileengine_iterator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystemwatcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystemwatcher_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystementry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/qfsfileengine_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystemengine_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qprocess_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/qfilesystemiterator_unix.cpp
@@ -263,19 +346,24 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qtimer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qtranslator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qvariant.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qsharedmemory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qsystemsemaphore.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qpointer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qcore_unix.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qsharedmemory_unix.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qsystemsemaphore_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qeventdispatcher_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qpluginloader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qfactoryloader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugin/quuid.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qlibrary.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/qlibrary_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qatomic.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qmutex.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/thread/qrunnable.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/thread/qreadwritelock.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/thread/qmutexpool.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qsemaphore.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qthread.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/thread/qthreadpool.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qthread_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/thread/qwaitcondition_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qbitarray.cpp
@@ -288,12 +376,14 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qhash.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qjsondocument.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qline.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/qlinkedlist.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qlist.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qlocale.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qlocale_tools.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qpoint.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qmap.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qmargins.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/qcontiguouscache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qrect.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qregexp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/qshareddata.cpp
@@ -316,6 +406,14 @@ foreach(lib dl rt)
         set(EXTRA_CORE_LIBS ${EXTRA_CORE_LIBS} ${lib${lib}_path})
     endif()
 endforeach()
+
+if(WITH_INTL AND INTL_FOUND)
+    set(EXTRA_CORE_LIBS
+        ${EXTRA_CORE_LIBS}
+        ${INTL_LIBRARIES}
+    )
+    include_directories(${INTL_INCLUDES})
+endif()
 
 if(WITH_EXECINFO AND EXECINFO_FOUND)
     set(EXTRA_CORE_LIBS
@@ -344,7 +442,7 @@ set_target_properties(KtCore PROPERTIES
 
 install(
     TARGETS KtCore
-    EXPORT KatieTargets
+    EXPORT KatieTargets ${INSTALL_TARGETS_DEFAULT_ARGS}
     DESTINATION ${KATIE_LIBRARIES_PATH}
     COMPONENT Runtime
 )

@@ -41,33 +41,42 @@ class QPaintDevice;
 class QRegion;
 class QRect;
 class QPoint;
+class QImage;
 class QWindowSurfacePrivate;
 
-class QWindowSurface
+class Q_GUI_EXPORT QWindowSurface
 {
 public:
     QWindowSurface(QWidget *windows);
-    ~QWindowSurface();
+    virtual ~QWindowSurface();
 
     QWidget *window() const;
 
-    QPaintDevice *paintDevice();
+    virtual QPaintDevice *paintDevice() = 0;
 
     // 'widget' can be a child widget, in which case 'region' is in child widget coordinates and
     // offset is the (child) widget's offset in relation to the window surface. On QWS, 'offset'
     // can be larger than just the offset from the top-level widget as there may also be window
     // decorations which are painted into the window surface.
-    void flush(QWidget *widget, const QRegion &region, const QPoint &offset);
-    void setGeometry(const QRect &rect);
+    virtual void flush(QWidget *widget, const QRegion &region, const QPoint &offset) = 0;
+    virtual void setGeometry(const QRect &rect);
     QRect geometry() const;
 
-    bool scroll(const QRegion &area, int dx, int dy);
+    virtual bool scroll(const QRegion &area, int dx, int dy) = 0;
 
-    void beginPaint(const QRegion &);
+    virtual void beginPaint(const QRegion &) = 0;
     void endPaint(const QRegion &);
+
+    QImage* buffer(const QWidget *widget);
 
     QPoint offset(const QWidget *widget) const;
     inline QRect rect(const QWidget *widget) const;
+
+    void setStaticContents(const QRegion &region);
+    QRegion staticContents() const;
+
+protected:
+    bool hasStaticContents() const;
 
 private:
     QWindowSurfacePrivate *d_ptr;

@@ -55,10 +55,21 @@ public:
     bool autoRemove() const;
     void setAutoRemove(bool b);
 
-    bool open();
+    // ### Hides open(flags)
+    bool open() { return open(QIODevice::ReadWrite); }
 
+    QString fileName() const;
     QString fileTemplate() const;
     void setFileTemplate(const QString &name);
+
+    inline static QTemporaryFile *createLocalFile(const QString &fileName)
+        { QFile file(fileName); return createLocalFile(file); }
+    static QTemporaryFile *createLocalFile(QFile &file);
+
+    virtual QAbstractFileEngine *fileEngine() const;
+
+protected:
+    bool open(OpenMode flags);
 
 private:
     friend class QFile;

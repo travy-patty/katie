@@ -48,13 +48,14 @@ public:
     };
 
     enum PrintDialogOption {
-        PrintNone               = 0x0000, // obsolete
-        PrintSelection          = 0x0001,
-        PrintPageRange          = 0x0002,
-        PrintShowPageSize       = 0x0004,
-        PrintCollateCopies      = 0x0008,
-        DontUseSheet            = 0x0010,
-        PrintCurrentPage        = 0x0020
+        None                    = 0x0000, // obsolete
+        PrintToFile             = 0x0001,
+        PrintSelection          = 0x0002,
+        PrintPageRange          = 0x0004,
+        PrintShowPageSize       = 0x0008,
+        PrintCollateCopies      = 0x0010,
+        DontUseSheet            = 0x0020,
+        PrintCurrentPage        = 0x0040
     };
 
     Q_DECLARE_FLAGS(PrintDialogOptions, PrintDialogOption)

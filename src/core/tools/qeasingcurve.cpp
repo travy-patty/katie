@@ -28,6 +28,9 @@
 
 */
 
+
+
+
 /*!
     \class QEasingCurve
     \since 4.6
@@ -116,109 +119,203 @@
 
     The type of easing curve.
 
-    \value Linear       Easing curve for a linear (t) function:
+    \value Linear       \inlineimage qeasingcurve-linear.png
+                        \br
+                        Easing curve for a linear (t) function:
                         velocity is constant.
-    \value InQuad       Easing curve for a quadratic (t^2) function:
+    \value InQuad       \inlineimage qeasingcurve-inquad.png
+                        \br
+                        Easing curve for a quadratic (t^2) function:
                         accelerating from zero velocity.
-    \value OutQuad      Easing curve for a quadratic (t^2) function:
+    \value OutQuad      \inlineimage qeasingcurve-outquad.png
+                        \br
+                        Easing curve for a quadratic (t^2) function:
                         decelerating to zero velocity.
-    \value InOutQuad    Easing curve for a quadratic (t^2) function:
+    \value InOutQuad    \inlineimage qeasingcurve-inoutquad.png
+                        \br
+                        Easing curve for a quadratic (t^2) function:
                         acceleration until halfway, then deceleration.
-    \value OutInQuad    Easing curve for a quadratic (t^2) function:
+    \value OutInQuad    \inlineimage qeasingcurve-outinquad.png
+                        \br
+                        Easing curve for a quadratic (t^2) function:
                         deceleration until halfway, then acceleration.
-    \value InCubic      Easing curve for a cubic (t^3) function:
+    \value InCubic      \inlineimage qeasingcurve-incubic.png
+                        \br
+                        Easing curve for a cubic (t^3) function:
                         accelerating from zero velocity.
-    \value OutCubic     Easing curve for a cubic (t^3) function:
+    \value OutCubic     \inlineimage qeasingcurve-outcubic.png
+                        \br
+                        Easing curve for a cubic (t^3) function:
                         decelerating to zero velocity.
-    \value InOutCubic   Easing curve for a cubic (t^3) function:
+    \value InOutCubic   \inlineimage qeasingcurve-inoutcubic.png
+                        \br
+                        Easing curve for a cubic (t^3) function:
                         acceleration until halfway, then deceleration.
-    \value OutInCubic   Easing curve for a cubic (t^3) function:
+    \value OutInCubic   \inlineimage qeasingcurve-outincubic.png
+                        \br
+                        Easing curve for a cubic (t^3) function:
                         deceleration until halfway, then acceleration.
-    \value InQuart      Easing curve for a quartic (t^4) function:
+    \value InQuart      \inlineimage qeasingcurve-inquart.png
+                        \br
+                        Easing curve for a quartic (t^4) function:
                         accelerating from zero velocity.
-    \value OutQuart     Easing curve for a quartic (t^4) function:
+    \value OutQuart     \inlineimage qeasingcurve-outquart.png
+                        \br
+                        Easing curve for a quartic (t^4) function:
                         decelerating to zero velocity.
-    \value InOutQuart   Easing curve for a quartic (t^4) function:
+    \value InOutQuart   \inlineimage qeasingcurve-inoutquart.png
+                        \br
+                        Easing curve for a quartic (t^4) function:
                         acceleration until halfway, then deceleration.
-    \value OutInQuart   Easing curve for a quartic (t^4) function:
+    \value OutInQuart   \inlineimage qeasingcurve-outinquart.png
+                        \br
+                        Easing curve for a quartic (t^4) function:
                         deceleration until halfway, then acceleration.
-    \value InQuint      Easing curve for a quintic (t^5) easing
+    \value InQuint      \inlineimage qeasingcurve-inquint.png
+                        \br
+                        Easing curve for a quintic (t^5) easing
                         in: accelerating from zero velocity.
-    \value OutQuint     Easing curve for a quintic (t^5) function:
+    \value OutQuint     \inlineimage qeasingcurve-outquint.png
+                        \br
+                        Easing curve for a quintic (t^5) function:
                         decelerating to zero velocity.
-    \value InOutQuint   Easing curve for a quintic (t^5) function:
+    \value InOutQuint   \inlineimage qeasingcurve-inoutquint.png
+                        \br
+                        Easing curve for a quintic (t^5) function:
                         acceleration until halfway, then deceleration.
-    \value OutInQuint   Easing curve for a quintic (t^5) function:
+    \value OutInQuint   \inlineimage qeasingcurve-outinquint.png
+                        \br
+                        Easing curve for a quintic (t^5) function:
                         deceleration until halfway, then acceleration.
-    \value InSine       Easing curve for a sinusoidal (sin(t)) function:
+    \value InSine       \inlineimage qeasingcurve-insine.png
+                        \br
+                        Easing curve for a sinusoidal (sin(t)) function:
                         accelerating from zero velocity.
-    \value OutSine      Easing curve for a sinusoidal (sin(t)) function:
+    \value OutSine      \inlineimage qeasingcurve-outsine.png
+                        \br
+                        Easing curve for a sinusoidal (sin(t)) function:
                         decelerating from zero velocity.
-    \value InOutSine    Easing curve for a sinusoidal (sin(t)) function:
+    \value InOutSine    \inlineimage qeasingcurve-inoutsine.png
+                        \br
+                        Easing curve for a sinusoidal (sin(t)) function:
                         acceleration until halfway, then deceleration.
-    \value OutInSine    Easing curve for a sinusoidal (sin(t)) function:
+    \value OutInSine    \inlineimage qeasingcurve-outinsine.png
+                        \br
+                        Easing curve for a sinusoidal (sin(t)) function:
                         deceleration until halfway, then acceleration.
-    \value InExpo       Easing curve for an exponential (2^t) function:
+    \value InExpo       \inlineimage qeasingcurve-inexpo.png
+                        \br
+                        Easing curve for an exponential (2^t) function:
                         accelerating from zero velocity.
-    \value OutExpo      Easing curve for an exponential (2^t) function:
+    \value OutExpo      \inlineimage qeasingcurve-outexpo.png
+                        \br
+                        Easing curve for an exponential (2^t) function:
                         decelerating from zero velocity.
-    \value InOutExpo    Easing curve for an exponential (2^t) function:
+    \value InOutExpo    \inlineimage qeasingcurve-inoutexpo.png
+                        \br
+                        Easing curve for an exponential (2^t) function:
                         acceleration until halfway, then deceleration.
-    \value OutInExpo    Easing curve for an exponential (2^t) function:
+    \value OutInExpo    \inlineimage qeasingcurve-outinexpo.png
+                        \br
+                        Easing curve for an exponential (2^t) function:
                         deceleration until halfway, then acceleration.
-    \value InCirc       Easing curve for a circular (sqrt(1-t^2)) function:
+    \value InCirc       \inlineimage qeasingcurve-incirc.png
+                        \br
+                        Easing curve for a circular (sqrt(1-t^2)) function:
                         accelerating from zero velocity.
-    \value OutCirc      Easing curve for a circular (sqrt(1-t^2)) function:
+    \value OutCirc      \inlineimage qeasingcurve-outcirc.png
+                        \br
+                        Easing curve for a circular (sqrt(1-t^2)) function:
                         decelerating from zero velocity.
-    \value InOutCirc    Easing curve for a circular (sqrt(1-t^2)) function:
+    \value InOutCirc    \inlineimage qeasingcurve-inoutcirc.png
+                        \br
+                        Easing curve for a circular (sqrt(1-t^2)) function:
                         acceleration until halfway, then deceleration.
-    \value OutInCirc    Easing curve for a circular (sqrt(1-t^2)) function:
+    \value OutInCirc    \inlineimage qeasingcurve-outincirc.png
+                        \br
+                        Easing curve for a circular (sqrt(1-t^2)) function:
                         deceleration until halfway, then acceleration.
-    \value InElastic    Easing curve for an elastic
+    \value InElastic    \inlineimage qeasingcurve-inelastic.png
+                        \br
+                        Easing curve for an elastic
                         (exponentially decaying sine wave) function:
                         accelerating from zero velocity.  The peak amplitude
                         can be set with the \e amplitude parameter, and the
                         period of decay by the \e period parameter.
-    \value OutElastic   Easing curve for an elastic
+    \value OutElastic   \inlineimage qeasingcurve-outelastic.png
+                        \br
+                        Easing curve for an elastic
                         (exponentially decaying sine wave) function:
                         decelerating from zero velocity.  The peak amplitude
                         can be set with the \e amplitude parameter, and the
                         period of decay by the \e period parameter.
-    \value InOutElastic Easing curve for an elastic
+    \value InOutElastic \inlineimage qeasingcurve-inoutelastic.png
+                        \br
+                        Easing curve for an elastic
                         (exponentially decaying sine wave) function:
                         acceleration until halfway, then deceleration.
-    \value OutInElastic Easing curve for an elastic
+    \value OutInElastic \inlineimage qeasingcurve-outinelastic.png
+                        \br
+                        Easing curve for an elastic
                         (exponentially decaying sine wave) function:
                         deceleration until halfway, then acceleration.
-    \value InBack       Easing curve for a back (overshooting
+    \value InBack       \inlineimage qeasingcurve-inback.png
+                        \br
+                        Easing curve for a back (overshooting
                         cubic function: (s+1)*t^3 - s*t^2) easing in:
                         accelerating from zero velocity.
-    \value OutBack      Easing curve for a back (overshooting
+    \value OutBack      \inlineimage qeasingcurve-outback.png
+                        \br
+                        Easing curve for a back (overshooting
                         cubic function: (s+1)*t^3 - s*t^2) easing out:
                         decelerating to zero velocity.
-    \value InOutBack    Easing curve for a back (overshooting
+    \value InOutBack    \inlineimage qeasingcurve-inoutback.png
+                        \br
+                        Easing curve for a back (overshooting
                         cubic function: (s+1)*t^3 - s*t^2) easing in/out:
                         acceleration until halfway, then deceleration.
-    \value OutInBack    Easing curve for a back (overshooting
+    \value OutInBack    \inlineimage qeasingcurve-outinback.png
+                        \br
+                        Easing curve for a back (overshooting
                         cubic easing: (s+1)*t^3 - s*t^2) easing out/in:
                         deceleration until halfway, then acceleration.
-    \value InBounce     Easing curve for a bounce (exponentially
+    \value InBounce     \inlineimage qeasingcurve-inbounce.png
+                        \br
+                        Easing curve for a bounce (exponentially
                         decaying parabolic bounce) function: accelerating
                         from zero velocity.
-    \value OutBounce    Easing curve for a bounce (exponentially
+    \value OutBounce    \inlineimage qeasingcurve-outbounce.png
+                        \br
+                        Easing curve for a bounce (exponentially
                         decaying parabolic bounce) function: decelerating
                         from zero velocity.
-    \value InOutBounce  Easing curve for a bounce (exponentially
+    \value InOutBounce  \inlineimage qeasingcurve-inoutbounce.png
+                        \br
+                        Easing curve for a bounce (exponentially
                         decaying parabolic bounce) function easing in/out:
                         acceleration until halfway, then deceleration.
-    \value OutInBounce  Easing curve for a bounce (exponentially
+    \value OutInBounce  \inlineimage qeasingcurve-outinbounce.png
+                        \br
+                        Easing curve for a bounce (exponentially
                         decaying parabolic bounce) function easing out/in:
                         deceleration until halfway, then acceleration.
-    \value InCurve
-    \value OutCurve
-    \value SineCurve
-    \value CosineCurve
+    \omitvalue InCurve
+    \omitvalue OutCurve
+    \omitvalue SineCurve
+    \omitvalue CosineCurve
+    \value Custom       This is returned if the user specified a custom curve type with
+                        setCustomType(). Note that you cannot call setType() with this value,
+                        but type() can return it.
     \omitvalue NCurveTypes
+*/
+
+/*!
+    \typedef QEasingCurve::EasingFunction
+
+    This is a typedef for a pointer to a function with the following
+    signature:
+
+    \snippet doc/src/snippets/code/src_corelib_tools_qeasingcurve.cpp 0
 */
 
 #include "qeasingcurve.h"
@@ -232,34 +329,250 @@
 #include <QtCore/qdatastream.h>
 #endif
 
-#include "../../3rdparty/easing/easing.cpp"
-
 QT_BEGIN_NAMESPACE
 
-static const qreal s_defaultperiod = qreal(0.3);
-static const qreal s_defaultamplitude = qreal(1.0);
-static const qreal s_defaultovershoot = qreal(1.70158);
+static inline bool isConfigFunction(QEasingCurve::Type type)
+{
+    return type >= QEasingCurve::InElastic && type <= QEasingCurve::OutInBounce;
+}
+
+class QEasingCurveFunction
+{
+public:
+    QEasingCurveFunction(QEasingCurve::Type type, qreal period = 0.3, qreal amplitude = 1.0,
+        qreal overshoot = 1.70158)
+        : _t(type), _p(period), _a(amplitude), _o(overshoot)
+    { }
+    virtual ~QEasingCurveFunction() {}
+    virtual qreal value(qreal t);
+    QEasingCurveFunction *copy() const;
+    bool operator==(const QEasingCurveFunction& other) const;
+
+    QEasingCurve::Type _t;
+    qreal _p;
+    qreal _a;
+    qreal _o;
+};
+
+qreal QEasingCurveFunction::value(qreal t)
+{
+    return t;
+}
+
+QEasingCurveFunction *QEasingCurveFunction::copy() const
+{
+    return new QEasingCurveFunction(_t, _p, _a, _o);
+}
+
+bool QEasingCurveFunction::operator==(const QEasingCurveFunction& other) const
+{
+    return _t == other._t &&
+           qFuzzyCompare(_p, other._p) &&
+           qFuzzyCompare(_a, other._a) &&
+           qFuzzyCompare(_o, other._o);
+}
+
+QT_BEGIN_INCLUDE_NAMESPACE
+#include "../../3rdparty/easing/easing.cpp"
+QT_END_INCLUDE_NAMESPACE
 
 class QEasingCurvePrivate
 {
 public:
     QEasingCurvePrivate()
         : type(QEasingCurve::Linear),
-          per(s_defaultperiod), amp(s_defaultamplitude), over(s_defaultovershoot)
+          config(nullptr),
+          func(&easeNone)
     { }
+    QEasingCurvePrivate(const QEasingCurvePrivate &other)
+        : type(other.type),
+          config(other.config ? other.config->copy() : nullptr),
+          func(other.func)
+    { }
+    ~QEasingCurvePrivate() { delete config; }
+    void setType_helper(QEasingCurve::Type);
 
     QEasingCurve::Type type;
-    qreal per;
-    qreal amp;
-    qreal over;
-
-private:
-    Q_DISABLE_COPY(QEasingCurvePrivate);
+    QEasingCurveFunction *config;
+    QEasingCurve::EasingFunction func;
 };
+
+struct ElasticEase : public QEasingCurveFunction
+{
+    ElasticEase(QEasingCurve::Type type)
+        : QEasingCurveFunction(type)
+    { }
+
+    qreal value(qreal t)
+    {
+        qreal p = (_p < 0) ? qreal(0.3) : _p;
+        qreal a = (_a < 0) ? qreal(1.0) : _a;
+        switch(_t) {
+            case QEasingCurve::InElastic:
+                return easeInElastic(t, a, p);
+            case QEasingCurve::OutElastic:
+                return easeOutElastic(t, a, p);
+            case QEasingCurve::InOutElastic:
+                return easeInOutElastic(t, a, p);
+            case QEasingCurve::OutInElastic:
+                return easeOutInElastic(t, a, p);
+            default:
+                return t;
+        }
+    }
+};
+
+struct BounceEase : public QEasingCurveFunction
+{
+    BounceEase(QEasingCurve::Type type)
+        : QEasingCurveFunction(type)
+    { }
+
+    qreal value(qreal t)
+    {
+        qreal a = (_a < 0) ? qreal(1.0) : _a;
+        switch(_t) {
+            case QEasingCurve::InBounce:
+                return easeInBounce(t, a);
+            case QEasingCurve::OutBounce:
+                return easeOutBounce(t, a);
+            case QEasingCurve::InOutBounce:
+                return easeInOutBounce(t, a);
+            case QEasingCurve::OutInBounce:
+                return easeOutInBounce(t, a);
+            default:
+                return t;
+        }
+    }
+};
+
+struct BackEase : public QEasingCurveFunction
+{
+    BackEase(QEasingCurve::Type type)
+        : QEasingCurveFunction(type)
+    { }
+
+    qreal value(qreal t)
+    {
+        qreal o = (_o < 0) ? qreal(1.70158) : _o;
+        switch(_t) {
+            case QEasingCurve::InBack:
+                return easeInBack(t, o);
+            case QEasingCurve::OutBack:
+                return easeOutBack(t, o);
+            case QEasingCurve::InOutBack:
+                return easeInOutBack(t, o);
+            case QEasingCurve::OutInBack:
+                return easeOutInBack(t, o);
+            default:
+                return t;
+        }
+    }
+};
+
+static QEasingCurve::EasingFunction curveToFunc(QEasingCurve::Type curve)
+{
+    switch(curve) {
+        case QEasingCurve::Linear:
+            return &easeNone;
+        case QEasingCurve::InQuad:
+            return &easeInQuad;
+        case QEasingCurve::OutQuad:
+            return &easeOutQuad;
+        case QEasingCurve::InOutQuad:
+            return &easeInOutQuad;
+        case QEasingCurve::OutInQuad:
+            return &easeOutInQuad;
+        case QEasingCurve::InCubic:
+            return &easeInCubic;
+        case QEasingCurve::OutCubic:
+            return &easeOutCubic;
+        case QEasingCurve::InOutCubic:
+            return &easeInOutCubic;
+        case QEasingCurve::OutInCubic:
+            return &easeOutInCubic;
+        case QEasingCurve::InQuart:
+            return &easeInQuart;
+        case QEasingCurve::OutQuart:
+            return &easeOutQuart;
+        case QEasingCurve::InOutQuart:
+            return &easeInOutQuart;
+        case QEasingCurve::OutInQuart:
+            return &easeOutInQuart;
+        case QEasingCurve::InQuint:
+            return &easeInQuint;
+        case QEasingCurve::OutQuint:
+            return &easeOutQuint;
+        case QEasingCurve::InOutQuint:
+            return &easeInOutQuint;
+        case QEasingCurve::OutInQuint:
+            return &easeOutInQuint;
+        case QEasingCurve::InSine:
+            return &easeInSine;
+        case QEasingCurve::OutSine:
+            return &easeOutSine;
+        case QEasingCurve::InOutSine:
+            return &easeInOutSine;
+        case QEasingCurve::OutInSine:
+            return &easeOutInSine;
+        case QEasingCurve::InExpo:
+            return &easeInExpo;
+        case QEasingCurve::OutExpo:
+            return &easeOutExpo;
+        case QEasingCurve::InOutExpo:
+            return &easeInOutExpo;
+        case QEasingCurve::OutInExpo:
+            return &easeOutInExpo;
+        case QEasingCurve::InCirc:
+            return &easeInCirc;
+        case QEasingCurve::OutCirc:
+            return &easeOutCirc;
+        case QEasingCurve::InOutCirc:
+            return &easeInOutCirc;
+        case QEasingCurve::OutInCirc:
+            return &easeOutInCirc;
+        // Internal for, compatibility with QTimeLine only ??
+        case QEasingCurve::InCurve:
+            return &easeInCurve;
+        case QEasingCurve::OutCurve:
+            return &easeOutCurve;
+        case QEasingCurve::SineCurve:
+            return &easeSineCurve;
+        case QEasingCurve::CosineCurve:
+            return &easeCosineCurve;
+        default:
+            return nullptr;
+    };
+}
+
+static QEasingCurveFunction *curveToFunctionObject(QEasingCurve::Type type)
+{
+    switch(type) {
+        case QEasingCurve::InElastic:
+        case QEasingCurve::OutElastic:
+        case QEasingCurve::InOutElastic:
+        case QEasingCurve::OutInElastic:
+            return new ElasticEase(type);
+        case QEasingCurve::OutBounce:
+        case QEasingCurve::InBounce:
+        case QEasingCurve::OutInBounce:
+        case QEasingCurve::InOutBounce:
+            return new BounceEase(type);
+        case QEasingCurve::InBack:
+        case QEasingCurve::OutBack:
+        case QEasingCurve::InOutBack:
+        case QEasingCurve::OutInBack:
+            return new BackEase(type);
+        default:
+            return new QEasingCurveFunction(type);
+    }
+
+    Q_UNREACHABLE();
+}
 
 /*!
     Constructs an easing curve of the given \a type.
-*/
+ */
 QEasingCurve::QEasingCurve(Type type)
     : d_ptr(new QEasingCurvePrivate())
 {
@@ -268,19 +581,17 @@ QEasingCurve::QEasingCurve(Type type)
 
 /*!
     Construct a copy of \a other.
-*/
+ */
 QEasingCurve::QEasingCurve(const QEasingCurve &other)
-    : d_ptr(new QEasingCurvePrivate())
+    : d_ptr(new QEasingCurvePrivate(*other.d_ptr))
 {
-    d_ptr->type = other.d_ptr->type;
-    d_ptr->per = other.d_ptr->per;
-    d_ptr->amp = other.d_ptr->amp;
-    d_ptr->over = other.d_ptr->over;
+    // ### non-atomic, requires malloc on shallow copy
 }
 
 /*!
     Destructor.
-*/
+ */
+
 QEasingCurve::~QEasingCurve()
 {
     delete d_ptr;
@@ -288,14 +599,12 @@ QEasingCurve::~QEasingCurve()
 
 /*!
     Copy \a other.
-*/
+ */
 QEasingCurve &QEasingCurve::operator=(const QEasingCurve &other)
 {
     if (*this != other) {
-        d_ptr->type = other.d_ptr->type;
-        d_ptr->per = other.d_ptr->per;
-        d_ptr->amp = other.d_ptr->amp;
-        d_ptr->over = other.d_ptr->over;
+        QEasingCurve copy(other);
+        qSwap(d_ptr, copy.d_ptr);
     }
     return *this;
 }
@@ -303,14 +612,22 @@ QEasingCurve &QEasingCurve::operator=(const QEasingCurve &other)
 /*!
     Compare this easing curve with \a other and returns true if they are
     equal. It will also compare the properties of a curve.
-*/
+ */
 bool QEasingCurve::operator==(const QEasingCurve &other) const
 {
-    bool res = (d_ptr->type == other.d_ptr->type);
+    bool res = d_ptr->func == other.d_ptr->func
+            && d_ptr->type == other.d_ptr->type;
     if (res) {
-        res = qFuzzyCompare(period(), other.period()) &&
-              qFuzzyCompare(amplitude(), other.amplitude()) &&
-              qFuzzyCompare(overshoot(), other.overshoot());
+        if (d_ptr->config && other.d_ptr->config) {
+            // catch the config content
+            res = d_ptr->config->operator==(*(other.d_ptr->config));
+
+        } else if (d_ptr->config || other.d_ptr->config) {
+            // one one has a config object, which could contain default values
+            res = qFuzzyCompare(amplitude(), other.amplitude()) &&
+                  qFuzzyCompare(period(), other.period()) &&
+                  qFuzzyCompare(overshoot(), other.overshoot());
+        }
     }
     return res;
 }
@@ -329,10 +646,10 @@ bool QEasingCurve::operator==(const QEasingCurve &other) const
     QEasingCurve::InBounce, QEasingCurve::OutBounce, QEasingCurve::InOutBounce,
     QEasingCurve::OutInBounce, QEasingCurve::InElastic, QEasingCurve::OutElastic,
     QEasingCurve::InOutElastic or QEasingCurve::OutInElastic).
-*/
+ */
 qreal QEasingCurve::amplitude() const
 {
-    return d_ptr->amp;
+    return d_ptr->config ? d_ptr->config->_a : qreal(1.0);
 }
 
 /*!
@@ -344,17 +661,19 @@ qreal QEasingCurve::amplitude() const
 */
 void QEasingCurve::setAmplitude(qreal amplitude)
 {
-    d_ptr->amp = amplitude;
+    if (!d_ptr->config)
+        d_ptr->config = curveToFunctionObject(d_ptr->type);
+    d_ptr->config->_a = amplitude;
 }
 
 /*!
     Returns the period. This is not applicable for all curve types.
     It is only applicable if type() is QEasingCurve::InElastic, QEasingCurve::OutElastic,
     QEasingCurve::InOutElastic or QEasingCurve::OutInElastic.
-*/
+ */
 qreal QEasingCurve::period() const
 {
-    return d_ptr->per;
+    return d_ptr->config ? d_ptr->config->_p : qreal(0.3);
 }
 
 /*!
@@ -366,17 +685,19 @@ qreal QEasingCurve::period() const
 */
 void QEasingCurve::setPeriod(qreal period)
 {
-    d_ptr->per = period;
+    if (!d_ptr->config)
+        d_ptr->config = curveToFunctionObject(d_ptr->type);
+    d_ptr->config->_p = period;
 }
 
 /*!
     Returns the overshoot. This is not applicable for all curve types.
     It is only applicable if type() is QEasingCurve::InBack, QEasingCurve::OutBack,
     QEasingCurve::InOutBack or QEasingCurve::OutInBack.
-*/
+ */
 qreal QEasingCurve::overshoot() const
 {
-    return d_ptr->over;
+    return d_ptr->config ? d_ptr->config->_o : qreal(1.70158) ;
 }
 
 /*!
@@ -388,7 +709,9 @@ qreal QEasingCurve::overshoot() const
 */
 void QEasingCurve::setOvershoot(qreal overshoot)
 {
-    d_ptr->over = overshoot;
+    if (!d_ptr->config)
+        d_ptr->config = curveToFunctionObject(d_ptr->type);
+    d_ptr->config->_o = overshoot;
 }
 
 /*!
@@ -399,379 +722,170 @@ QEasingCurve::Type QEasingCurve::type() const
     return d_ptr->type;
 }
 
+void QEasingCurvePrivate::setType_helper(QEasingCurve::Type newType)
+{
+    qreal amp = -1.0;
+    qreal period = -1.0;
+    qreal overshoot = -1.0;
+
+    if (config) {
+        amp = config->_a;
+        period = config->_p;
+        overshoot = config->_o;
+        delete config;
+        config = nullptr;
+    }
+
+    if (isConfigFunction(newType) || (amp != -1.0) || (period != -1.0) || (overshoot != -1.0)) {
+        config = curveToFunctionObject(newType);
+        if (amp != -1.0)
+            config->_a = amp;
+        if (period != -1.0)
+            config->_p = period;
+        if (overshoot != -1.0)
+            config->_o = overshoot;
+        func = nullptr;
+    } else if (newType != QEasingCurve::Custom) {
+        func = curveToFunc(newType);
+    }
+    Q_ASSERT((func == nullptr) == (config != nullptr));
+    type = newType;
+}
+
 /*!
     Sets the type of the easing curve to \a type.
 */
 void QEasingCurve::setType(Type type)
 {
-    if (Q_UNLIKELY(type < QEasingCurve::Linear || type >= QEasingCurve::NCurveTypes)) {
+    if (d_ptr->type == type)
+        return;
+    if (Q_UNLIKELY(type < Linear || type >= NCurveTypes - 1)) {
         qWarning("QEasingCurve: Invalid curve type %d", type);
         return;
     }
-    d_ptr->type = type;
+
+    d_ptr->setType_helper(type);
 }
 
-#define BOUND_PERIOD(per) (per < 0) ? s_defaultperiod : per
-#define BOUND_AMPLITUDE(amp) (amp < 0) ? s_defaultamplitude : amp
-#define BOUND_OVERSHOOT(over) (over < 0) ? s_defaultovershoot : over
+/*!
+    Sets a custom easing curve that is defined by the user in the function \a func.
+    The signature of the function is qreal myEasingFunction(qreal progress),
+    where \e progress and the return value is considered to be normalized between 0 and 1.
+    (In some cases the return value can be outside that range)
+    After calling this function type() will return QEasingCurve::Custom.
+    \a func cannot be zero.
+
+    \sa customType()
+    \sa valueForProgress()
+*/
+void QEasingCurve::setCustomType(EasingFunction func)
+{
+    if (Q_UNLIKELY(!func)) {
+        qWarning("Function pointer must not be null");
+        return;
+    }
+    d_ptr->func = func;
+    d_ptr->setType_helper(Custom);
+}
+
+/*!
+    Returns the function pointer to the custom easing curve.
+    If type() does not return QEasingCurve::Custom, this function
+    will return 0.
+*/
+QEasingCurve::EasingFunction QEasingCurve::customType() const
+{
+    return d_ptr->type == Custom ? d_ptr->func : nullptr;
+}
 
 /*!
     Return the effective progress for the easing curve at \a progress.
     While  \a progress must be between 0 and 1, the returned effective progress
     can be outside those bounds. For instance, QEasingCurve::InBack will
     return negative values in the beginning of the function.
-*/
+ */
 qreal QEasingCurve::valueForProgress(qreal progress) const
 {
     progress = qBound<qreal>(0, progress, 1);
-
-    switch (d_ptr->type) {
-        case QEasingCurve::Linear: {
-            return easeNone(progress);
-        }
-        case QEasingCurve::InQuad: {
-            return easeInQuad(progress);
-        }
-        case QEasingCurve::OutQuad: {
-            return easeOutQuad(progress);
-        }
-        case QEasingCurve::InOutQuad: {
-            return easeInOutQuad(progress);
-        }
-        case QEasingCurve::OutInQuad: {
-            return easeOutInQuad(progress);
-        }
-        case QEasingCurve::InCubic: {
-            return easeInCubic(progress);
-        }
-        case QEasingCurve::OutCubic: {
-            return easeOutCubic(progress);
-        }
-        case QEasingCurve::InOutCubic: {
-            return easeInOutCubic(progress);
-        }
-        case QEasingCurve::OutInCubic: {
-            return easeOutInCubic(progress);
-        }
-        case QEasingCurve::InQuart: {
-            return easeInQuart(progress);
-        }
-        case QEasingCurve::OutQuart: {
-            return easeOutQuart(progress);
-        }
-        case QEasingCurve::InOutQuart: {
-            return easeInOutQuart(progress);
-        }
-        case QEasingCurve::OutInQuart: {
-            return easeOutInQuart(progress);
-        }
-        case QEasingCurve::InQuint: {
-            return easeInQuint(progress);
-        }
-        case QEasingCurve::OutQuint: {
-            return easeOutQuint(progress);
-        }
-        case QEasingCurve::InOutQuint: {
-            return easeInOutQuint(progress);
-        }
-        case QEasingCurve::OutInQuint: {
-            return easeOutInQuint(progress);
-        }
-        case QEasingCurve::InSine: {
-            return easeInSine(progress);
-        }
-        case QEasingCurve::OutSine: {
-            return easeOutSine(progress);
-        }
-        case QEasingCurve::InOutSine: {
-            return easeInOutSine(progress);
-        }
-        case QEasingCurve::OutInSine: {
-            return easeOutInSine(progress);
-        }
-        case QEasingCurve::InExpo: {
-            return easeInExpo(progress);
-        }
-        case QEasingCurve::OutExpo: {
-            return easeOutExpo(progress);
-        }
-        case QEasingCurve::InOutExpo: {
-            return easeInOutExpo(progress);
-        }
-        case QEasingCurve::OutInExpo: {
-            return easeOutInExpo(progress);
-        }
-        case QEasingCurve::InCirc: {
-            return easeInCirc(progress);
-        }
-        case QEasingCurve::OutCirc: {
-            return easeOutCirc(progress);
-        }
-        case QEasingCurve::InOutCirc: {
-            return easeInOutCirc(progress);
-        }
-        case QEasingCurve::OutInCirc: {
-            return easeOutInCirc(progress);
-        }
-        case QEasingCurve::InCurve: {
-            return easeInCurve(progress);
-        }
-        case QEasingCurve::OutCurve: {
-            return easeOutCurve(progress);
-        }
-        case QEasingCurve::SineCurve: {
-            return easeSineCurve(progress);
-        }
-        case QEasingCurve::CosineCurve: {
-            return easeCosineCurve(progress);
-        }
-        case QEasingCurve::InElastic: {
-            return easeInElastic(progress, BOUND_AMPLITUDE(d_ptr->amp), BOUND_PERIOD(d_ptr->per));
-        }
-        case QEasingCurve::OutElastic: {
-            return easeOutElastic(progress, BOUND_AMPLITUDE(d_ptr->amp), BOUND_PERIOD(d_ptr->per));
-        }
-        case QEasingCurve::InOutElastic: {
-            return easeInOutElastic(progress, BOUND_AMPLITUDE(d_ptr->amp), BOUND_PERIOD(d_ptr->per));
-        }
-        case QEasingCurve::OutInElastic: {
-            return easeOutInElastic(progress, BOUND_AMPLITUDE(d_ptr->amp), BOUND_PERIOD(d_ptr->per));
-        }
-        case QEasingCurve::InBounce: {
-            return easeInBounce(progress, BOUND_AMPLITUDE(d_ptr->amp));
-        }
-        case QEasingCurve::OutBounce: {
-            return easeOutBounce(progress, BOUND_AMPLITUDE(d_ptr->amp));
-        }
-        case QEasingCurve::InOutBounce: {
-            return easeInOutBounce(progress, BOUND_AMPLITUDE(d_ptr->amp));
-        }
-        case QEasingCurve::OutInBounce: {
-            return easeOutInBounce(progress, BOUND_AMPLITUDE(d_ptr->amp));
-        }
-        case QEasingCurve::InBack: {
-            return easeInBack(progress, BOUND_OVERSHOOT(d_ptr->over));
-        }
-        case QEasingCurve::OutBack: {
-            return easeOutBack(progress, BOUND_OVERSHOOT(d_ptr->over));
-        }
-        case QEasingCurve::InOutBack: {
-            return easeInOutBack(progress, BOUND_OVERSHOOT(d_ptr->over));
-        }
-        case QEasingCurve::OutInBack: {
-            return easeOutInBack(progress, BOUND_OVERSHOOT(d_ptr->over));
-        }
-        case QEasingCurve::NCurveTypes: {
-            break;
-        }
-    }
-
-    return progress;
+    if (d_ptr->func)
+        return d_ptr->func(progress);
+    else if (d_ptr->config)
+        return d_ptr->config->value(progress);
+    else
+        return progress;
 }
-#undef BOUND_PERIOD
-#undef BOUND_AMPLITUDE
-#undef BOUND_OVERSHOOT
 
 #ifndef QT_NO_DEBUG_STREAM
-static const char* const easingTypeName(const QEasingCurve::Type type)
+QDebug operator<<(QDebug debug, const QEasingCurve &item)
 {
-    switch (type) {
-        case QEasingCurve::Linear: {
-            return "Linear";
-        }
-        case QEasingCurve::InQuad: {
-            return "InQuad";
-        }
-        case QEasingCurve::OutQuad: {
-            return "OutQuad";
-        }
-        case QEasingCurve::InOutQuad: {
-            return "InOutQuad";
-        }
-        case QEasingCurve::OutInQuad: {
-            return "OutInQuad";
-        }
-        case QEasingCurve::InCubic: {
-            return "InCubic";
-        }
-        case QEasingCurve::OutCubic: {
-            return "OutCubic";
-        }
-        case QEasingCurve::InOutCubic: {
-            return "InOutCubic";
-        }
-        case QEasingCurve::OutInCubic: {
-            return "OutInCubic";
-        }
-        case QEasingCurve::InQuart: {
-            return "InQuart";
-        }
-        case QEasingCurve::OutQuart: {
-            return "OutQuart";
-        }
-        case QEasingCurve::InOutQuart: {
-            return "InOutQuart";
-        }
-        case QEasingCurve::OutInQuart: {
-            return "OutInQuart";
-        }
-        case QEasingCurve::InQuint: {
-            return "InQuint";
-        }
-        case QEasingCurve::OutQuint: {
-            return "OutQuint";
-        }
-        case QEasingCurve::InOutQuint: {
-            return "InOutQuint";
-        }
-        case QEasingCurve::OutInQuint: {
-            return "OutInQuint";
-        }
-        case QEasingCurve::InSine: {
-            return "InSine";
-        }
-        case QEasingCurve::OutSine: {
-            return "OutSine";
-        }
-        case QEasingCurve::InOutSine: {
-            return "InOutSine";
-        }
-        case QEasingCurve::OutInSine: {
-            return "OutInSine";
-        }
-        case QEasingCurve::InExpo: {
-            return "InExpo";
-        }
-        case QEasingCurve::OutExpo: {
-            return "OutExpo";
-        }
-        case QEasingCurve::InOutExpo: {
-            return "InOutExpo";
-        }
-        case QEasingCurve::OutInExpo: {
-            return "OutInExpo";
-        }
-        case QEasingCurve::InCirc: {
-            return "InCirc";
-        }
-        case QEasingCurve::OutCirc: {
-            return "OutCirc";
-        }
-        case QEasingCurve::InOutCirc: {
-            return "InOutCirc";
-        }
-        case QEasingCurve::OutInCirc: {
-            return "OutInCirc";
-        }
-        case QEasingCurve::InCurve: {
-            return "InCurve";
-        }
-        case QEasingCurve::OutCurve: {
-            return "OutCurve";
-        }
-        case QEasingCurve::SineCurve: {
-            return "SineCurve";
-        }
-        case QEasingCurve::CosineCurve: {
-            return "CosineCurve";
-        }
-        case QEasingCurve::InElastic: {
-            return "InElastic";
-        }
-        case QEasingCurve::OutElastic: {
-            return "OutElastic";
-        }
-        case QEasingCurve::InOutElastic: {
-            return "InOutElastic";
-        }
-        case QEasingCurve::OutInElastic: {
-            return "OutInElastic";
-        }
-        case QEasingCurve::InBounce: {
-            return "InBounce";
-        }
-        case QEasingCurve::OutBounce: {
-            return "OutBounce";
-        }
-        case QEasingCurve::InOutBounce: {
-            return "InOutBounce";
-        }
-        case QEasingCurve::OutInBounce: {
-            return "OutInBounce";
-        }
-        case QEasingCurve::InBack: {
-            return "InBack";
-        }
-        case QEasingCurve::OutBack: {
-            return "OutBack";
-        }
-        case QEasingCurve::InOutBack: {
-            return "InOutBack";
-        }
-        case QEasingCurve::OutInBack: {
-            return "OutInBack";
-        }
-        default: {
-            Q_ASSERT(false);
-            return "";
-        }
+    debug << "type:" << item.d_ptr->type
+          << "func:" << item.d_ptr->func;
+    if (item.d_ptr->config) {
+        debug << QString::fromAscii("period:%1").arg(item.d_ptr->config->_p, 0, 'f', 20)
+              << QString::fromAscii("amp:%1").arg(item.d_ptr->config->_a, 0, 'f', 20)
+              << QString::fromAscii("overshoot:%1").arg(item.d_ptr->config->_o, 0, 'f', 20);
     }
-    Q_UNREACHABLE();
-}
-
-QDebug operator<<(QDebug debug, const QEasingCurve &easing)
-{
-#ifndef Q_BROKEN_DEBUG_STREAM
-    debug.nospace() << "QEasingCurve("
-        << easingTypeName(easing.type()) << ", "
-        << easing.period() << ", "
-        << easing.amplitude() << ", "
-        << easing.overshoot();
-    debug.nospace() << ')';
-    return debug.space();
-#else
-    qWarning("This compiler doesn't support streaming QEasingCurve to QDebug");
     return debug;
-    Q_UNUSED(v);
-#endif
 }
 #endif // QT_NO_DEBUG_STREAM
 
 #ifndef QT_NO_DATASTREAM
 /*!
+    \fn QDataStream &operator<<(QDataStream &stream, const QEasingCurve &easing)
     \relates QEasingCurve
 
     Writes the given \a easing curve to the given \a stream and returns a
     reference to the stream.
 
-    \sa {Serializing Katie Data Types}
+    \sa {Serializing Qt Data Types}
 */
+
 QDataStream &operator<<(QDataStream &stream, const QEasingCurve &easing)
 {
     stream << quint8(easing.d_ptr->type);
-    stream << easing.d_ptr->per;
-    stream << easing.d_ptr->amp;
-    stream << easing.d_ptr->over;
+    stream << quint64(quintptr(easing.d_ptr->func));
+
+    bool hasConfig = easing.d_ptr->config;
+    stream << hasConfig;
+    if (hasConfig) {
+        stream << easing.d_ptr->config->_p;
+        stream << easing.d_ptr->config->_a;
+        stream << easing.d_ptr->config->_o;
+    }
     return stream;
 }
 
 /*!
-    \relates QEasingCurve
+    \fn QDataStream &operator>>(QDataStream &stream, QEasingCurve &easing)
+    \relates QQuaternion
 
     Reads an easing curve from the given \a stream into the given \a
     easing curve and returns a reference to the stream.
 
-    \sa {Serializing Katie Data Types}
+    \sa {Serializing Qt Data Types}
 */
+
 QDataStream &operator>>(QDataStream &stream, QEasingCurve &easing)
 {
+    QEasingCurve::Type type;
     quint8 int_type;
     stream >> int_type;
-    easing.setType(static_cast<QEasingCurve::Type>(int_type));
+    type = static_cast<QEasingCurve::Type>(int_type);
+    easing.setType(type);
 
-    stream >> easing.d_ptr->per;
-    stream >> easing.d_ptr->amp;
-    stream >> easing.d_ptr->over;
+    quint64 ptr_func;
+    stream >> ptr_func;
+    easing.d_ptr->func = QEasingCurve::EasingFunction(quintptr(ptr_func));
+
+    bool hasConfig;
+    stream >> hasConfig;
+    if (hasConfig) {
+        QEasingCurveFunction *config = curveToFunctionObject(type);
+        stream >> config->_p;
+        stream >> config->_a;
+        stream >> config->_o;
+        easing.d_ptr->config = config;
+    }
     return stream;
 }
 #endif // QT_NO_DATASTREAM
@@ -779,3 +893,4 @@ QDataStream &operator>>(QDataStream &stream, QEasingCurve &easing)
 QT_END_NAMESPACE
 
 #include "moc_qeasingcurve.h"
+

@@ -24,6 +24,7 @@
 #include "qplatformdefs.h"
 
 #include "qhostinfo_p.h"
+#include "qnativesocketengine_p.h"
 #include "qiodevice.h"
 #include "qbytearray.h"
 #include "qurl.h"
@@ -34,18 +35,15 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <netinet/in.h>
 
 QT_BEGIN_NAMESPACE
 
-QHostInfo QHostInfoPrivate::fromName(const QString &hostName)
+QHostInfo QHostInfoAgent::fromName(const QString &hostName)
 {
     QHostInfo results;
-    results.d->err = QHostInfo::NoError;
-    results.d->errorStr = QCoreApplication::translate("QHostInfo", "Unknown error");
 
 #if defined(QHOSTINFO_DEBUG)
-    qDebug("QHostInfoPrivate::fromName(%s) looking up...",
+    qDebug("QHostInfoAgent::fromName(%s) looking up...",
            hostName.toLatin1().constData());
 #endif
 
@@ -78,35 +76,35 @@ QHostInfo QHostInfoPrivate::fromName(const QString &hostName)
         QSTACKARRAY(char, hbuf, NI_MAXHOST);
         int result = (sa ? ::getnameinfo(sa, saSize, hbuf, sizeof(hbuf), 0, 0, NI_NAMEREQD) : EAI_NONAME);
         if (result == 0) {
-            results.d->hostName = QString::fromLatin1(hbuf);
+            results.setHostName(QString::fromLatin1(hbuf));
         } else if (result == EAI_NONAME || result == EAI_FAIL
 #ifdef EAI_NODATA
                // EAI_NODATA is deprecated in RFC 3493
                || result == EAI_NODATA
 #endif
                ) {
-            results.d->err = QHostInfo::HostNotFound;
-            results.d->errorStr = QCoreApplication::translate("QHostInfo", "Host not found");
+            results.setError(QHostInfo::HostNotFound);
+            results.setErrorString(tr("Host not found"));
         } else {
-            results.d->err = QHostInfo::UnknownError;
-            results.d->errorStr = QString::fromLocal8Bit(::gai_strerror(result));
+            results.setError(QHostInfo::UnknownError);
+            results.setErrorString(QString::fromLocal8Bit(::gai_strerror(result)));
         }
 
         if (results.hostName().isEmpty())
-            results.d->hostName = address.toString();
-        results.d->addrs.append(address);
+            results.setHostName(address.toString());
+        results.setAddresses(QList<QHostAddress>() << address);
         return results;
     }
 
     // IDN support
     QByteArray aceHostname = QUrl::toAce(hostName);
-    results.d->hostName = hostName;
+    results.setHostName(hostName);
     if (aceHostname.isEmpty()) {
-        results.d->err = QHostInfo::HostNotFound;
+        results.setError(QHostInfo::HostNotFound);
         if (hostName.isEmpty()) {
-            results.d->errorStr = QCoreApplication::translate("QHostInfo", "No host name given");
+            results.setErrorString(tr("No host name given"));
         } else {
-            results.d->errorStr = QCoreApplication::translate("QHostInfo", "Invalid hostname");
+            results.setErrorString(tr("Invalid hostname"));
         }
         return results;
     }
@@ -157,11 +155,11 @@ QHostInfo QHostInfoPrivate::fromName(const QString &hostName)
         if (addresses.isEmpty() && node == 0) {
             // Reached the end of the list, but no addresses were found; this
             // means the list contains one or more unknown address types.
-            results.d->err = QHostInfo::UnknownError;
-            results.d->errorStr = QCoreApplication::translate("QHostInfo", "Unknown address type");
+            results.setError(QHostInfo::UnknownError);
+            results.setErrorString(tr("Unknown address type"));
         }
 
-        results.d->addrs = addresses;
+        results.setAddresses(addresses);
         ::freeaddrinfo(res);
     } else if (result == EAI_NONAME || result ==  EAI_FAIL
 #ifdef EAI_NODATA
@@ -169,16 +167,16 @@ QHostInfo QHostInfoPrivate::fromName(const QString &hostName)
                 || result == EAI_NODATA
 #endif
                 ) {
-        results.d->err = QHostInfo::HostNotFound;
-        results.d->errorStr = QCoreApplication::translate("QHostInfo", "Host not found");
+        results.setError(QHostInfo::HostNotFound);
+        results.setErrorString(tr("Host not found"));
     } else {
-        results.d->err = QHostInfo::UnknownError;
-        results.d->errorStr = QString::fromLocal8Bit(::gai_strerror(result));
+        results.setError(QHostInfo::UnknownError);
+        results.setErrorString(QString::fromLocal8Bit(::gai_strerror(result)));
     }
 
 #if defined(QHOSTINFO_DEBUG)
     if (results.error() != QHostInfo::NoError) {
-        qDebug("QHostInfoPrivate::fromName(): error #%d %s",
+        qDebug("QHostInfoAgent::fromName(): error #%d %s",
                h_errno, results.errorString().toLatin1().constData());
     } else {
         QString tmp;
@@ -187,7 +185,7 @@ QHostInfo QHostInfoPrivate::fromName(const QString &hostName)
             if (i != 0) tmp += ", ";
             tmp += addresses.at(i).toString();
         }
-        qDebug("QHostInfoPrivate::fromName(): found %i entries for \"%s\": {%s}",
+        qDebug("QHostInfoAgent::fromName(): found %i entries for \"%s\": {%s}",
                addresses.count(), hostName.toLatin1().constData(),
                tmp.toLatin1().constData());
     }

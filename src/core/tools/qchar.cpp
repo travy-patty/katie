@@ -30,16 +30,94 @@
 #include "qchar.h"
 #include "qdatastream.h"
 #include "qtextcodec.h"
-#include "qlocale_tools_p.h"
 
 #include <unicode/uchar.h>
 #include <unicode/unorm2.h>
 
 QT_BEGIN_NAMESPACE
 
+#ifndef QT_NO_CODEC_FOR_C_STRINGS
+#  ifdef QT_NO_TEXTCODEC
+#    define QT_NO_CODEC_FOR_C_STRINGS
+#  endif
+#endif
+
 static inline bool is_ascii_char(uint ucs4)
 {
     return ucs4 <= 127;
+}
+
+static inline bool is_ascii_number(uint ucs4)
+{
+    return (ucs4 >= '0' && ucs4 <= '9');
+}
+
+static inline uint to_ascii_lower(uint ucs4)
+{
+    switch (ucs4) {
+        case 'A':
+        case 'B':
+        case 'C':
+        case 'D':
+        case 'E':
+        case 'F':
+        case 'G':
+        case 'H':
+        case 'I':
+        case 'J':
+        case 'K':
+        case 'L':
+        case 'M':
+        case 'N':
+        case 'O':
+        case 'P':
+        case 'Q':
+        case 'R':
+        case 'S':
+        case 'T':
+        case 'U':
+        case 'V':
+        case 'W':
+        case 'X':
+        case 'Y':
+        case 'Z':
+            return ucs4 + 32;
+    }
+    return ucs4;
+}
+
+static inline uint to_ascii_upper(uint ucs4)
+{
+    switch (ucs4) {
+        case 'a':
+        case 'b':
+        case 'c':
+        case 'd':
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'h':
+        case 'i':
+        case 'j':
+        case 'k':
+        case 'l':
+        case 'm':
+        case 'n':
+        case 'o':
+        case 'p':
+        case 'q':
+        case 'r':
+        case 's':
+        case 't':
+        case 'u':
+        case 'v':
+        case 'w':
+        case 'x':
+        case 'y':
+        case 'z':
+            return ucs4 - 32;
+    }
+    return ucs4;
 }
 
 /*!
@@ -175,7 +253,6 @@ static inline bool is_ascii_char(uint ucs4)
     \value Unicode_12_1
     \value Unicode_13_0
     \value Unicode_14_0
-    \value Unicode_15_0
     \value Unicode_Last Latest supported version
     \value Unicode_Unassigned  The value is not assigned to any character
         in Unicode.
@@ -397,16 +474,29 @@ static inline bool is_ascii_char(uint ucs4)
     ch.
 */
 QChar::QChar(const char ch)
-    : ucs(uchar(ch))
 {
+#ifndef QT_NO_CODEC_FOR_C_STRINGS
+    if (QTextCodec::codecForCStrings())
+        // #####
+        ucs =  QTextCodec::codecForCStrings()->toUnicode(&ch, 1).at(0).unicode();
+    else
+#endif
+        ucs = uchar(ch);
 }
 
 /*!
     Constructs a QChar corresponding to ASCII/Latin-1 character \a ch.
 */
 QChar::QChar(const uchar ch)
-    : ucs(ch)
 {
+#ifndef QT_NO_CODEC_FOR_C_STRINGS
+    if (QTextCodec::codecForCStrings()) {
+        // #####
+        const char c = char(ch);
+        ucs =  QTextCodec::codecForCStrings()->toUnicode(&c, 1).at(0).unicode();
+    } else
+#endif
+        ucs = ch;
 }
 
 /*!
@@ -552,7 +642,7 @@ bool QChar::isLetter() const
 */
 bool QChar::isNumber() const
 {
-    if (qIsDigit(ucs)) {
+    if (is_ascii_number(ucs)) {
         return true;
     }
     return u_isxdigit(ucs);
@@ -591,7 +681,7 @@ bool QChar::isLetterOrNumber() const
 */
 bool QChar::isDigit() const
 {
-    if (qIsDigit(ucs)) {
+    if (is_ascii_number(ucs)) {
         return true;
     }
     return u_isdigit(ucs);
@@ -1216,8 +1306,6 @@ QChar::UnicodeVersion QChar::unicodeVersion(const uint ucs4)
         return QChar::Unicode_13_0;
     } else if (info[0] == 14 && info[1] == 0) {
         return QChar::Unicode_14_0;
-    } else if (info[0] == 15 && info[1] == 0) {
-        return QChar::Unicode_15_0;
     }
     return QChar::Unicode_Unassigned;
 }
@@ -1261,7 +1349,7 @@ ushort QChar::toLower(const ushort ucs2)
 uint QChar::toLower(const uint ucs4)
 {
     if (is_ascii_char(ucs4)) {
-        return qToLower(ucs4);
+        return to_ascii_lower(ucs4);
     }
     return u_tolower(ucs4);
 }
@@ -1295,7 +1383,7 @@ ushort QChar::toUpper(const ushort ucs2)
 uint QChar::toUpper(const uint ucs4)
 {
     if (is_ascii_char(ucs4)) {
-        return qToUpper(ucs4);
+        return to_ascii_upper(ucs4);
     }
     return u_toupper(ucs4);
 }
@@ -1329,7 +1417,7 @@ ushort QChar::toTitleCase(const ushort ucs2)
 uint QChar::toTitleCase(const uint ucs4)
 {
     if (is_ascii_char(ucs4)) {
-        return qToUpper(ucs4);
+        return to_ascii_upper(ucs4);
     }
     return u_totitle(ucs4);
 }
@@ -1361,7 +1449,7 @@ ushort QChar::toCaseFolded(const ushort ucs2)
 uint QChar::toCaseFolded(const uint ucs4)
 {
     if (is_ascii_char(ucs4)) {
-        return qToLower(ucs4);
+        return to_ascii_lower(ucs4);
     }
     return u_foldCase(ucs4, U_FOLD_CASE_DEFAULT);
 }
@@ -1384,7 +1472,7 @@ uint QChar::toCaseFolded(const uint ucs4)
     Returns the Latin-1 character equivalent to the QChar, or 0. This
     is mainly useful for non-internationalized software.
 
-    \sa toAscii(), unicode()
+    \sa toAscii(), unicode(), QTextCodec::codecForCStrings()
 */
 
 /*!
@@ -1399,10 +1487,15 @@ uint QChar::toCaseFolded(const uint ucs4)
     in C strings. This is mainly useful for developers of non-internationalized
     software.
 
-    \sa toLatin1(), unicode()
+    \sa toLatin1(), unicode(), QTextCodec::codecForCStrings()
 */
 char QChar::toAscii() const
 {
+#ifndef QT_NO_CODEC_FOR_C_STRINGS
+    if (QTextCodec::codecForCStrings())
+        // #####
+        return QTextCodec::codecForCStrings()->fromUnicode(QString(*this)).at(0);
+#endif
     return ucs > 0xff ? 0 : char(ucs);
 }
 
@@ -1412,7 +1505,7 @@ char QChar::toAscii() const
     Converts the Latin-1 character \a c to its equivalent QChar. This
     is mainly useful for non-internationalized software.
 
-    \sa fromAscii(), unicode()
+    \sa fromAscii(), unicode(), QTextCodec::codecForCStrings()
 */
 
 /*!
@@ -1421,10 +1514,15 @@ char QChar::toAscii() const
 
     An alternative is to use QLatin1Char.
 
-    \sa fromLatin1(), unicode()
+    \sa fromLatin1(), unicode(), QTextCodec::codecForCStrings()
 */
 QChar QChar::fromAscii(const char c)
 {
+#ifndef QT_NO_CODEC_FOR_C_STRINGS
+    if (QTextCodec::codecForCStrings())
+        // #####
+        return QTextCodec::codecForCStrings()->toUnicode(&c, 1).at(0).unicode();
+#endif
     return QChar(ushort(uchar(c)));
 }
 

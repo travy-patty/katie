@@ -81,7 +81,21 @@ void QSyntaxHighlighterPrivate::applyFormatChanges()
 
     QList<QTextLayout::FormatRange> ranges = layout->additionalFormats();
 
-    if (!ranges.isEmpty()) {
+    const int preeditAreaStart = layout->preeditAreaPosition();
+    const int preeditAreaLength = layout->preeditAreaText().length();
+
+    if (preeditAreaLength != 0) {
+        QList<QTextLayout::FormatRange>::Iterator it = ranges.begin();
+        while (it != ranges.end()) {
+            if (it->start >= preeditAreaStart
+                && it->start + it->length <= preeditAreaStart + preeditAreaLength) {
+                ++it;
+            } else {
+                it = ranges.erase(it);
+                formatsChanged = true;
+            }
+        }
+    } else if (!ranges.isEmpty()) {
         ranges.clear();
         formatsChanged = true;
     }
@@ -104,6 +118,13 @@ void QSyntaxHighlighterPrivate::applyFormatChanges()
 
         Q_ASSERT(i <= formatChanges.count());
         r.length = i - r.start;
+
+        if (preeditAreaLength != 0) {
+            if (r.start >= preeditAreaStart)
+                r.start += preeditAreaLength;
+            else if (r.start + r.length >= preeditAreaStart)
+                r.length += preeditAreaLength;
+        }
 
         ranges << r;
         formatsChanged = true;

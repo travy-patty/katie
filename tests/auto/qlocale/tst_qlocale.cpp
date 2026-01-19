@@ -26,6 +26,7 @@
 #include <qlocale.h>
 #include <qnumeric.h>
 #include <qprocess.h>
+#include <qlocale_p.h>
 
 #include <math.h>
 #include <float.h>
@@ -100,8 +101,11 @@ private slots:
     void defaultNumeringSystem();
 
     void ampm();
+    void currency();
+    void quoteString();
     void uiLanguages();
     void weekendDays();
+    void listPatterns();
 
 private:
     QString m_decimal, m_thousand, m_sdate, m_ldate, m_time;
@@ -956,17 +960,17 @@ void tst_QLocale::formatDateTime_data()
     QTest::newRow("5nn_NO") << "nn_NO" << QDateTime(QDate(1974, 1, 1), QTime(15, 14, 13))
                             << "dd/MM/yyy z" << "01/01/74y 0";
     QTest::newRow("6nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 2), QTime(15, 14, 13))
-                            << "ddd/MMM/yy AP" << QString::fromUtf8("må./Dec/74 PM");
+                            << "ddd/MMM/yy AP" << "må./des./74 PM";
     QTest::newRow("7nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 2), QTime(15, 14, 13))
-                            << "dddd/MMMM/y apa" << QString::fromUtf8("måndag/M12/y pmpm");
+                            << "dddd/MMMM/y apa" << "måndag/M12/y pmpm";
     QTest::newRow("8nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 2), QTime(15, 14, 13))
-                            << "ddddd/MMMMM/yy ss" << QString::fromUtf8("måndag2/M1212/74 13");
+                            << "ddddd/MMMMM/yy ss" << "måndag2/M1212/74 13";
     QTest::newRow("9nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 1), QTime(15, 14, 13))
                             << "'dddd'/MMMM/yy s" << "dddd/M12/74 13";
     QTest::newRow("10nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 1), QTime(15, 4, 13))
                              << "d'dd'd/MMMM/yyy m'm'mm" << "1dd1/M12/74y 4m04";
     QTest::newRow("11nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 1), QTime(15, 14, 3))
-                             << "d'dd'd/MMM'M'/yysss" << "1dd1/DecM/74033";
+                             << "d'dd'd/MMM'M'/yysss" << "1dd1/des.M/74033";
     QTest::newRow("12nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 1), QTime(15, 14, 13))
                              << "d'd'dd/M/yyh" << "1d01/12/7415";
 
@@ -1037,13 +1041,13 @@ void tst_QLocale::toDateTime_data()
     QTest::newRow("5nn_NO") << "nn_NO" << QDateTime(QDate(1974, 1, 1), QTime(0, 0, 0))
                             << "dd/MM/yyy z" << "01/01/74y 0";
     QTest::newRow("8nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 2), QTime(0, 0, 13))
-                            << "ddddd/MMMMM/yy ss" << QString::fromUtf8("måndag2/M1212/74 13");
+                            << "ddddd/MMMMM/yy ss" << "måndag2/M1212/74 13";
     QTest::newRow("9nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 1), QTime(0, 0, 13))
                             << "'dddd'/MMMM/yy s" << "dddd/M12/74 13";
     QTest::newRow("10nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 1), QTime(0, 4, 0))
                              << "d'dd'd/MMMM/yyy m'm'mm" << "1dd1/M12/74y 4m04";
     QTest::newRow("11nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 1), QTime(0, 0, 3))
-                             << "d'dd'd/MMM'M'/yysss" << "1dd1/DecM/74033";
+                             << "d'dd'd/MMM'M'/yysss" << "1dd1/des.M/74033";
     QTest::newRow("12nn_NO") << "nn_NO" << QDateTime(QDate(1974, 12, 1), QTime(15, 0, 0))
                              << "d'd'dd/M/yyh" << "1d01/12/7415";
 
@@ -1210,7 +1214,7 @@ void tst_QLocale::dayName_data()
 
     QTest::newRow("ru_RU long")  << QString("ru_RU") << QString::fromUtf8("воскресенье") << 7 << QLocale::LongFormat;
     QTest::newRow("ru_RU short")  << QString("ru_RU") << QString::fromUtf8("вс") << 7 << QLocale::ShortFormat;
-    QTest::newRow("ru_RU narrow")  << QString("ru_RU") << QString::fromUtf8("В") << 7 << QLocale::NarrowFormat;
+    QTest::newRow("ru_RU narrow")  << QString("ru_RU") << QString::fromUtf8("7") << 7 << QLocale::NarrowFormat;
 }
 
 void tst_QLocale::dayName()
@@ -1473,9 +1477,9 @@ void tst_QLocale::dateFormat()
     QCOMPARE(nn.dateFormat(QLocale::ShortFormat), QLatin1String("dd.MM.yyyy"));
     QCOMPARE(nn.dateFormat(QLocale::LongFormat), QLatin1String("d. MMMM yyyy"));
 
-    const QLocale wae("wae_CH");
-    QCOMPARE(wae.dateFormat(QLocale::ShortFormat), QLatin1String("yyyy-MM-dd"));
-    QCOMPARE(wae.dateFormat(QLocale::LongFormat), QLatin1String("d. MMMM yyyy"));
+    const QLocale ca("en_CA");
+    QCOMPARE(ca.dateFormat(QLocale::ShortFormat), QLatin1String("yyyy-MM-dd"));
+    QCOMPARE(ca.dateFormat(QLocale::LongFormat), QLatin1String("MMMM d, yyyy"));
 
     const QLocale ja("ja_JP");
     QCOMPARE(ja.dateFormat(QLocale::ShortFormat), QLatin1String("yyyy/MM/dd"));
@@ -1492,9 +1496,9 @@ void tst_QLocale::timeFormat()
     QCOMPARE(nn.timeFormat(QLocale::ShortFormat), QLatin1String("HH:mm"));
     QCOMPARE(nn.timeFormat(QLocale::LongFormat), QLatin1String("HH:mm:ss Z"));
 
-    const QLocale hi("hi_Latn_IN");
-    QCOMPARE(hi.timeFormat(QLocale::ShortFormat), QLatin1String("h:mm AP"));
-    QCOMPARE(hi.timeFormat(QLocale::LongFormat), QLatin1String("h:mm:ss AP Z"));
+    const QLocale en("en_FJ");
+    QCOMPARE(en.timeFormat(QLocale::ShortFormat), QLatin1String("h:mm AP"));
+    QCOMPARE(en.timeFormat(QLocale::LongFormat), QLatin1String("h:mm:ss AP Z"));
 
     const QLocale cat("ca_ES");
     QCOMPARE(cat.timeFormat(QLocale::ShortFormat), QLatin1String("H:mm"));
@@ -1538,8 +1542,9 @@ void tst_QLocale::monthName()
     QCOMPARE(ru.monthName(1, QLocale::ShortFormat), QString::fromUtf8("янв."));
     QCOMPARE(ru.monthName(1, QLocale::NarrowFormat), QString::fromUtf8("Я"));
 
+    // check that our CLDR scripts handle surrogate pairs correctly
     QLocale dsrt("en-Dsrt-US");
-    QCOMPARE(dsrt.monthName(1, QLocale::LongFormat), QString::fromUtf8("January"));
+    QCOMPARE(dsrt.monthName(1, QLocale::LongFormat), QString::fromUtf8("M01"));
 
     QLocale ir("ga_IE");
     QCOMPARE(ir.monthName(1, QLocale::ShortFormat), QLatin1String("Ean"));
@@ -1577,6 +1582,52 @@ void tst_QLocale::standaloneMonthName()
     QCOMPARE(ru.standaloneMonthName(1, QLocale::NarrowFormat), QString::fromUtf8("Я"));
 }
 
+void tst_QLocale::currency()
+{
+    const QLocale c(QLocale::C);
+    QCOMPARE(c.toCurrencyString(qulonglong(1234)), QString("1,234"));
+    QCOMPARE(c.toCurrencyString(qlonglong(-1234)), QString("-1,234"));
+    QCOMPARE(c.toCurrencyString(double(1234.56)), QString("1,234.56"));
+    QCOMPARE(c.toCurrencyString(double(-1234.56)), QString("-1,234.56"));
+
+    const QLocale en_US("en_US");
+    QCOMPARE(en_US.toCurrencyString(qulonglong(1234)), QString("$1,234"));
+    QCOMPARE(en_US.toCurrencyString(qlonglong(-1234)), QString("$-1,234"));
+    QCOMPARE(en_US.toCurrencyString(double(1234.56)), QString("$1,234.56"));
+    QCOMPARE(en_US.toCurrencyString(double(-1234.56)), QString("$-1,234.56"));
+
+    const QLocale ru_RU("ru_RU");
+    QCOMPARE(ru_RU.toCurrencyString(qulonglong(1234)), QString::fromUtf8("1 234 ₽"));
+    QCOMPARE(ru_RU.toCurrencyString(qlonglong(-1234)), QString::fromUtf8("-1 234 ₽"));
+    QCOMPARE(ru_RU.toCurrencyString(double(1234.56)), QString::fromUtf8("1 234,56 ₽"));
+    QCOMPARE(ru_RU.toCurrencyString(double(-1234.56)), QString::fromUtf8("-1 234,56 ₽"));
+
+    const QLocale de_DE("de_DE");
+    QCOMPARE(de_DE.toCurrencyString(qulonglong(1234)), QString::fromUtf8("1.234 €"));
+    QCOMPARE(de_DE.toCurrencyString(qulonglong(1234), QLatin1String("BAZ")), QString::fromUtf8("1.234\xc2\xa0" "BAZ"));
+    QCOMPARE(de_DE.toCurrencyString(qlonglong(-1234)), QString::fromUtf8("-1.234 €"));
+    QCOMPARE(de_DE.toCurrencyString(qlonglong(-1234), QLatin1String("BAZ")), QString::fromUtf8("-1.234\xc2\xa0" "BAZ"));
+    QCOMPARE(de_DE.toCurrencyString(double(1234.56)), QString::fromUtf8("1.234,56 €"));
+    QCOMPARE(de_DE.toCurrencyString(double(-1234.56)), QString::fromUtf8("-1.234,56 €"));
+    QCOMPARE(de_DE.toCurrencyString(double(-1234.56), QLatin1String("BAZ")), QString::fromUtf8("-1.234,56\xc2\xa0" "BAZ"));
+
+    const QLocale system = QLocale::system();
+    QVERIFY(system.toCurrencyString(1, QLatin1String("FOO")).contains(QLatin1String("FOO")));
+}
+
+void tst_QLocale::quoteString()
+{
+    const QString someText("text");
+    const QLocale c(QLocale::C);
+    QCOMPARE(c.quoteString(someText), QString::fromUtf8("\x22" "text" "\x22"));
+    QCOMPARE(c.quoteString(someText, QLocale::AlternateQuotation), QString::fromUtf8("\x27" "text" "\x27"));
+
+    const QLocale de_CH("de_CH");
+    QCOMPARE(de_CH.quoteString(someText), QString::fromUtf8("„text“"));
+    QCOMPARE(de_CH.quoteString(someText, QLocale::AlternateQuotation), QString::fromUtf8("‚text‘"));
+
+}
+
 void tst_QLocale::uiLanguages()
 {
     const QLocale c(QLocale::C);
@@ -1585,7 +1636,7 @@ void tst_QLocale::uiLanguages()
 
     const QLocale en_US("en_US");
     QCOMPARE(en_US.uiLanguages().size(), 1);
-    QCOMPARE(en_US.uiLanguages().at(0), QLatin1String("en-Dsrt-US"));
+    QCOMPARE(en_US.uiLanguages().at(0), QLatin1String("en-Latn-US"));
 
     const QLocale ru_RU("ru_RU");
     QCOMPARE(ru_RU.uiLanguages().size(), 1);
@@ -1598,6 +1649,40 @@ void tst_QLocale::weekendDays()
     QList<Qt::DayOfWeek> days;
     days << Qt::Monday << Qt::Tuesday << Qt::Wednesday << Qt::Thursday << Qt::Friday;
     QCOMPARE(c.weekdays(), days);
+}
+
+void tst_QLocale::listPatterns()
+{
+    QStringList sl1;
+    QStringList sl2;
+    sl2 << "aaa";
+    QStringList sl3;
+    sl3 << "aaa" << "bbb";
+    QStringList sl4;
+    sl4 << "aaa" << "bbb" << "ccc";
+    QStringList sl5;
+    sl5 << "aaa" << "bbb" << "ccc" << "ddd";
+
+    const QLocale c(QLocale::C);
+    QCOMPARE(c.createSeparatedList(sl1), QString(""));
+    QCOMPARE(c.createSeparatedList(sl2), QString("aaa"));
+    QCOMPARE(c.createSeparatedList(sl3), QString("aaa, bbb"));
+    QCOMPARE(c.createSeparatedList(sl4), QString("aaa, bbb, ccc"));
+    QCOMPARE(c.createSeparatedList(sl5), QString("aaa, bbb, ccc, ddd"));
+
+    const QLocale en_US("en_US");
+    QCOMPARE(en_US.createSeparatedList(sl1), QString(""));
+    QCOMPARE(en_US.createSeparatedList(sl2), QString("aaa"));
+    QCOMPARE(en_US.createSeparatedList(sl3), QString("aaa and bbb"));
+    QCOMPARE(en_US.createSeparatedList(sl4), QString("aaa, bbb, and ccc"));
+    QCOMPARE(en_US.createSeparatedList(sl5), QString("aaa, bbb, ccc, and ddd"));
+
+    const QLocale zh_CN("zh_CN");
+    QCOMPARE(zh_CN.createSeparatedList(sl1), QString(""));
+    QCOMPARE(zh_CN.createSeparatedList(sl2), QString("aaa"));
+    QCOMPARE(zh_CN.createSeparatedList(sl3), QString::fromUtf8("aaa" "\xe5\x92\x8c" "bbb"));
+    QCOMPARE(zh_CN.createSeparatedList(sl4), QString::fromUtf8("aaa" "\xe3\x80\x81" "bbb" "\xe5\x92\x8c" "ccc"));
+    QCOMPARE(zh_CN.createSeparatedList(sl5), QString::fromUtf8("aaa" "\xe3\x80\x81" "bbb" "\xe3\x80\x81" "ccc" "\xe5\x92\x8c" "ddd"));
 }
 
 QTEST_MAIN(tst_QLocale)

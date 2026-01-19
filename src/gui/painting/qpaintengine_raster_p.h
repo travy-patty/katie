@@ -40,7 +40,7 @@
 #include "qrasterizer_p.h"
 #include "qstroker_p.h"
 #include "qpainter_p.h"
-#include "qfontengine_p.h"
+#include "qtextureglyphcache_p.h"
 #include "qoutlinemapper_p.h"
 
 #include <stdlib.h>
@@ -86,6 +86,7 @@ public:
         bool non_complex_pen;           // can use rasterizer, rather than stroker
         bool antialiased;
         bool bilinear;
+        bool fast_text;
         bool tx_noshear;
     };
 
@@ -127,17 +128,24 @@ public:
 
     void updateBrush(const QBrush &brush);
     void updatePen(const QPen &pen);
+
     void updateMatrix(const QTransform &matrix);
 
     void drawPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode);
     void drawPolygon(const QPoint *points, int pointCount, PolygonDrawMode mode);
+    void fillPath(const QPainterPath &path, QSpanData *fillData);
+    void fillPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode);
+
+    void drawEllipse(const QRectF &rect);
 
     void fillRect(const QRectF &rect, const QBrush &brush);
     void fillRect(const QRectF &rect, const QColor &color);
 
     void drawRects(const QRect  *rects, int rectCount);
 
+    void drawPixmap(const QPointF &p, const QPixmap &pm);
     void drawPixmap(const QRectF &r, const QPixmap &pm, const QRectF &sr);
+    void drawImage(const QPointF &p, const QImage &img);
     void drawImage(const QRectF &r, const QImage &pm, const QRectF &sr,
                    Qt::ImageConversionFlags flags = Qt::AutoColor);
     void drawTiledPixmap(const QRectF &r, const QPixmap &pm, const QPointF &sr);
@@ -156,11 +164,25 @@ public:
     void clip(const QRect &rect, Qt::ClipOperation op);
     void clip(const QRegion &region, Qt::ClipOperation op);
 
+    void drawStaticTextItem(QStaticTextItem *textItem);
+
+#ifdef Q_NO_USING_KEYWORD
+    inline void drawEllipse(const QRect &rect) { QPaintEngineEx::drawEllipse(rect); }
+#else
+    using QPaintEngineEx::drawEllipse;
+#endif
+
 #ifndef QT_NO_DEBUG
     void saveBuffer(const QString &s) const;
 #endif
 
+    void alphaPenBlt(const void* src, const int bpl, const int depth,
+                    int rx, int ry, int w, int h);
+
     Type type() const { return Raster; }
+
+    bool supportsTransformations(const QFontEngine *fontEngine) const;
+    bool supportsTransformations(const qreal pixelSize, const QTransform &m) const;
 
 protected:
     QRasterPaintEngine(QRasterPaintEnginePrivate &d, QPaintDevice *);
@@ -169,9 +191,11 @@ private:
     void init();
 
     void fillRect(const QRectF &rect, QSpanData *data);
-    void fillPath(const QPainterPath &path, QSpanData *fillData);
-    void fillPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode);
     void drawBitmap(const QPointF &pos, const QImage &image, QSpanData *fill);
+
+    bool drawCachedGlyphs(int numGlyphs, const glyph_t *glyphs, const QFixedPoint *positions,
+                          QFontEngine *fontEngine);
+
 
     bool setClipRectInDeviceCoords(const QRect &r, Qt::ClipOperation op);
 
@@ -244,9 +268,14 @@ public:
     QSpanData image_filler_xform;
     QSpanData solid_color_filler;
 
+
+    QFontEngineGlyphCache::Type glyphCacheType;
+
     QScopedPointer<QClipData> baseClip;
 
     int deviceDepth;
+
+    bool mono_surface;
 
     QScopedPointer<QRasterizer> rasterizer;
 };

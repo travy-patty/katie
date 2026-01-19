@@ -35,6 +35,7 @@
 
 #include "qshareddata.h"
 #include "qfilesystemengine_p.h"
+
 #include "qfilesystementry_p.h"
 #include "qfilesystemmetadata_p.h"
 
@@ -43,17 +44,8 @@ QT_BEGIN_NAMESPACE
 class QFileInfoPrivate : public QSharedData
 {
 public:
-    enum FileName {
-        AbsoluteName,
-        AbsolutePathName,
-        LinkName,
-        CanonicalName,
-        CanonicalPathName,
-        NFileNames
-    };
-
     inline QFileInfoPrivate()
-        : QSharedData(),
+        : QSharedData(), fileEngine(0),
         isDefaultConstructed(true),
         cache_enabled(true)
     {}
@@ -61,13 +53,23 @@ public:
         : QSharedData(copy),
         fileEntry(copy.fileEntry),
         metaData(copy.metaData),
+        fileEngine(QAbstractFileEngine::create(fileEntry.filePath())),
+#ifndef QT_NO_FSFILEENGINE
         isDefaultConstructed(false),
+#else
+        isDefaultConstructed(!fileEngine),
+#endif
         cache_enabled(copy.cache_enabled)
     {}
     inline QFileInfoPrivate(const QString &file)
         : QSharedData(),
         fileEntry(file),
+        fileEngine(QAbstractFileEngine::create(file)),
+#ifndef QT_NO_FSFILEENGINE
         isDefaultConstructed(false),
+#else
+        isDefaultConstructed(!fileEngine),
+#endif
         cache_enabled(true)
     {
     }
@@ -76,23 +78,43 @@ public:
         : QSharedData(),
         fileEntry(file),
         metaData(data),
+        fileEngine(QAbstractFileEngine::create(fileEntry.filePath())),
         isDefaultConstructed(false),
         cache_enabled(true)
     {
+        //If the file engine is not null, this maybe a "mount point" for a custom file engine
+        //in which case we can't trust the metadata
+        if (fileEngine)
+            metaData = QFileSystemMetaData();
     }
 
+    inline ~QFileInfoPrivate()
+    {
+        delete fileEngine;
+    }
+
+    inline void clearFlags() const {
+        if (fileEngine)
+            (void)fileEngine->fileFlags(QAbstractFileEngine::Refresh);
+    }
     inline void clear() const {
         metaData.clear();
-        for (int i = 0; i < FileName::NFileNames; i++)
+        clearFlags();
+        for (int i = 0; i < QAbstractFileEngine::NFileNames; i++)
             fileNames[i].clear();
     }
 
-    QString getFileName(const FileName name) const;
+    uint getFileFlags(QAbstractFileEngine::FileFlags) const;
+    QDateTime getFileTime(QAbstractFileEngine::FileTime) const;
+    QString getFileName(QAbstractFileEngine::FileName) const;
+    QString getFileOwner(QAbstractFileEngine::FileOwner own) const;
 
     QFileSystemEntry fileEntry;
     mutable QFileSystemMetaData metaData;
 
-    mutable QString fileNames[FileName::NFileNames];
+    QAbstractFileEngine* const fileEngine;
+
+    mutable QString fileNames[QAbstractFileEngine::NFileNames];
 
     bool const isDefaultConstructed; // QFileInfo is a default constructed instance
     bool cache_enabled;

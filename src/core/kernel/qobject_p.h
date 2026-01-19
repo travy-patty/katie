@@ -33,11 +33,12 @@
 // We mean it.
 //
 
-#include "qpointer.h"
-#include "qsharedpointer.h"
-#include "qcoreevent.h"
-#include "qmetaobject.h"
-#include "qstdcontainers_p.h"
+#include "QtCore/qpointer.h"
+#include "QtCore/qsharedpointer.h"
+#include "QtCore/qcoreevent.h"
+#include "QtCore/qreadwritelock.h"
+#include "QtCore/qmetaobject.h"
+#include "QtCore/qvarlengtharray.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -119,6 +120,10 @@ public:
     void setThreadData_helper(QThreadData *currentData, QThreadData *targetData);
     void _q_reregisterTimers(void *pointer);
 
+    bool isSender(const QObject *receiver, const char *signal) const;
+    QObjectList receiverList(const char *signal) const;
+    QObjectList senderList() const;
+
     void addConnection(int signal, Connection *c);
     void cleanConnectionLists();
 
@@ -141,7 +146,7 @@ public:
     inline void disconnectNotify(const char *signal);
 
     static inline void signalSignature(const QMetaMethod &signal,
-                                       QStdVector<char> *result);
+                                       QVarLengthArray<char> *result);
 
 public:
     QString objectName;
@@ -192,21 +197,17 @@ inline void QObjectPrivate::disconnectNotify(const char *signal)
 }
 
 inline void QObjectPrivate::signalSignature(const QMetaMethod &signal,
-                                            QStdVector<char> *result)
+                                                  QVarLengthArray<char> *result)
 {
     Q_ASSERT(result);
-    const char* signatureData = signal.signature();
-    const int signatureLength = qstrlen(signatureData);
+    const int signatureLength = qstrlen(signal.signature());
     if (signatureLength == 0) {
         result->append((char)0);
         return;
     }
     result->reserve(signatureLength + 2);
     result->append((char)(QSIGNAL_CODE + '0'));
-    for (int i = 0; i < signatureLength; i++) {
-        result->append(signatureData[i]);
-    }
-    result->append('\0');
+    result->append(signal.signature(), signatureLength + 1);
 }
 
 inline QObjectPrivate::Sender *QObjectPrivate::setCurrentSender(QObject *receiver,

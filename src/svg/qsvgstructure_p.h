@@ -34,6 +34,9 @@
 //
 
 #include "qsvgnode_p.h"
+
+#ifndef QT_NO_SVG
+
 #include "QtCore/qlist.h"
 #include "QtCore/qhash.h"
 
@@ -87,4 +90,5 @@ private:
 
 QT_END_NAMESPACE
 
+#endif // QT_NO_SVG
 #endif // QSVGSTRUCTURE_P_H

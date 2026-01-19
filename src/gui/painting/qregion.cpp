@@ -22,29 +22,18 @@
 #include "qregion.h"
 #include "qpainterpath.h"
 #include "qpolygon.h"
+#include "qbuffer.h"
 #include "qdatastream.h"
 #include "qvariant.h"
+#include "qvarlengtharray.h"
 #include "qdebug.h"
 #include "qimage.h"
 #include "qbitmap.h"
-#include "qscopedpointer.h"
-#include "qt_x11_p.h"
-#include "qstdcontainers_p.h"
 #include "qcorecommon_p.h"
 
 #include <stdlib.h>
-#include <limits.h>
 
 QT_BEGIN_NAMESPACE
-
-// hack, so we don't have to make QRegion::clipRectangles() public or include
-// X11 headers in qregion.h
-Q_AUTOTEST_EXPORT void *qt_getClipRects(const QRegion &r, int &num)
-{
-    return r.clipRectangles(num);
-}
-
-QRegion::QRegionData QRegion::shared_empty = { QAtomicInt(1), 0, 0, 0};
 
 /*!
     \class QRegion
@@ -419,6 +408,29 @@ QRegion& QRegion::operator|=(const QRegion &r)
 }
 
 /*!
+    \fn QRegion& QRegion::operator+=(const QRect &rect)
+
+    Returns a region that is the union of this region with the specified \a rect.
+
+    \sa united()
+*/
+/*!
+    \fn QRegion& QRegion::operator+=(const QRegion &r)
+
+    Applies the united() function to this region and \a r and assigns
+    the result to this region. \c r1+=r2 is equivalent to \c
+    {r1 = r1.united(r2)}.
+
+    \sa intersected()
+*/
+#if !defined (Q_OS_UNIX)
+QRegion& QRegion::operator+=(const QRect &r)
+{
+    return operator+=(QRegion(r));
+}
+#endif
+
+/*!
   \fn QRegion& QRegion::operator&=(const QRegion &r)
 
   Applies the intersected() function to this region and \a r and
@@ -436,10 +448,17 @@ QRegion& QRegion::operator&=(const QRegion &r)
    \overload
    \since 4.4
  */
+#if defined (Q_OS_UNIX)
 QRegion& QRegion::operator&=(const QRect &r)
 {
     return *this = *this & r;
 }
+#else
+QRegion& QRegion::operator&=(const QRect &r)
+{
+    return *this &= (QRegion(r));
+}
+#endif
 
 /*!
   \fn QRegion& QRegion::operator-=(const QRegion &r)
@@ -565,6 +584,26 @@ bool QRegion::intersects(const QRegion &region) const
     }
     return false;
 }
+
+/*!
+    \fn bool QRegion::intersects(const QRect &rect) const
+    \since 4.2
+
+    Returns true if this region intersects with \a rect, otherwise
+    returns false.
+*/
+
+
+#if !defined (Q_OS_UNIX)
+/*!
+    \overload
+    \since 4.4
+*/
+QRegion QRegion::intersect(const QRect &r) const
+{
+    return intersect(QRegion(r));
+}
+#endif
 
 /*!
     \fn int QRegion::rectCount() const
@@ -861,9 +900,6 @@ Q_AUTOTEST_EXPORT QPainterPath qt_regionToPath(const QRegion &region)
     }
 
     const QVector<QRect> rects = region.rects();
-    if (rects.size() <= 0) {
-        return result;
-    }
 
     QSTACKARRAY(Segment, segments, 4 * rects.size());
 
@@ -957,8 +993,8 @@ struct QRegionPrivate {
      * Returns true if r is guaranteed to be fully contained in this region.
      * A false return value does not guarantee the opposite.
      */
-    inline bool contains(const QRegionPrivate *r) const {
-        return contains(r->extents);
+    inline bool contains(const QRegionPrivate &r) const {
+        return contains(r.extents);
     }
 
     inline bool contains(const QRect &r2) const {
@@ -1443,6 +1479,12 @@ void QRegionPrivate::selfTest() const
 }
 #endif // QT_REGION_DEBUG
 
+#if defined(Q_WS_X11)
+QT_BEGIN_INCLUDE_NAMESPACE
+# include "qregion_x11.cpp"
+QT_END_INCLUDE_NAMESPACE
+#endif
+
 typedef void (*OverlapFunc)(QRegionPrivate &dest, const QRect *r1, const QRect *r1End,
                             const QRect *r2, const QRect *r2End, int y1, int y2);
 typedef void (*NonOverlapFunc)(QRegionPrivate &dest, const QRect *r, const QRect *rEnd,
@@ -1512,6 +1554,10 @@ SOFTWARE.
 #ifndef _XREGION_H
 #define _XREGION_H
 
+QT_BEGIN_INCLUDE_NAMESPACE
+#include <limits.h>
+QT_END_INCLUDE_NAMESPACE
+
 /*  1 if two BOXes overlap.
  *  0 if two BOXes do not overlap.
  *  Remember, x2 and y2 are not in the region
@@ -1544,12 +1590,12 @@ SOFTWARE.
  * the buffers together
  */
 typedef struct _POINTBLOCK {
-    char data[NUMPTSTOBUFFER * sizeof(QPoint)];
+    int data[NUMPTSTOBUFFER * sizeof(QPoint)];
     QPoint *pts;
     struct _POINTBLOCK *next;
 } POINTBLOCK;
 
-#endif // _XREGION_H
+#endif
 // END OF region.h extract
 
 // START OF Region.c extract
@@ -2228,8 +2274,8 @@ static void miUnionO(QRegionPrivate &dest, const QRect *r1, const QRect *r1End,
 static void UnionRegion(const QRegionPrivate *reg1, const QRegionPrivate *reg2, QRegionPrivate &dest)
 {
     Q_ASSERT(!isEmptyHelper(reg1) && !isEmptyHelper(reg2));
-    Q_ASSERT(!reg1->contains(reg2));
-    Q_ASSERT(!reg2->contains(reg1));
+    Q_ASSERT(!reg1->contains(*reg2));
+    Q_ASSERT(!reg2->contains(*reg1));
     Q_ASSERT(!EqualRegion(reg1, reg2));
     Q_ASSERT(!reg1->canAppend(reg2));
     Q_ASSERT(!reg2->canAppend(reg1));
@@ -2404,7 +2450,7 @@ static void SubtractRegion(QRegionPrivate *regM, QRegionPrivate *regS,
     Q_ASSERT(!isEmptyHelper(regM));
     Q_ASSERT(!isEmptyHelper(regS));
     Q_ASSERT(EXTENTCHECK(regM->extents, regS->extents));
-    Q_ASSERT(!regS->contains(regM));
+    Q_ASSERT(!regS->contains(*regM));
     Q_ASSERT(!EqualRegion(regM, regS));
 
     miRegionOp(dest, regM, regS, miSubtractO, miSubtractNonO1, 0);
@@ -2427,13 +2473,13 @@ static void XorRegion(QRegionPrivate *sra, QRegionPrivate *srb, QRegionPrivate &
 
     QRegionPrivate tra, trb;
 
-    if (!srb->contains(sra))
+    if (!srb->contains(*sra))
         SubtractRegion(sra, srb, tra);
-    if (!sra->contains(srb))
+    if (!sra->contains(*srb))
         SubtractRegion(srb, sra, trb);
 
-    Q_ASSERT(isEmptyHelper(&trb) || !tra.contains(&trb));
-    Q_ASSERT(isEmptyHelper(&tra) || !trb.contains(&tra));
+    Q_ASSERT(isEmptyHelper(&trb) || !tra.contains(trb));
+    Q_ASSERT(isEmptyHelper(&tra) || !trb.contains(tra));
 
     if (isEmptyHelper(&tra)) {
         dest = trb;
@@ -3202,13 +3248,15 @@ static void FreeStorage(ScanLineListBlock *pSLLBlock)
 }
 
 struct QRegionSpan {
-    QRegionSpan() : x1(0), x2(0) {}
+    QRegionSpan() {}
     QRegionSpan(int x1_, int x2_) : x1(x1_), x2(x2_) {}
 
     int x1;
     int x2;
     int width() const { return x2 - x1; }
 };
+
+Q_DECLARE_TYPEINFO(QRegionSpan, Q_PRIMITIVE_TYPE);
 
 static inline void flushRow(const QRegionSpan *spans, int y, int numSpans, QRegionPrivate *reg, int *lastRow, int *extendTo, bool *needsExtend)
 {
@@ -3260,7 +3308,7 @@ static void PtsToRegion(int numFullPtBlocks, int iCurPtBlock,
     int lastRow = 0;
     int extendTo = 0;
     bool needsExtend = false;
-    QStdVector<QRegionSpan> row;
+    QVarLengthArray<QRegionSpan> row;
     int rowSize = 0;
 
     reg->extents.setLeft(INT_MAX);
@@ -3344,7 +3392,6 @@ static QRegionPrivate *PolygonRegion(const QPoint *Pts, int Count, int rule)
     int fixWAET = false;
     POINTBLOCK FirstPtBlock, *curPtBlock; /* PtBlock buffers    */
     FirstPtBlock.pts = reinterpret_cast<QPoint *>(FirstPtBlock.data);
-    FirstPtBlock.next = nullptr;
     POINTBLOCK *tmpPtBlock;
     int numFullPtBlocks = 0;
 
@@ -3396,86 +3443,40 @@ static QRegionPrivate *PolygonRegion(const QPoint *Pts, int Count, int rule)
         return 0;
     }
 
-    if (rule == EvenOddRule) {
-        /*
-            *  for each scanline
-            */
-        for (y = ET.ymin; y < ET.ymax; ++y) {
 
+    QT_TRY {
+        if (rule == EvenOddRule) {
             /*
-                *  Add a new edge to the active edge table when we
-                *  get to the next edge.
-                */
-            if (pSLL && y == pSLL->scanline) {
-                loadAET(&AET, pSLL->edgelist);
-                pSLL = pSLL->next;
-            }
-            pPrevAET = &AET;
-            pAET = AET.next;
-
-            /*
-                *  for each active edge
-                */
-            while (pAET) {
-                pts->setX(pAET->bres.minor_axis);
-                pts->setY(y);
-                ++pts;
-                ++iPts;
+             *  for each scanline
+             */
+            for (y = ET.ymin; y < ET.ymax; ++y) {
 
                 /*
-                    *  send out the buffer
-                    */
-                if (iPts == NUMPTSTOBUFFER) {
-                    tmpPtBlock = (POINTBLOCK *)malloc(sizeof(POINTBLOCK));
-                    Q_CHECK_PTR(tmpPtBlock);
-                    tmpPtBlock->pts = reinterpret_cast<QPoint *>(tmpPtBlock->data);
-                    curPtBlock->next = tmpPtBlock;
-                    curPtBlock = tmpPtBlock;
-                    pts = curPtBlock->pts;
-                    ++numFullPtBlocks;
-                    iPts = 0;
+                 *  Add a new edge to the active edge table when we
+                 *  get to the next edge.
+                 */
+                if (pSLL && y == pSLL->scanline) {
+                    loadAET(&AET, pSLL->edgelist);
+                    pSLL = pSLL->next;
                 }
-                EVALUATEEDGEEVENODD(pAET, pPrevAET, y)
-            }
-            InsertionSort(&AET);
-        }
-    } else {
-        /*
-            *  for each scanline
-            */
-        for (y = ET.ymin; y < ET.ymax; ++y) {
-            /*
-                *  Add a new edge to the active edge table when we
-                *  get to the next edge.
-                */
-            if (pSLL && y == pSLL->scanline) {
-                loadAET(&AET, pSLL->edgelist);
-                computeWAET(&AET);
-                pSLL = pSLL->next;
-            }
-            pPrevAET = &AET;
-            pAET = AET.next;
-            pWETE = pAET;
+                pPrevAET = &AET;
+                pAET = AET.next;
 
-            /*
-                *  for each active edge
-                */
-            while (pAET) {
                 /*
-                    *  add to the buffer only those edges that
-                    *  are in the Winding active edge table.
-                    */
-                if (pWETE == pAET) {
+                 *  for each active edge
+                 */
+                while (pAET) {
                     pts->setX(pAET->bres.minor_axis);
                     pts->setY(y);
                     ++pts;
                     ++iPts;
 
                     /*
-                        *  send out the buffer
-                        */
+                     *  send out the buffer
+                     */
                     if (iPts == NUMPTSTOBUFFER) {
-                        tmpPtBlock = static_cast<POINTBLOCK *>(malloc(sizeof(POINTBLOCK)));
+                        tmpPtBlock = (POINTBLOCK *)malloc(sizeof(POINTBLOCK));
+                        Q_CHECK_PTR(tmpPtBlock);
                         tmpPtBlock->pts = reinterpret_cast<QPoint *>(tmpPtBlock->data);
                         curPtBlock->next = tmpPtBlock;
                         curPtBlock = tmpPtBlock;
@@ -3483,20 +3484,79 @@ static QRegionPrivate *PolygonRegion(const QPoint *Pts, int Count, int rule)
                         ++numFullPtBlocks;
                         iPts = 0;
                     }
-                    pWETE = pWETE->nextWETE;
+                    EVALUATEEDGEEVENODD(pAET, pPrevAET, y)
                 }
-                EVALUATEEDGEWINDING(pAET, pPrevAET, y, fixWAET)
+                InsertionSort(&AET);
             }
-
+        } else {
             /*
-                *  recompute the winding active edge table if
-                *  we just resorted or have exited an edge.
-                */
-            if (InsertionSort(&AET) || fixWAET) {
-                computeWAET(&AET);
-                fixWAET = false;
+             *  for each scanline
+             */
+            for (y = ET.ymin; y < ET.ymax; ++y) {
+                /*
+                 *  Add a new edge to the active edge table when we
+                 *  get to the next edge.
+                 */
+                if (pSLL && y == pSLL->scanline) {
+                    loadAET(&AET, pSLL->edgelist);
+                    computeWAET(&AET);
+                    pSLL = pSLL->next;
+                }
+                pPrevAET = &AET;
+                pAET = AET.next;
+                pWETE = pAET;
+
+                /*
+                 *  for each active edge
+                 */
+                while (pAET) {
+                    /*
+                     *  add to the buffer only those edges that
+                     *  are in the Winding active edge table.
+                     */
+                    if (pWETE == pAET) {
+                        pts->setX(pAET->bres.minor_axis);
+                        pts->setY(y);
+                        ++pts;
+                        ++iPts;
+
+                        /*
+                         *  send out the buffer
+                         */
+                        if (iPts == NUMPTSTOBUFFER) {
+                            tmpPtBlock = static_cast<POINTBLOCK *>(malloc(sizeof(POINTBLOCK)));
+                            tmpPtBlock->pts = reinterpret_cast<QPoint *>(tmpPtBlock->data);
+                            curPtBlock->next = tmpPtBlock;
+                            curPtBlock = tmpPtBlock;
+                            pts = curPtBlock->pts;
+                            ++numFullPtBlocks;
+                            iPts = 0;
+                        }
+                        pWETE = pWETE->nextWETE;
+                    }
+                    EVALUATEEDGEWINDING(pAET, pPrevAET, y, fixWAET)
+                }
+
+                /*
+                 *  recompute the winding active edge table if
+                 *  we just resorted or have exited an edge.
+                 */
+                if (InsertionSort(&AET) || fixWAET) {
+                    computeWAET(&AET);
+                    fixWAET = false;
+                }
             }
         }
+    } QT_CATCH(...) {
+        FreeStorage(SLLBlock.next);
+        PtsToRegion(numFullPtBlocks, iPts, &FirstPtBlock, region);
+        for (curPtBlock = FirstPtBlock.next; --numFullPtBlocks >= 0;) {
+            tmpPtBlock = curPtBlock->next;
+            free(curPtBlock);
+            curPtBlock = tmpPtBlock;
+        }
+        free(pETEs);
+        return 0; // this function returns 0 in case of an error
     }
 
     FreeStorage(SLLBlock.next);
@@ -3679,6 +3739,7 @@ QRegion::~QRegion()
         cleanUp(d);
 }
 
+
 QRegion &QRegion::operator=(const QRegion &r)
 {
     if (d == r.d)
@@ -3745,9 +3806,9 @@ QRegion QRegion::unite(const QRegion &r) const
     if (d == r.d)
         return *this;
 
-    if (d->qt_rgn->contains(r.d->qt_rgn)) {
+    if (d->qt_rgn->contains(*r.d->qt_rgn)) {
         return *this;
-    } else if (r.d->qt_rgn->contains(d->qt_rgn)) {
+    } else if (r.d->qt_rgn->contains(*d->qt_rgn)) {
         return r;
     } else if (d->qt_rgn->canAppend(r.d->qt_rgn)) {
         QRegion result(*this);
@@ -3769,15 +3830,6 @@ QRegion QRegion::unite(const QRegion &r) const
     }
 }
 
-/*!
-    \fn QRegion& QRegion::operator+=(const QRegion &r)
-
-    Applies the united() function to this region and \a r and assigns
-    the result to this region. \c r1+=r2 is equivalent to \c
-    {r1 = r1.united(r2)}.
-
-    \sa intersected()
-*/
 QRegion& QRegion::operator+=(const QRegion &r)
 {
     if (isEmptyHelper(d->qt_rgn))
@@ -3787,9 +3839,9 @@ QRegion& QRegion::operator+=(const QRegion &r)
     if (d == r.d)
         return *this;
 
-    if (d->qt_rgn->contains(r.d->qt_rgn)) {
+    if (d->qt_rgn->contains(*r.d->qt_rgn)) {
         return *this;
-    } else if (r.d->qt_rgn->contains(d->qt_rgn)) {
+    } else if (r.d->qt_rgn->contains(*d->qt_rgn)) {
         return *this = r;
     } else if (d->qt_rgn->canAppend(r.d->qt_rgn)) {
         detach();
@@ -3840,13 +3892,6 @@ QRegion QRegion::unite(const QRect &r) const
     }
 }
 
-/*!
-    \fn QRegion& QRegion::operator+=(const QRect &rect)
-
-    Returns a region that is the union of this region with the specified \a rect.
-
-    \sa united()
-*/
 QRegion& QRegion::operator+=(const QRect &r)
 {
     if (isEmptyHelper(d->qt_rgn))
@@ -3883,11 +3928,11 @@ QRegion QRegion::intersect(const QRegion &r) const
         return QRegion();
 
     /* this is fully contained in r */
-    if (r.d->qt_rgn->contains(d->qt_rgn))
+    if (r.d->qt_rgn->contains(*d->qt_rgn))
         return *this;
 
     /* r is fully contained in this */
-    if (d->qt_rgn->contains(r.d->qt_rgn))
+    if (d->qt_rgn->contains(*r.d->qt_rgn))
         return r;
 
     if (r.d->qt_rgn->numRects == 1 && d->qt_rgn->numRects == 1) {
@@ -3951,7 +3996,7 @@ QRegion QRegion::subtract(const QRegion &r) const
 {
     if (isEmptyHelper(d->qt_rgn) || isEmptyHelper(r.d->qt_rgn))
         return *this;
-    if (r.d->qt_rgn->contains(d->qt_rgn))
+    if (r.d->qt_rgn->contains(*d->qt_rgn))
         return QRegion();
     if (!EXTENTCHECK(d->qt_rgn->extents, r.d->qt_rgn->extents))
         return *this;
@@ -4081,6 +4126,7 @@ int QRegion::rectCount() const
     return (d->qt_rgn ? d->qt_rgn->numRects : 0);
 }
 
+
 bool QRegion::operator==(const QRegion &r) const
 {
     if (!d->qt_rgn)
@@ -4094,14 +4140,6 @@ bool QRegion::operator==(const QRegion &r) const
         return EqualRegion(d->qt_rgn, r.d->qt_rgn);
 }
 
-/*!
-    \fn bool QRegion::intersects(const QRect &rect) const
-    \overload
-    \since 4.4
-
-    Returns true if this region intersects with \a rect, otherwise
-    returns false.
-*/
 bool QRegion::intersects(const QRect &rect) const
 {
     if (isEmptyHelper(d->qt_rgn) || rect.isNull())
@@ -4119,49 +4157,10 @@ bool QRegion::intersects(const QRect &rect) const
     }
     return false;
 }
-
-void QRegion::updateX11Region() const
-{
-    d->rgn = XCreateRegion();
-    if (!d->qt_rgn)
-        return;
-
-    int n = d->qt_rgn->numRects;
-    const QRect *rect = (n == 1 ? &d->qt_rgn->extents : d->qt_rgn->rects.constData());
-    while (n--) {
-        XRectangle r;
-        r.x = qMax(SHRT_MIN, rect->x());
-        r.y = qMax(SHRT_MIN, rect->y());
-        r.width = qMin((int)USHRT_MAX, rect->width());
-        r.height = qMin((int)USHRT_MAX, rect->height());
-        XUnionRectWithRegion(&r, d->rgn, d->rgn);
-        ++rect;
-    }
-}
-
-void *QRegion::clipRectangles(int &num) const
-{
-    if (!d->xrectangles && !(d == &shared_empty || d->qt_rgn->numRects == 0)) {
-        XRectangle *r = static_cast<XRectangle*>(malloc(d->qt_rgn->numRects * sizeof(XRectangle)));
-        d->xrectangles = r;
-        int n = d->qt_rgn->numRects;
-        const QRect *rect = (n == 1 ? &d->qt_rgn->extents : d->qt_rgn->rects.constData());
-        while (n--) {
-            r->x = qMax(SHRT_MIN, rect->x());
-            r->y = qMax(SHRT_MIN, rect->y());
-            r->width = qMin((int)USHRT_MAX, rect->width());
-            r->height = qMin((int)USHRT_MAX, rect->height());
-            ++r;
-            ++rect;
-        }
-    }
-    if (d == &shared_empty || d->qt_rgn->numRects == 0)
-        num = 0;
-    else
-        num = d->qt_rgn->numRects;
-    return d->xrectangles;
-}
-
-#endif // Q_OS_UNIX
+#endif
 
 QT_END_NAMESPACE
+
+
+
+

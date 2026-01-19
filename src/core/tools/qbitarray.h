@@ -23,7 +23,7 @@
 #define QBITARRAY_H
 
 #include <QtCore/qbytearray.h>
-#include <QtCore/qdatastream.h>
+
 
 QT_BEGIN_NAMESPACE
 
@@ -42,8 +42,10 @@ public:
     explicit QBitArray(int size, bool val = false);
     QBitArray(const QBitArray &other) : d(other.d) {}
     inline QBitArray &operator=(const QBitArray &other) { d = other.d; return *this; }
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QBitArray &operator=(QBitArray &&other)
     { qSwap(d, other.d); return *this; }
+#endif
 
     inline void swap(QBitArray &other) { qSwap(d, other.d); }
 
@@ -79,14 +81,14 @@ public:
     inline bool operator==(const QBitArray& a) const { return d == a.d; }
     inline bool operator!=(const QBitArray& a) const { return d != a.d; }
 
-    inline void fill(bool val, int size = -1);
+    inline bool fill(bool val, int size = -1);
     void fill(bool val, int first, int last);
 
     inline void truncate(int pos) { if (pos < size()) resize(pos); }
 };
 
-inline void QBitArray::fill(bool aval, int asize)
-{ *this = QBitArray((asize < 0 ? this->size() : asize), aval); }
+inline bool QBitArray::fill(bool aval, int asize)
+{ *this = QBitArray((asize < 0 ? this->size() : asize), aval); return true; }
 
 Q_CORE_EXPORT QBitArray operator&(const QBitArray &, const QBitArray &);
 Q_CORE_EXPORT QBitArray operator|(const QBitArray &, const QBitArray &);

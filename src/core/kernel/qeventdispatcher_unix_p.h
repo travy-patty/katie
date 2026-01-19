@@ -36,7 +36,7 @@
 #include "QtCore/qabstracteventdispatcher.h"
 #include "qabstracteventdispatcher_p.h"
 #include "qcore_unix_p.h"
-#include "qstdcontainers_p.h"
+#include "qvarlengtharray.h"
 
 #include <sys/time.h>
 #include <sys/select.h>
@@ -98,7 +98,7 @@ public:
     QSockNotType();
     ~QSockNotType();
 
-    typedef QStdVector<QSockNot*> List;
+    typedef QVarLengthArray<QSockNot*, 32> List;
 
     List list;
     fd_set select_fds;

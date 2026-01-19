@@ -22,9 +22,11 @@
 #ifndef QWIDGET_H
 #define QWIDGET_H
 
+#include <QtCore/qconfig.h>
 #include <QtCore/qmargins.h>
 #include <QtGui/qpalette.h>
 #include <QtGui/qfontmetrics.h>
+#include <QtGui/qfontinfo.h>
 #include <QtGui/qsizepolicy.h>
 #include <QtGui/qcursor.h>
 #include <QtGui/qkeysequence.h>
@@ -59,6 +61,7 @@ class QIcon;
 class QWindowSurface;
 class QLocale;
 class QGraphicsProxyWidget;
+class QGraphicsEffect;
 #if defined(Q_WS_X11)
 class QX11Info;
 #endif
@@ -146,6 +149,10 @@ class Q_GUI_EXPORT QWidget : public QObject, public QPaintDevice
 #endif
 #ifndef QT_NO_WHATSTHIS
     Q_PROPERTY(QString whatsThis READ whatsThis WRITE setWhatsThis)
+#endif
+#ifndef QT_NO_ACCESSIBILITY
+    Q_PROPERTY(QString accessibleName READ accessibleName WRITE setAccessibleName)
+    Q_PROPERTY(QString accessibleDescription READ accessibleDescription WRITE setAccessibleDescription)
 #endif
     Q_PROPERTY(Qt::LayoutDirection layoutDirection READ layoutDirection WRITE setLayoutDirection RESET unsetLayoutDirection)
     Q_PROPERTY(Qt::WindowFlags windowFlags READ windowFlags WRITE setWindowFlags)
@@ -261,6 +268,7 @@ public:
     const QFont &font() const;
     void setFont(const QFont &);
     QFontMetrics fontMetrics() const;
+    QFontInfo fontInfo() const;
 
 #ifndef QT_NO_CURSOR
     QCursor cursor() const;
@@ -284,6 +292,11 @@ public:
     void render(QPainter *painter, const QPoint &targetOffset = QPoint(),
                 const QRegion &sourceRegion = QRegion(),
                 RenderFlags renderFlags = RenderFlags(DrawWindowBackground | DrawChildren));
+
+#ifndef QT_NO_GRAPHICSEFFECT
+    QGraphicsEffect *graphicsEffect() const;
+    void setGraphicsEffect(QGraphicsEffect *effect);
+#endif //QT_NO_GRAPHICSEFFECT
 
 public Q_SLOTS:
     void setWindowTitle(const QString &);
@@ -317,6 +330,12 @@ public:
 #ifndef QT_NO_WHATSTHIS
     void setWhatsThis(const QString &);
     QString whatsThis() const;
+#endif
+#ifndef QT_NO_ACCESSIBILITY
+    QString accessibleName() const;
+    void setAccessibleName(const QString &name);
+    QString accessibleDescription() const;
+    void setAccessibleDescription(const QString &description);
 #endif
 
     void setLayoutDirection(Qt::LayoutDirection direction);
@@ -568,6 +587,7 @@ protected:
 private:
     QLayout *takeLayout();
 
+    friend class QBackingStoreDevice;
     friend class QWidgetBackingStore;
     friend class QApplication;
     friend class QApplicationPrivate;
@@ -575,9 +595,11 @@ private:
     friend class QPainterPrivate;
     friend class QPixmap; // for QPixmap::grabWidget()
     friend class QFontMetrics;
+    friend class QFontInfo;
     friend class QETWidget;
     friend class QLayout;
     friend class QWidgetItem;
+    friend class QWidgetItemV2;
     friend class QX11PaintEngine;
     friend class QShortcutPrivate;
     friend class QShortcutMap;
@@ -587,6 +609,8 @@ private:
     friend class QStyleSheetStyle;
     friend class QX11EmbedWidgetPrivate;
     friend class QX11EmbedContainerPrivate;
+    friend struct QWidgetExceptionCleaner;
+    friend class QWidgetEffectSourcePrivate;
 
 #ifdef Q_WS_X11
     friend void qt_net_update_user_time(QWidget *tlw, unsigned long timestamp);
@@ -603,7 +627,11 @@ private:
 
 protected:
     virtual void styleChange(QStyle&); // compat
+    virtual void enabledChange(bool);  // compat
+    virtual void paletteChange(const QPalette &);  // compat
     virtual void fontChange(const QFont &); // compat
+    virtual void windowActivationChange(bool);  // compat
+    virtual void languageChange();  // compat
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QWidget::RenderFlags)
@@ -669,6 +697,9 @@ inline const QFont &QWidget::font() const
 inline QFontMetrics QWidget::fontMetrics() const
 { return QFontMetrics(data->fnt); }
 
+inline QFontInfo QWidget::fontInfo() const
+{ return QFontInfo(data->fnt); }
+
 inline void QWidget::setMouseTracking(bool enable)
 { setAttribute(Qt::WA_MouseTracking, enable); }
 
@@ -720,7 +751,7 @@ inline QWidget *QWidget::parentWidget() const
 inline void QWidget::setSizePolicy(QSizePolicy::Policy hor, QSizePolicy::Policy ver)
 { setSizePolicy(QSizePolicy(hor, ver)); }
 
-#define QWIDGETSIZE_MAX 16777215
+#define QWIDGETSIZE_MAX ((1<<24)-1)
 
 QT_END_NAMESPACE
 

@@ -52,6 +52,7 @@ public:
     };
 
     explicit QAbstractItemDelegate(QObject *parent = nullptr);
+    virtual ~QAbstractItemDelegate();
 
     // painting
     virtual void paint(QPainter *painter,

@@ -39,6 +39,7 @@
 #include "qdeclarativeglobal_p.h"
 #include "qdeclarativeworkerscript_p.h"
 #include "qdeclarativecomponent_p.h"
+#include "qdeclarativenetworkaccessmanagerfactory.h"
 #include "qdeclarativeimageprovider.h"
 #include "qdeclarativedirparser_p.h"
 #include "qdeclarativeextensioninterface.h"
@@ -51,6 +52,9 @@
 
 #include <QtCore/qmetaobject.h>
 #include <QScriptClass>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QNetworkAccessManager>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QList>
@@ -296,7 +300,8 @@ QDeclarativeEnginePrivate::QDeclarativeEnginePrivate(QDeclarativeEngine *e)
   outputWarningsToStdErr(true), contextClass(0), sharedContext(0), sharedScope(0),
   objectClass(0), valueTypeClass(0), globalClass(0), cleanup(0), erroredBindings(0),
   inProgressCreations(0), scriptEngine(this), workerScriptEngine(0), componentAttached(0),
-  inBeginCreate(false), typeLoader(e), importDatabase(e)
+  inBeginCreate(false), networkAccessManager(0), networkAccessManagerFactory(0),
+  typeLoader(e), importDatabase(e)
 {
     if (!qt_QmlQtModule_registered) {
         qt_QmlQtModule_registered = true;
@@ -344,7 +349,7 @@ QDeclarativeScriptEngine::QDeclarativeScriptEngine(QDeclarativeEnginePrivate *pr
 
     qtObject.setProperty(QLatin1String("isQtObject"), newFunction(QDeclarativeEnginePrivate::isQtObject, 1));
     qtObject.setProperty(QLatin1String("rgba"), newFunction(QDeclarativeEnginePrivate::rgba, 4));
-    qtObject.setProperty(QLatin1String("hsva"), newFunction(QDeclarativeEnginePrivate::hsva, 4));
+    qtObject.setProperty(QLatin1String("hsla"), newFunction(QDeclarativeEnginePrivate::hsla, 4));
     qtObject.setProperty(QLatin1String("rect"), newFunction(QDeclarativeEnginePrivate::rect, 4));
     qtObject.setProperty(QLatin1String("point"), newFunction(QDeclarativeEnginePrivate::point, 2));
     qtObject.setProperty(QLatin1String("size"), newFunction(QDeclarativeEnginePrivate::size, 2));
@@ -400,6 +405,11 @@ QScriptValue QDeclarativeScriptEngine::resolvedUrl(QScriptContext *ctxt, QScript
     QString arg = ctxt->argument(0).toString();
     QUrl r = QDeclarativeScriptEngine::get(engine)->resolvedUrl(ctxt,QUrl(arg));
     return QScriptValue(r.toString());
+}
+
+QNetworkAccessManager *QDeclarativeScriptEngine::networkAccessManager()
+{
+    return p->getNetworkAccessManager();
 }
 
 QDeclarativeEnginePrivate::~QDeclarativeEnginePrivate()
@@ -494,7 +504,7 @@ void QDeclarativeEnginePrivate::init()
     qRegisterMetaType<QVariant>("QVariant");
     qRegisterMetaType<QDeclarativeScriptString>("QDeclarativeScriptString");
     qRegisterMetaType<QScriptValue>("QScriptValue");
-    qRegisterMetaType<QDeclarativeComponent::ComponentStatus>("QDeclarativeComponent::ComponentStatus");
+    qRegisterMetaType<QDeclarativeComponent::Status>("QDeclarativeComponent::Status");
 
     QDeclarativeData::init();
 
@@ -605,6 +615,69 @@ QDeclarativeContext *QDeclarativeEngine::rootContext() const
 {
     Q_D(const QDeclarativeEngine);
     return d->rootContext;
+}
+
+/*!
+  Sets the \a factory to use for creating QNetworkAccessManager(s).
+
+  QNetworkAccessManager is used for all network access by QML.  By
+  implementing a factory it is possible to create custom
+  QNetworkAccessManager with specialized caching, proxy and cookie
+  support.
+
+  The factory must be set before executing the engine.
+*/
+void QDeclarativeEngine::setNetworkAccessManagerFactory(QDeclarativeNetworkAccessManagerFactory *factory)
+{
+    Q_D(QDeclarativeEngine);
+    QMutexLocker locker(&d->mutex);
+    d->networkAccessManagerFactory = factory;
+}
+
+/*!
+  Returns the current QDeclarativeNetworkAccessManagerFactory.
+
+  \sa setNetworkAccessManagerFactory()
+*/
+QDeclarativeNetworkAccessManagerFactory *QDeclarativeEngine::networkAccessManagerFactory() const
+{
+    Q_D(const QDeclarativeEngine);
+    return d->networkAccessManagerFactory;
+}
+
+QNetworkAccessManager *QDeclarativeEnginePrivate::createNetworkAccessManager(QObject *parent) const
+{
+    if (networkAccessManagerFactory) {
+        return networkAccessManagerFactory->create(parent);
+    }
+
+    return new QNetworkAccessManager(parent);
+}
+
+QNetworkAccessManager *QDeclarativeEnginePrivate::getNetworkAccessManager() const
+{
+    Q_Q(const QDeclarativeEngine);
+    if (!networkAccessManager)
+        networkAccessManager = createNetworkAccessManager(const_cast<QDeclarativeEngine*>(q));
+    return networkAccessManager;
+}
+
+/*!
+  Returns a common QNetworkAccessManager which can be used by any QML
+  element instantiated by this engine.
+
+  If a QDeclarativeNetworkAccessManagerFactory has been set and a
+  QNetworkAccessManager has not yet been created, the
+  QDeclarativeNetworkAccessManagerFactory will be used to create the
+  QNetworkAccessManager; otherwise the returned QNetworkAccessManager
+  will have no proxy or cache set.
+
+  \sa setNetworkAccessManagerFactory()
+*/
+QNetworkAccessManager *QDeclarativeEngine::networkAccessManager() const
+{
+    Q_D(const QDeclarativeEngine);
+    return d->getNetworkAccessManager();
 }
 
 /*!
@@ -778,7 +851,7 @@ void QDeclarativeEngine::setContextForObject(QObject *object, QDeclarativeContex
         return;
 
     QDeclarativeData *data = QDeclarativeData::get(object, true);
-    if (Q_UNLIKELY(data->context)) {
+    if (data->context) {
         qWarning("QDeclarativeEngine::setContextForObject(): Object already has a QDeclarativeContext");
         return;
     }
@@ -1511,31 +1584,31 @@ QScriptValue QDeclarativeEnginePrivate::rgba(QScriptContext *ctxt, QScriptEngine
 }
 
 /*!
-\qmlmethod color Qt::hsla(real hue, real saturation, real value, real alpha)
+\qmlmethod color Qt::hsla(real hue, real saturation, real lightness, real alpha)
 
-Returns a color with the specified \c hue, \c saturation, \c value and \c alpha components.
+Returns a color with the specified \c hue, \c saturation, \c lightness and \c alpha components.
 All components should be in the range 0-1 inclusive.
 */
-QScriptValue QDeclarativeEnginePrivate::hsva(QScriptContext *ctxt, QScriptEngine *engine)
+QScriptValue QDeclarativeEnginePrivate::hsla(QScriptContext *ctxt, QScriptEngine *engine)
 {
     int argCount = ctxt->argumentCount();
     if(argCount < 3 || argCount > 4)
-        return ctxt->throwError(QLatin1String("Qt.hsva(): Invalid arguments"));
+        return ctxt->throwError(QLatin1String("Qt.hsla(): Invalid arguments"));
     qsreal h = ctxt->argument(0).toNumber();
     qsreal s = ctxt->argument(1).toNumber();
-    qsreal v = ctxt->argument(2).toNumber();
+    qsreal l = ctxt->argument(2).toNumber();
     qsreal a = (argCount == 4) ? ctxt->argument(3).toNumber() : 1;
 
     if (h < 0.0) h=0.0;
     if (h > 1.0) h=1.0;
     if (s < 0.0) s=0.0;
     if (s > 1.0) s=1.0;
-    if (v < 0.0) v=0.0;
-    if (v > 1.0) v=1.0;
+    if (l < 0.0) l=0.0;
+    if (l > 1.0) l=1.0;
     if (a < 0.0) a=0.0;
     if (a > 1.0) a=1.0;
 
-    return engine->toScriptValue(QVariant::fromValue(QColor::fromHsvF(h, s, v, a)));
+    return engine->toScriptValue(QVariant::fromValue(QColor::fromHslF(h, s, l, a)));
 }
 
 /*!
@@ -1694,9 +1767,9 @@ QScriptValue QDeclarativeEnginePrivate::md5(QScriptContext *ctxt, QScriptEngine 
         return ctxt->throwError(QLatin1String("Qt.md5(): Invalid arguments"));
 
     QByteArray data = ctxt->argument(0).toString().toUtf8();
-    QByteArray result = QCryptographicHash::hash(data, QCryptographicHash::Md5).toHex();
+    QByteArray result = QCryptographicHash::hash(data, QCryptographicHash::Md5);
 
-    return QScriptValue(QString::fromLatin1(result.constData(), result.size()));
+    return QScriptValue(QLatin1String(result.toHex()));
 }
 
 /*!
@@ -1708,9 +1781,9 @@ QScriptValue QDeclarativeEnginePrivate::btoa(QScriptContext *ctxt, QScriptEngine
     if (ctxt->argumentCount() != 1)
         return ctxt->throwError(QLatin1String("Qt.btoa(): Invalid arguments"));
 
-    QByteArray data = ctxt->argument(0).toString().toUtf8().toBase64();
+    QByteArray data = ctxt->argument(0).toString().toUtf8();
 
-    return QScriptValue(QString::fromLatin1(data.constData(), data.size()));
+    return QScriptValue(QLatin1String(data.toBase64()));
 }
 
 /*!
@@ -1723,9 +1796,9 @@ QScriptValue QDeclarativeEnginePrivate::atob(QScriptContext *ctxt, QScriptEngine
     if (ctxt->argumentCount() != 1)
         return ctxt->throwError(QLatin1String("Qt.atob(): Invalid arguments"));
 
-    QByteArray data = QByteArray::fromBase64(ctxt->argument(0).toString().toUtf8());
+    QByteArray data = ctxt->argument(0).toString().toUtf8();
 
-    return QScriptValue(QString::fromLatin1(data.constData(), data.size()));
+    return QScriptValue(QLatin1String(QByteArray::fromBase64(data)));
 }
 
 QScriptValue QDeclarativeEnginePrivate::consoleLog(QScriptContext *ctxt, QScriptEngine *e)
@@ -1751,7 +1824,7 @@ void QDeclarativeEnginePrivate::sendQuit()
 {
     Q_Q(QDeclarativeEngine);
     emit q->quit();
-    if (Q_UNLIKELY(q->receivers(SIGNAL(quit())) == 0)) {
+    if (q->receivers(SIGNAL(quit())) == 0) {
         qWarning("Signal QDeclarativeEngine::quit() emitted, but no receivers connected to handle it.");
     }
 }

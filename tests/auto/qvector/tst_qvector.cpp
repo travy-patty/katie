@@ -49,6 +49,7 @@ private slots:
     void fill() const;
     void first() const;
     void fromList() const;
+    void fromStdVector() const;
     void indexOf() const;
     void insert() const;
     void isEmpty() const;
@@ -61,6 +62,7 @@ private slots:
     void startsWith() const;
     void swap() const;
     void toList() const;
+    void toStdVector() const;
     void value() const;
 
     void testOperators() const;
@@ -336,6 +338,20 @@ void tst_QVector::fromList() const
     QCOMPARE(list, QList<QString>() << "aaa" << "bbb" << "ninjas" << "pirates");
 }
 
+void tst_QVector::fromStdVector() const
+{
+    // stl = :(
+    std::vector<QString> svec;
+    svec.push_back(QLatin1String("aaa"));
+    svec.push_back(QLatin1String("bbb"));
+    svec.push_back(QLatin1String("ninjas"));
+    svec.push_back(QLatin1String("pirates"));
+    QVector<QString> myvec = QVector<QString>::fromStdVector(svec);
+
+    // test it converts ok
+    QCOMPARE(myvec, QVector<QString>() << "aaa" << "bbb" << "ninjas" << "pirates");
+}
+
 void tst_QVector::indexOf() const
 {
     QVector<QString> myvec;
@@ -562,6 +578,19 @@ void tst_QVector::toList() const
 
     // make sure it converts and doesn't modify the original vector
     QCOMPARE(myvec.toList(), QList<QString>() << "A" << "B" << "C");
+    QCOMPARE(myvec, QVector<QString>() << "A" << "B" << "C");
+}
+
+void tst_QVector::toStdVector() const
+{
+    QVector<QString> myvec;
+    myvec << "A" << "B" << "C";
+
+    std::vector<QString> svec = myvec.toStdVector();
+    QCOMPARE(svec.at(0), QLatin1String("A"));
+    QCOMPARE(svec.at(1), QLatin1String("B"));
+    QCOMPARE(svec.at(2), QLatin1String("C"));
+
     QCOMPARE(myvec, QVector<QString>() << "A" << "B" << "C");
 }
 
@@ -800,6 +829,7 @@ void tst_QVector::QTBUG6416_reserve()
 
 void tst_QVector::initializeList()
 {
+#ifdef Q_COMPILER_INITIALIZER_LISTS
     QVector<int> v1{2,3,4};
     QCOMPARE(v1, QVector<int>() << 2 << 3 << 4);
     QCOMPARE(v1, (QVector<int>{2,3,4}));
@@ -808,6 +838,7 @@ void tst_QVector::initializeList()
     QVector<QVector<int>> v3;
     v3 << v1 << (QVector<int>() << 1) << QVector<int>() << v1;
     QCOMPARE(v3, v2);
+#endif
 }
 
 QTEST_APPLESS_MAIN(tst_QVector)

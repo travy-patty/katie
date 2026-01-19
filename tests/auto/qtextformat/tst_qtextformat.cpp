@@ -23,14 +23,13 @@
 #include <QtTest/QtTest>
 #include <qcoreapplication.h>
 #include <qdebug.h>
+#include <qsettings.h>
 #include <qtextformat.h>
 #include <qtextdocument.h>
 #include <qtextcursor.h>
 #include <qtextobject.h>
 #include <qtextlayout.h>
 #include <qabstracttextdocumentlayout.h>
-
-#include <limits.h>
 
 //TESTED_CLASS=
 //TESTED_FILES=
@@ -42,11 +41,29 @@ Q_OBJECT
 private slots:
     void getSetCheck();
     void defaultAlignment();
+    void testQTextCharFormat() const;
     void testUnderlinePropertyPrecedence();
     void toFormat();
     void resolveFont();
+    void getSetTabs();
+    void testTabsUsed();
     void testFontStyleSetters();
 };
+
+/*! \internal
+  This (used to) trigger a crash in:
+ 
+    QDataStream &operator>>(QDataStream &stream, QTextFormat &fmt)
+
+  which is most easily produced through QSettings.
+ */
+void tst_QTextFormat::testQTextCharFormat() const
+{
+    QSettings settings("testQTextCharFormat", QSettings::NativeFormat);
+    QTextCharFormat test;
+
+    settings.value("test", test);
+}
 
 // Testing get/set functions
 void tst_QTextFormat::getSetCheck()
@@ -242,20 +259,85 @@ void tst_QTextFormat::resolveFont()
     QVERIFY(fmt.font().strikeOut());
 }
 
+void tst_QTextFormat::getSetTabs()
+{
+    class Comparator {
+      public:
+        Comparator(const QList<QTextOption::Tab> &tabs, const QList<QTextOption::Tab> &tabs2)
+        {
+            QCOMPARE(tabs.count(), tabs2.count());
+            for(int i=0; i < tabs.count(); i++) {
+                QTextOption::Tab t1 = tabs[i];
+                QTextOption::Tab t2 = tabs2[i];
+                QCOMPARE(t1.position, t2.position);
+                QCOMPARE(t1.type, t2.type);
+                QCOMPARE(t1.delimiter, t2.delimiter);
+            }
+        }
+    };
+
+    QList<QTextOption::Tab> tabs;
+    QTextBlockFormat format;
+    format.setTabPositions(tabs);
+    Comparator c1(tabs, format.tabPositions());
+
+    QTextOption::Tab tab1;
+    tab1.position = 1234;
+    tabs.append(tab1);
+    format.setTabPositions(tabs);
+    Comparator c2(tabs, format.tabPositions());
+
+    QTextOption::Tab tab2(3456, QTextOption::RightTab, QChar('x'));
+    tabs.append(tab2);
+    format.setTabPositions(tabs);
+    Comparator c3(tabs, format.tabPositions());
+}
+
+void tst_QTextFormat::testTabsUsed()
+{
+    QTextDocument doc;
+    QTextCursor cursor(&doc);
+
+    QList<QTextOption::Tab> tabs;
+    QTextBlockFormat format;
+    QTextOption::Tab tab;
+    tab.position = 100;
+    tabs.append(tab);
+    format.setTabPositions(tabs);
+    cursor.mergeBlockFormat(format);
+    cursor.insertText("foo\tbar");
+    //doc.setPageSize(QSizeF(200, 200));
+    doc.documentLayout()->pageCount(); // force layout;
+
+    QTextBlock block = doc.begin();
+    QTextLayout *layout = block.layout();
+    QVERIFY(layout);
+    QCOMPARE(layout->lineCount(), 1);
+    QTextLine line = layout->lineAt(0);
+    QCOMPARE(line.cursorToX(4), 100.);
+
+    QTextOption option = layout->textOption();
+    QCOMPARE(option.tabs().count(), tabs.count());
+
+}
+
 void tst_QTextFormat::testFontStyleSetters()
 {
     QTextCharFormat format;
 
     // test the setters
-    QCOMPARE(format.font().hintingPreference(), QFont::PreferDefaultHinting);
-    format.setFontHintingPreference(QFont::PreferFullHinting);
-    QCOMPARE(format.font().hintingPreference(), QFont::PreferFullHinting);
+    format.setFontStyleHint(QFont::Serif);
+    QCOMPARE(format.font().styleHint(), QFont::Serif);
+    QCOMPARE(format.font().styleStrategy(), QFont::PreferDefault);
+    format.setFontStyleStrategy(QFont::PreferOutline);
+    QCOMPARE(format.font().styleStrategy(), QFont::PreferOutline);
 
     // test setting properties through setFont()
     QFont font;
-    font.setHintingPreference(QFont::PreferVerticalHinting);
+    font.setStyleHint(QFont::SansSerif, QFont::PreferAntialias);
     format.setFont(font);
-    QCOMPARE(format.font().hintingPreference(), QFont::PreferVerticalHinting);
+    QCOMPARE(format.font().styleHint(), QFont::SansSerif);
+    QCOMPARE(format.font().styleStrategy(), QFont::PreferAntialias);
 
     // test kerning
     format.setFontKerning(false);

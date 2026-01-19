@@ -39,27 +39,35 @@
 
 QT_BEGIN_NAMESPACE
 
-typedef QMap<QString,QString> QSettingsMap;
-
 class QSettingsPrivate
+    : public QObjectPrivate
 {
+    Q_DECLARE_PUBLIC(QSettings)
+
 public:
-    QSettingsPrivate();
-    QSettingsPrivate(const QString &fileName);
+    QSettingsPrivate(QSettings::Format format);
+    QSettingsPrivate(const QString &fileName, QSettings::Format format);
+    ~QSettingsPrivate();
 
     void read();
     void write();
+    void notify();
 
     QString toGroupKey(const QString &key) const;
+    // INI parser functions
+    static QString variantToString(const QVariant &v);
+    static QVariant stringToVariant(const QString &s);
+    static QStringList splitArgs(const QString &s, int idx);
 
+    QSettings::Format format;
     QSettings::SettingsStatus status;
     QString filename;
-    QMap<QString,QString> map;
+    QSettings::SettingsMap map;
     QString group;
-    bool shouldwrite;
 
-private:
-    Q_DISABLE_COPY(QSettingsPrivate);
+    QSettings::ReadFunc readFunc;
+    QSettings::WriteFunc writeFunc;
+    bool shouldwrite;
 };
 
 QT_END_NAMESPACE

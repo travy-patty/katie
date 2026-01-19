@@ -1,6 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2023 Ivailo Monev
+** Copyright (C) 2015 The Qt Company Ltd.
+** Copyright (C) 2016 Ivailo Monev
 **
 ** This file is part of the QtGui module of the Katie Toolkit.
 **
@@ -32,61 +33,125 @@
 // We mean it.
 //
 
-#include "qwidget_p.h"
-#include "qdatetimeedit.h"
-#include "qboxlayout.h"
+#include "qcombobox.h"
+#include "qcalendarwidget.h"
 #include "qspinbox.h"
 #include "qtoolbutton.h"
 #include "qmenu.h"
-#include "qwidgetaction.h"
+#include "qlabel.h"
+#include "qdatetimeedit.h"
+#include "qabstractspinbox_p.h"
+#include "qdatetime_p.h"
 #include "qdebug.h"
 
 #ifndef QT_NO_DATETIMEEDIT
 
 QT_BEGIN_NAMESPACE
 
-class QDateTimeBox : public QSpinBox
-{
-public:
-    QDateTimeBox(QWidget *parent);
-
-    void updateLocale(const QLocale &locale);
-
-protected:
-    QValidator::State validate(QString &input, int &pos) const final;
-    int valueFromText(const QString &text) const final;
-    QString textFromValue(int value) const final;
-};
-
-class QDateTimeEditPrivate : public QWidgetPrivate
+class QCalendarPopup;
+class QDateTimeEditPrivate : public QAbstractSpinBoxPrivate, public QDateTimeParser
 {
     Q_DECLARE_PUBLIC(QDateTimeEdit)
 public:
     QDateTimeEditPrivate();
 
-    QDateTime minimumdate;
-    QDateTime maximumdate;
-    QCalendarWidget *calendarwidget;
+    void init(const QVariant &var);
+    void readLocaleSettings();
 
-    void init(const QDateTime &datetime, const bool showdate, const bool showtime);
-    void updateWidgets(const QDateTime &datetime);
-    void updateButton(const QDate &date);
-    void updateLocale(const QLocale &locale);
-    void setCalendar(QCalendarWidget *calendar);
-    QDateTime currentDateTime() const;
+    void emitSignals(EmitPolicy ep, const QVariant &old);
+    QString textFromValue(const QVariant &f) const;
+    QVariant valueFromText(const QString &f) const;
+    virtual void _q_editorCursorPositionChanged(int oldpos, int newpos);
+    virtual void interpret(EmitPolicy ep);
+    virtual void clearCache() const;
 
-    void _q_dateChanged();
-    void _q_timeChanged();
-    void _q_selectDate();
+    QDateTime validateAndInterpret(QString &input, int &, QValidator::State &state,
+                                   bool fixup = false) const;
+    void clearSection(int index);
+    virtual QString displayText() const { return edit->text(); } // this is from QDateTimeParser
+
+    int absoluteIndex(QDateTimeEdit::Section s, int index) const;
+    int absoluteIndex(const SectionNode &s) const;
+    void updateEdit();
+    QDateTime stepBy(int index, int steps, bool test = false) const;
+    int sectionAt(int pos) const;
+    int closestSection(int index, bool forward) const;
+    int nextPrevSection(int index, bool forward) const;
+    void setSelected(int index, bool forward = false);
+
+    void updateCache(const QVariant &val, const QString &str) const;
+
+    void updateTimeSpec();
+    virtual QDateTime getMinimum() const { return minimum.toDateTime(); }
+    virtual QDateTime getMaximum() const { return maximum.toDateTime(); }
+    virtual QLocale locale() const { return q_func()->locale(); }
+    QString valueToText(const QVariant &var) const { return textFromValue(var); }
+    QString getAmPmText(AmPm ap, Case cs) const;
+    int cursorPosition() const { return edit ? edit->cursorPosition() : -1; }
+
+    virtual QStyle::SubControl newHoverControl(const QPoint &pos);
+    virtual void updateEditFieldGeometry();
+    virtual QVariant getZeroVariant() const;
+    virtual void setRange(const QVariant &min, const QVariant &max);
+
+    void _q_resetButton();
+    void updateArrow(QStyle::StateFlag state);
+    bool calendarPopupEnabled() const;
+    void syncCalendarWidget();
+
+    bool isSeparatorKey(const QKeyEvent *k) const;
+
+    static QDateTimeEdit::Sections convertSections(QDateTimeParser::Sections s);
+    static QDateTimeEdit::Section convertToPublic(QDateTimeParser::Section s);
+
+    void initCalendarPopup(QCalendarWidget *cw = 0);
+    void positionCalendarPopup();
+
+    QDateTimeEdit::Sections sections;
+    mutable bool cacheGuard;
+
+    QString defaultDateFormat, defaultTimeFormat, defaultDateTimeFormat, unreversedFormat;
+    mutable QVariant conflictGuard;
+    bool hasHadFocus, formatExplicitlySet, calendarPopup;
+    QStyle::StateFlag arrowState;
+    QCalendarPopup *monthCalendar;
+
+};
+
+
+class QCalendarPopup : public QWidget
+{
+    Q_OBJECT
+public:
+    QCalendarPopup(QWidget *parent = nullptr, QCalendarWidget *cw = 0);
+    QDate selectedDate() { return verifyCalendarInstance()->selectedDate(); }
+    void setDate(const QDate &date);
+    void setDateRange(const QDate &min, const QDate &max);
+    void setFirstDayOfWeek(Qt::DayOfWeek dow) { verifyCalendarInstance()->setFirstDayOfWeek(dow); }
+    QCalendarWidget *calendarWidget() const { return const_cast<QCalendarPopup*>(this)->verifyCalendarInstance(); }
+    void setCalendarWidget(QCalendarWidget *cw);
+Q_SIGNALS:
+    void activated(const QDate &date);
+    void newDateSelected(const QDate &newDate);
+    void hidingCalendar(const QDate &oldDate);
+    void resetButton();
+
+private Q_SLOTS:
+    void dateSelected(const QDate &date);
+    void dateSelectionChanged();
+
+protected:
+    void hideEvent(QHideEvent *);
+    void mousePressEvent(QMouseEvent *e);
+    void mouseReleaseEvent(QMouseEvent *);
+    bool event(QEvent *e);
 
 private:
-    bool m_showdate;
-    bool m_showtime;
-    QHBoxLayout *m_layout;
-    QDateTimeBox *m_timebox;
-    QToolButton *m_datebutton;
-    QMenu* m_datemenu;
-    QWidgetAction* m_dateaction;
+    QCalendarWidget *verifyCalendarInstance();
+
+    QWeakPointer<QCalendarWidget> calendar;
+    QDate oldDate;
+    bool dateChanged;
 };
 
 QT_END_NAMESPACE

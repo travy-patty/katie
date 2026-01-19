@@ -31,19 +31,29 @@
 
 QT_BEGIN_NAMESPACE
 
+#ifdef QFORMINTERNAL_NAMESPACE
+namespace QFormInternal {
+#endif
+
 /*!
     \class QFormBuilder
 
     \brief The QFormBuilder class is used to dynamically construct
     user interfaces from UI files at run-time.
 
-    \inmodule QtUiTools
+    \inmodule QtDesigner
 
     The QFormBuilder class provides a mechanism for dynamically
     creating user interfaces at run-time, based on UI files
     created with \QD. For example:
 
     \snippet doc/src/snippets/code/tools_designer_src_lib_uilib_formbuilder.cpp 0
+
+    By including the user interface in the example's resources (\c
+    myForm.qrc), we ensure that it will be present when the example is
+    run:
+
+    \snippet doc/src/snippets/code/tools_designer_src_lib_uilib_formbuilder.cpp 1
 
     QFormBuilder extends the QAbstractFormBuilder base class with a
     number of functions that are used to support custom widget
@@ -109,11 +119,14 @@ QWidget *QFormBuilder::create(DomWidget *ui_widget, QWidget *parentWidget)
 #ifndef QT_NO_STACKEDWIDGET
             && !qobject_cast<QStackedWidget *>(parentWidget)
 #endif
-#ifndef QT_NO_TABWIDGET
+#ifndef QT_NO_STACKEDWIDGET
             && !qobject_cast<QTabWidget *>(parentWidget)
 #endif
 #ifndef QT_NO_SCROLLAREA
             && !qobject_cast<QScrollArea *>(parentWidget)
+#endif
+#ifndef QT_NO_MDIAREA
+            && !qobject_cast<QMdiArea *>(parentWidget)
 #endif
 #ifndef QT_NO_DOCKWIDGET
             && !qobject_cast<QDockWidget *>(parentWidget)
@@ -132,7 +145,7 @@ QWidget *QFormBuilder::create(DomWidget *ui_widget, QWidget *parentWidget)
 */
 QWidget *QFormBuilder::createWidget(const QString &widgetName, QWidget *parentWidget, const QString &name)
 {
-    if (Q_UNLIKELY(widgetName.isEmpty())) {
+    if (widgetName.isEmpty()) {
         //: Empty class name passed to widget factory method
         qWarning() << QCoreApplication::translate("QFormBuilder", "An empty class name was passed on to %1 (object name: '%2').").arg(QString::fromUtf8(Q_FUNC_INFO), name);
         return 0;
@@ -179,7 +192,7 @@ QWidget *QFormBuilder::createWidget(const QString &widgetName, QWidget *parentWi
             break;
 
         // try with a registered custom widget
-        QCustomWidget *factory = m_customWidgets.value(widgetName);
+        QDesignerCustomWidgetInterface *factory = m_customWidgets.value(widgetName);
         if (factory != 0)
             w = factory->createWidget(parentWidget);
     } while(false);
@@ -187,13 +200,13 @@ QWidget *QFormBuilder::createWidget(const QString &widgetName, QWidget *parentWi
     QFormBuilderExtra *fb = QFormBuilderExtra::instance(this);
     if (w == 0) { // Attempt to instantiate base class of promoted/custom widgets
         const QString baseClassName = fb->customWidgetBaseClass(widgetName);
-        if (Q_UNLIKELY(!baseClassName.isEmpty())) {
+        if (!baseClassName.isEmpty()) {
             qWarning() << QCoreApplication::translate("QFormBuilder", "QFormBuilder was unable to create a custom widget of the class '%1'; defaulting to base class '%2'.").arg(widgetName, baseClassName);
             return createWidget(baseClassName, parentWidget, name);
         }
     }
 
-    if (Q_UNLIKELY(w == 0)) { // nothing to do
+    if (w == 0) { // nothing to do
         qWarning() << QCoreApplication::translate("QFormBuilder", "QFormBuilder was unable to create a widget of the class '%1'.").arg(widgetName);
         return 0;
     }
@@ -420,10 +433,16 @@ void QFormBuilder::setPluginPath(const QStringList &pluginPaths)
     updateCustomWidgets();
 }
 
-static void insertPlugins(QObject *o, QMap<QString, QCustomWidget*> *customWidgets)
+static void insertPlugins(QObject *o, QMap<QString, QDesignerCustomWidgetInterface*> *customWidgets)
 {
-    if (QCustomWidgetPlugin *c = qobject_cast<QCustomWidgetPlugin *>(o)) {
-        foreach (QCustomWidget *iface, c->customWidgets())
+    // step 1) try with a normal plugin
+    if (QDesignerCustomWidgetInterface *iface = qobject_cast<QDesignerCustomWidgetInterface *>(o)) {
+        customWidgets->insert(iface->name(), iface);
+        return;
+    }
+    // step 2) try with a collection of plugins
+    if (QDesignerCustomWidgetCollectionInterface *c = qobject_cast<QDesignerCustomWidgetCollectionInterface *>(o)) {
+        foreach (QDesignerCustomWidgetInterface *iface, c->customWidgets())
             customWidgets->insert(iface->name(), iface);
     }
 }
@@ -435,7 +454,6 @@ void QFormBuilder::updateCustomWidgets()
 {
     m_customWidgets.clear();
 
-#ifndef QT_NO_LIBRARY
     foreach (const QString &path, m_pluginPaths) {
         const QDir dir(path);
         const QStringList candidates = dir.entryList(QDir::Files);
@@ -453,15 +471,14 @@ void QFormBuilder::updateCustomWidgets()
                 insertPlugins(loader.instance(), &m_customWidgets);
         }
     }
-#endif // QT_NO_LIBRARY
 }
 
 /*!
-    \fn QList<QCustomWidget*> QFormBuilder::customWidgets() const
+    \fn QList<QDesignerCustomWidgetInterface*> QFormBuilder::customWidgets() const
 
     Returns a list of the available plugins.
 */
-QList<QCustomWidget*> QFormBuilder::customWidgets() const
+QList<QDesignerCustomWidgetInterface*> QFormBuilder::customWidgets() const
 {
     return m_customWidgets.values();
 }
@@ -497,5 +514,9 @@ void QFormBuilder::applyProperties(QObject *o, const QList<DomProperty*> &proper
         }
     }
 }
+
+#ifdef QFORMINTERNAL_NAMESPACE
+} // namespace QFormInternal
+#endif
 
 QT_END_NAMESPACE

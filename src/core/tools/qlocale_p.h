@@ -33,10 +33,12 @@
 // We mean it.
 //
 
-#include "qstring.h"
-#include "qmetatype.h"
+#include "QtCore/qstring.h"
+#include "QtCore/qvarlengtharray.h"
+#include "QtCore/qmetatype.h"
+
 #include "qlocale.h"
-#include "qstdcontainers_p.h"
+
 
 QT_BEGIN_NAMESPACE
 
@@ -52,6 +54,8 @@ public:
     QChar minus() const { return QChar(m_minus); }
     QChar exponential() const { return QChar(m_exponential); }
 
+    QString bcp47Name() const;
+
     static QLocale::Language codeToLanguage(const QByteArray &code);
     static QLocale::Script codeToScript(const QByteArray &code);
     static QLocale::Country codeToCountry(const QByteArray &code);
@@ -59,10 +63,14 @@ public:
                                             QLocale::Script script,
                                             QLocale::Country country);
 
+
+    QLocale::MeasurementSystem measurementSystem() const;
+
     enum DoubleForm {
         DFExponent = 0,
         DFDecimal,
-        DFSignificantDigits
+        DFSignificantDigits,
+        _DFMax = DFSignificantDigits
     };
 
     enum Flags {
@@ -124,7 +132,7 @@ public:
     static qint64 bytearrayToLongLong(const char *num, int base, bool *ok);
     static quint64 bytearrayToUnsLongLong(const char *num, int base, bool *ok);
 
-    typedef QStdVector<char> CharBuff;
+    typedef QVarLengthArray<char, 32> CharBuff;
     bool numberToCLocale(const QString &num,
                          GroupSeparatorMode group_sep_mode,
                          CharBuff *result) const;
@@ -134,7 +142,7 @@ public:
     bool validateChars(const QString &str, NumberMode numMode, QByteArray *buff, int decDigits = -1) const;
 
     QString dateTimeToString(const QString &format, const QDate *date, const QTime *time,
-                             const QLocale *q, const bool isLocalTime) const;
+                             const QLocale *q) const;
 
     const QLocale::Language m_language;
     const QLocale::Script m_script;
@@ -149,15 +157,29 @@ public:
     const ushort m_minus;
     const ushort m_plus;
     const ushort m_exponential;
+    const ushort m_currency_digits;
     const uint m_zero;
+    const uint m_quotation_start;
+    const uint m_quotation_end;
+    const uint m_alternate_quotation_start;
+    const uint m_alternate_quotation_end;
     const char* m_language_endonym;
     const char* m_country_endonym;
+    const char* m_list_pattern_part_start;
+    const char* m_list_pattern_part_mid;
+    const char* m_list_pattern_part_end;
+    const char* m_list_pattern_part_two;
     const char* m_short_date_format;
     const char* m_long_date_format;
     const char* m_short_time_format;
     const char* m_long_time_format;
     const char* m_am;
     const char* m_pm;
+    const char* m_currency_symbol;
+    const char* m_currency_format;
+    const char* m_currency_negative_format;
+    const char* m_currency_iso_code;
+    const char* m_currency_display_name;
     const char* m_standalone_short_month_names[12];
     const char* m_standalone_long_month_names[12];
     const char* m_standalone_narrow_month_names[12];

@@ -21,6 +21,7 @@
 
 #include "qxml.h"
 #include "qtextcodec.h"
+#include "qbuffer.h"
 #include "qregexp.h"
 #include "qmap.h"
 #include "qhash.h"
@@ -209,7 +210,7 @@ public:
     int length;
     bool nextReturnedEndOfData;
 #ifndef QT_NO_TEXTCODEC
-    QTextConverter *encMapper;
+    QTextDecoder *encMapper;
 #endif
 
     QByteArray encodingDeclBytes;
@@ -1303,7 +1304,7 @@ QString QXmlInputSource::fromRawData(const QByteArray &data, bool beginning)
         Q_ASSERT(codec);
         mib = codec->mibEnum();
 
-        d->encMapper = new QTextConverter(codec->name());
+        d->encMapper = codec->makeDecoder();
     }
 
     QString input = d->encMapper->toUnicode(data.constData(), data.size());
@@ -1319,7 +1320,7 @@ QString QXmlInputSource::fromRawData(const QByteArray &data, bool beginning)
                 /* If the encoding is the same, we don't have to do toUnicode() all over again. */
                 if(codec->mibEnum() != mib) {
                     delete d->encMapper;
-                    d->encMapper = new QTextConverter(codec->name());
+                    d->encMapper = codec->makeDecoder();
 
                     /* The variable input can potentially be large, so we deallocate
                      * it before calling toUnicode() in order to avoid having two
@@ -2726,6 +2727,10 @@ void QXmlSimpleReaderPrivate::initIncrementalParsing()
     parse() to work incrementally, and making subsequent calls to the
     parseContinue() function, until all the data has been processed.
 
+    A common way to perform incremental parsing is to connect the \c
+    readyRead() signal of a \l{QNetworkReply} {network reply} a slot,
+    and handle the incoming data there. See QNetworkAccessManager.
+    
     Aspects of the parsing behavior can be adapted using setFeature()
     and setProperty().
     

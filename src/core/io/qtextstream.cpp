@@ -114,8 +114,35 @@
 
     \table
     \header \o Manipulator        \o Description
+    \row    \o \c bin             \o Same as setIntegerBase(2).
+    \row    \o \c oct             \o Same as setIntegerBase(8).
+    \row    \o \c dec             \o Same as setIntegerBase(10).
+    \row    \o \c hex             \o Same as setIntegerBase(16).
+    \row    \o \c showbase        \o Same as setNumberFlags(numberFlags() | ShowBase).
+    \row    \o \c forcesign       \o Same as setNumberFlags(numberFlags() | ForceSign).
+    \row    \o \c forcepoint      \o Same as setNumberFlags(numberFlags() | ForcePoint).
+    \row    \o \c noshowbase      \o Same as setNumberFlags(numberFlags() & ~ShowBase).
+    \row    \o \c noforcesign     \o Same as setNumberFlags(numberFlags() & ~ForceSign).
+    \row    \o \c noforcepoint    \o Same as setNumberFlags(numberFlags() & ~ForcePoint).
+    \row    \o \c uppercasebase   \o Same as setNumberFlags(numberFlags() | UppercaseBase).
+    \row    \o \c uppercasedigits \o Same as setNumberFlags(numberFlags() | UppercaseDigits).
+    \row    \o \c lowercasebase   \o Same as setNumberFlags(numberFlags() & ~UppercaseBase).
+    \row    \o \c lowercasedigits \o Same as setNumberFlags(numberFlags() & ~UppercaseDigits).
+    \row    \o \c fixed           \o Same as setRealNumberNotation(FixedNotation).
+    \row    \o \c scientific      \o Same as setRealNumberNotation(ScientificNotation).
+    \row    \o \c left            \o Same as setFieldAlignment(AlignLeft).
+    \row    \o \c right           \o Same as setFieldAlignment(AlignRight).
+    \row    \o \c center          \o Same as setFieldAlignment(AlignCenter).
     \row    \o \c endl            \o Same as operator<<('\n') and flush().
+    \row    \o \c flush           \o Same as flush().
+    \row    \o \c reset           \o Same as reset().
+    \row    \o \c ws              \o Same as skipWhiteSpace().
+    \row    \o \c bom             \o Same as setGenerateByteOrderMark(true).
     \endtable
+
+    In addition, Qt provides three global manipulators that take a
+    parameter: qSetFieldWidth(), qSetPadChar(), and
+    qSetRealNumberPrecision().
 
     \sa QDataStream, QIODevice, QFile, QBuffer, QTcpSocket, {Codecs Example}
 */
@@ -272,9 +299,9 @@ public:
 #ifndef QT_NO_TEXTCODEC
     // codec
     QTextCodec *codec;
-    QTextConverter readConverter;
-    QTextConverter writeConverter;
-    QTextConverter readConverterSaved;
+    QTextCodec::ConverterState readConverterState;
+    QTextCodec::ConverterState writeConverterState;
+    QTextCodec::ConverterState readConverterSavedState;
     bool autoDetectUnicode;
 #endif
 
@@ -310,7 +337,6 @@ public:
     inline void write(const QString &data);
     inline void putString(const QString &ch, bool number = false);
     void putNumber(qulonglong number, bool negative);
-    void writeBOM();
 
     // buffers
     bool fillReadBuffer(qint64 maxBytes = -1);
@@ -333,8 +359,6 @@ public:
 
     // status
     QTextStream::TextStatus status;
-    bool generatebom;
-    bool bomwritten;
 
     QLocale locale;
 };
@@ -384,14 +408,12 @@ void QTextStreamPrivate::reset()
 
 #ifndef QT_NO_TEXTCODEC
     codec = QTextCodec::codecForLocale();
-    readConverter = codec->converter();
-    writeConverter = codec->converter();
-    readConverterSaved.reset();
+    readConverterState = QTextCodec::ConverterState();
+    writeConverterState = QTextCodec::ConverterState();
+    readConverterSavedState = QTextCodec::ConverterState();
+    writeConverterState.flags |= QTextCodec::IgnoreHeader;
     autoDetectUnicode = true;
 #endif
-
-    generatebom = false;
-    bomwritten = false;
 }
 
 /*! \internal
@@ -423,6 +445,7 @@ bool QTextStreamPrivate::fillReadBuffer(qint64 maxBytes)
         codec = QTextCodec::codecForUtfText(buffer, codec);
         if (!codec) {
             codec = QTextCodec::codecForLocale();
+            writeConverterState.flags |= QTextCodec::IgnoreHeader;
         }
     }
 #if defined (QTEXTSTREAM_DEBUG)
@@ -442,7 +465,7 @@ bool QTextStreamPrivate::fillReadBuffer(qint64 maxBytes)
     int oldReadBufferSize = readBuffer.size();
 #ifndef QT_NO_TEXTCODEC
     // convert to unicode
-    readBuffer += readConverter.toUnicode(buffer.constData(), bytesRead);
+    readBuffer += codec->toUnicode(buffer.constData(), bytesRead, &readConverterState);
 #else
     readBuffer += QString::fromAscii(buffer.constData());
 #endif
@@ -520,11 +543,11 @@ void QTextStreamPrivate::flushWriteBuffer()
         codec = QTextCodec::codecForLocale();
 #if defined (QTEXTSTREAM_DEBUG)
     qDebug("QTextStreamPrivate::flushWriteBuffer(), using %s codec (%s generating BOM)",
-           codec->name().constData(), generatebom ? "" : "not");
+           codec->name().constData(), writeConverterState.flags & QTextCodec::IgnoreHeader ? "not" : "");
 #endif
 
     // convert from unicode to raw data
-    QByteArray data = writeConverter.fromUnicode(writeBuffer.data(), writeBuffer.size());
+    QByteArray data = codec->fromUnicode(writeBuffer.data(), writeBuffer.size(), &writeConverterState);
 #else
     QByteArray data = writeBuffer.toLocal8Bit();
 #endif
@@ -726,7 +749,7 @@ inline void QTextStreamPrivate::consume(int size)
 inline void QTextStreamPrivate::saveConverterState(qint64 newPos)
 {
 #ifndef QT_NO_TEXTCODEC
-    readConverterSaved = readConverter;
+    readConverterSavedState = readConverterState;
 #endif
 
     readBufferStartDevicePos = newPos;
@@ -738,7 +761,7 @@ inline void QTextStreamPrivate::saveConverterState(qint64 newPos)
 inline void QTextStreamPrivate::restoreToSavedConverterState()
 {
 #ifndef QT_NO_TEXTCODEC
-    readConverter = readConverterSaved;
+    readConverterState = readConverterSavedState;
 #endif
 }
 
@@ -746,10 +769,6 @@ inline void QTextStreamPrivate::restoreToSavedConverterState()
 */
 inline void QTextStreamPrivate::write(const QString &data)
 {
-    if (generatebom && !bomwritten) {
-        writeBOM();
-    }
-
     if (string) {
         // ### What about seek()??
         string->append(data);
@@ -805,6 +824,7 @@ inline void QTextStreamPrivate::putString(const QString &s, bool number)
     // handle padding
     int padSize = fieldWidth - s.size();
     if (padSize > 0) {
+        QString pad(padSize, padChar);
         if (fieldAlignment == QTextStream::AlignLeft) {
             tmp.append(QString(padSize, padChar));
         } else if (fieldAlignment == QTextStream::AlignRight
@@ -1030,9 +1050,10 @@ bool QTextStream::seek(qint64 pos)
 
 #ifndef QT_NO_TEXTCODEC
         // Reset the codec converter states.
-        d->readConverter.reset();
-        d->writeConverter.reset();
-        d->readConverterSaved.reset();
+        d->readConverterState = QTextCodec::ConverterState();
+        d->writeConverterState = QTextCodec::ConverterState();
+        d->readConverterSavedState = QTextCodec::ConverterState();
+        d->writeConverterState.flags |= QTextCodec::IgnoreHeader;
 #endif
         return true;
     }
@@ -2153,59 +2174,6 @@ void QTextStreamPrivate::putNumber(qulonglong number, bool negative)
 }
 
 /*!
-    \internal
- */
-void QTextStreamPrivate::writeBOM()
-{
-    Q_ASSERT(generatebom);
-    Q_ASSERT(!bomwritten);
-
-#ifndef QT_NO_TEXTCODEC
-    bomwritten = true;
-    const QByteArray codecname = codec->name();
-    const uchar* bomptr = nullptr;
-    int bomptrsize = 0;
-    if (qstricmp("UTF-32BE", codecname.constData()) == 0) {
-        bomptr = qt_utf32be_bom;
-        bomptrsize = sizeof(qt_utf32be_bom);
-    } else if (qstricmp("UTF-32LE", codecname.constData()) == 0) {
-        bomptr = qt_utf32le_bom;
-        bomptrsize = sizeof(qt_utf32le_bom);
-    } else if (qstricmp("UTF-16BE", codecname.constData()) == 0) {
-        bomptr = qt_utf16be_bom;
-        bomptrsize = sizeof(qt_utf16be_bom);
-    } else if (qstricmp("UTF-16LE", codecname.constData()) == 0) {
-        bomptr = qt_utf16le_bom;
-        bomptrsize = sizeof(qt_utf16le_bom);
-    } else if (qstricmp("UTF-32", codecname.constData()) == 0) {
-#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
-        bomptr = qt_utf32le_bom;
-        bomptrsize = sizeof(qt_utf32le_bom);
-#else
-        bomptr = qt_utf32be_bom;
-        bomptrsize = sizeof(qt_utf32be_bom);
-#endif
-    } else if (qstricmp("UTF-16", codecname.constData()) == 0) {
-#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
-        bomptr = qt_utf16le_bom;
-        bomptrsize = sizeof(qt_utf16le_bom);
-#else
-        bomptr = qt_utf16be_bom;
-        bomptrsize = sizeof(qt_utf16be_bom);
-#endif
-    }
-
-    if (bomptr && bomptrsize) {
-        if (string) {
-            string->append(QString::fromRawData(reinterpret_cast<const QChar*>(bomptr), bomptrsize / sizeof(QChar)));
-        } else {
-            device->write(QByteArray::fromRawData(reinterpret_cast<const char*>(bomptr), bomptrsize));
-        }
-    }
-#endif // QT_NO_TEXTCODEC
-}
-
-/*!
     Writes the character \a c to the stream, then returns a reference
     to the QTextStream.
 
@@ -2352,7 +2320,6 @@ QTextStream &QTextStream::operator<<(qulonglong i)
 */
 QTextStream &QTextStream::operator<<(float f)
 {
-    // TODO: implement and use QLocale::floatToString()
     return *this << double(f);
 }
 
@@ -2454,7 +2421,387 @@ QTextStream &QTextStream::operator<<(const char *string)
     return *this;
 }
 
+/*!
+    \overload
+
+    Writes \a ptr to the stream as a hexadecimal number with a base.
+*/
+
+QTextStream &QTextStream::operator<<(const void *ptr)
+{
+    Q_D(QTextStream);
+    CHECK_VALID_STREAM(*this);
+    int oldBase = d->integerBase;
+    NumberFlags oldFlags = d->numberFlags;
+    d->integerBase = 16;
+    d->numberFlags |= ShowBase;
+    d->putNumber(reinterpret_cast<quintptr>(ptr), false);
+    d->integerBase = oldBase;
+    d->numberFlags = oldFlags;
+    return *this;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setIntegerBase(2) on \a stream and returns \a
+    stream.
+
+    \sa oct(), dec(), hex(), {QTextStream manipulators}
+*/
+QTextStream &bin(QTextStream &stream)
+{
+    stream.setIntegerBase(2);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setIntegerBase(8) on \a stream and returns \a
+    stream.
+
+    \sa bin(), dec(), hex(), {QTextStream manipulators}
+*/
+QTextStream &oct(QTextStream &stream)
+{
+    stream.setIntegerBase(8);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setIntegerBase(10) on \a stream and returns \a
+    stream.
+
+    \sa bin(), oct(), hex(), {QTextStream manipulators}
+*/
+QTextStream &dec(QTextStream &stream)
+{
+    stream.setIntegerBase(10);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setIntegerBase(16) on \a stream and returns \a
+    stream.
+
+    \note The hex modifier can only be used for writing to streams.
+    \sa bin(), oct(), dec(), {QTextStream manipulators}
+*/
+QTextStream &hex(QTextStream &stream)
+{
+    stream.setIntegerBase(16);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() |
+    QTextStream::ShowBase) on \a stream and returns \a stream.
+
+    \sa noshowbase(), forcesign(), forcepoint(), {QTextStream manipulators}
+*/
+QTextStream &showbase(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() | QTextStream::ShowBase);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() |
+    QTextStream::ForceSign) on \a stream and returns \a stream.
+
+    \sa noforcesign(), forcepoint(), showbase(), {QTextStream manipulators}
+*/
+QTextStream &forcesign(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() | QTextStream::ForceSign);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() |
+    QTextStream::ForcePoint) on \a stream and returns \a stream.
+
+    \sa noforcepoint(), forcesign(), showbase(), {QTextStream manipulators}
+*/
+QTextStream &forcepoint(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() | QTextStream::ForcePoint);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() &
+    ~QTextStream::ShowBase) on \a stream and returns \a stream.
+
+    \sa showbase(), noforcesign(), noforcepoint(), {QTextStream manipulators}
+*/
+QTextStream &noshowbase(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() &= ~QTextStream::ShowBase);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() &
+    ~QTextStream::ForceSign) on \a stream and returns \a stream.
+
+    \sa forcesign(), noforcepoint(), noshowbase(), {QTextStream manipulators}
+*/
+QTextStream &noforcesign(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() &= ~QTextStream::ForceSign);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() &
+    ~QTextStream::ForcePoint) on \a stream and returns \a stream.
+
+    \sa forcepoint(), noforcesign(), noshowbase(), {QTextStream manipulators}
+*/
+QTextStream &noforcepoint(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() &= ~QTextStream::ForcePoint);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() |
+    QTextStream::UppercaseBase) on \a stream and returns \a stream.
+
+    \sa lowercasebase(), uppercasedigits(), {QTextStream manipulators}
+*/
+QTextStream &uppercasebase(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() | QTextStream::UppercaseBase);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() |
+    QTextStream::UppercaseDigits) on \a stream and returns \a stream.
+
+    \sa lowercasedigits(), uppercasebase(), {QTextStream manipulators}
+*/
+QTextStream &uppercasedigits(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() | QTextStream::UppercaseDigits);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() &
+    ~QTextStream::UppercaseBase) on \a stream and returns \a stream.
+
+    \sa uppercasebase(), lowercasedigits(), {QTextStream manipulators}
+*/
+QTextStream &lowercasebase(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() & ~QTextStream::UppercaseBase);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setNumberFlags(QTextStream::numberFlags() &
+    ~QTextStream::UppercaseDigits) on \a stream and returns \a stream.
+
+    \sa uppercasedigits(), lowercasebase(), {QTextStream manipulators}
+*/
+QTextStream &lowercasedigits(QTextStream &stream)
+{
+    stream.setNumberFlags(stream.numberFlags() & ~QTextStream::UppercaseDigits);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setRealNumberNotation(QTextStream::FixedNotation)
+    on \a stream and returns \a stream.
+
+    \sa scientific(), {QTextStream manipulators}
+*/
+QTextStream &fixed(QTextStream &stream)
+{
+    stream.setRealNumberNotation(QTextStream::FixedNotation);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setRealNumberNotation(QTextStream::ScientificNotation)
+    on \a stream and returns \a stream.
+
+    \sa fixed(), {QTextStream manipulators}
+*/
+QTextStream &scientific(QTextStream &stream)
+{
+    stream.setRealNumberNotation(QTextStream::ScientificNotation);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setFieldAlignment(QTextStream::AlignLeft)
+    on \a stream and returns \a stream.
+
+    \sa right(), center(), {QTextStream manipulators}
+*/
+QTextStream &left(QTextStream &stream)
+{
+    stream.setFieldAlignment(QTextStream::AlignLeft);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setFieldAlignment(QTextStream::AlignRight)
+    on \a stream and returns \a stream.
+
+    \sa left(), center(), {QTextStream manipulators}
+*/
+QTextStream &right(QTextStream &stream)
+{
+    stream.setFieldAlignment(QTextStream::AlignRight);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::setFieldAlignment(QTextStream::AlignCenter)
+    on \a stream and returns \a stream.
+
+    \sa left(), right(), {QTextStream manipulators}
+*/
+QTextStream &center(QTextStream &stream)
+{
+    stream.setFieldAlignment(QTextStream::AlignCenter);
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Writes '\n' to the \a stream and flushes the stream.
+
+    Equivalent to
+
+    \snippet doc/src/snippets/code/src_corelib_io_qtextstream.cpp 9
+
+    Note: On Windows, all '\n' characters are written as '\r\n' if
+    QTextStream's device or string is opened using the QIODevice::Text flag.
+
+    \sa flush(), reset(), {QTextStream manipulators}
+*/
+QTextStream &endl(QTextStream &stream)
+{
+    return stream << QLatin1Char('\n') << flush;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::flush() on \a stream and returns \a stream.
+
+    \sa endl(), reset(), {QTextStream manipulators}
+*/
+QTextStream &flush(QTextStream &stream)
+{
+    stream.flush();
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls QTextStream::reset() on \a stream and returns \a stream.
+
+    \sa flush(), {QTextStream manipulators}
+*/
+QTextStream &reset(QTextStream &stream)
+{
+    stream.reset();
+    return stream;
+}
+
+/*!
+    \relates QTextStream
+
+    Calls skipWhiteSpace() on \a stream and returns \a stream.
+
+    \sa {QTextStream manipulators}
+*/
+QTextStream &ws(QTextStream &stream)
+{
+    stream.skipWhiteSpace();
+    return stream;
+}
+
+/*!
+    \fn QTextStreamManipulator qSetFieldWidth(int width)
+    \relates QTextStream
+
+    Equivalent to QTextStream::setFieldWidth(\a width).
+*/
+
+/*!
+    \fn QTextStreamManipulator qSetPadChar(QChar ch)
+    \relates QTextStream
+
+    Equivalent to QTextStream::setPadChar(\a ch).
+*/
+
+/*!
+    \fn QTextStreamManipulator qSetRealNumberPrecision(int precision)
+    \relates QTextStream
+
+    Equivalent to QTextStream::setRealNumberPrecision(\a precision).
+*/
+
 #ifndef QT_NO_TEXTCODEC
+/*!
+    \relates QTextStream
+
+    Toggles insertion of the Byte Order Mark on \a stream when QTextStream is
+    used with a UTF codec.
+
+    \sa QTextStream::setGenerateByteOrderMark(), {QTextStream manipulators}
+*/
+QTextStream &bom(QTextStream &stream)
+{
+    stream.setGenerateByteOrderMark(true);
+    return stream;
+}
+
 /*!
     Sets the codec for this stream to \a codec. The codec is used for
     decoding any data that is read from the assigned device, and for
@@ -2480,8 +2827,6 @@ void QTextStream::setCodec(QTextCodec *codec)
         }
     }
     d->codec = codec;
-    d->readConverter = codec->converter();
-    d->writeConverter = codec->converter();
     if (seekPos >=0 && !d->readBuffer.isEmpty())
         seek(seekPos);
 }
@@ -2557,7 +2902,10 @@ void QTextStream::setGenerateByteOrderMark(bool generate)
 {
     Q_D(QTextStream);
     if (d->writeBuffer.isEmpty()) {
-        d->generatebom = generate;
+        if (generate)
+            d->writeConverterState.flags &= ~QTextCodec::IgnoreHeader;
+        else
+            d->writeConverterState.flags |= QTextCodec::IgnoreHeader;
     }
 }
 
@@ -2571,8 +2919,9 @@ void QTextStream::setGenerateByteOrderMark(bool generate)
 bool QTextStream::generateByteOrderMark() const
 {
     Q_D(const QTextStream);
-    return d->generatebom;
+    return (d->writeConverterState.flags & QTextCodec::IgnoreHeader) == 0;
 }
+
 #endif
 
 /*!
@@ -2605,23 +2954,6 @@ QLocale QTextStream::locale() const
     return d->locale;
 }
 
-/*!
-    \relates QTextStream
-
-    Writes '\n' to the \a stream and flushes the stream.
-
-    Equivalent to
-
-    \snippet doc/src/snippets/code/src_corelib_io_qtextstream.cpp 9
-
-    \sa flush(), reset(), {QTextStream manipulators}
-*/
-QTextStream &endl(QTextStream &stream)
-{
-    stream << QLatin1Char('\n');
-    stream.flush();
-    return stream;
-}
 
 QT_END_NAMESPACE
 

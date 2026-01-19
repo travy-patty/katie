@@ -37,8 +37,7 @@ QT_BEGIN_NAMESPACE
 extern QSizeF qt_paperSizeToQSizeF(QPrinter::PaperSize size);
 
 /* also adds a space at the end of the number */
-static const char *qt_real_to_string(qreal val, char *buf)
-{
+const char *qt_real_to_string(qreal val, char *buf) {
     const char *ret = buf;
 
     if (qIsNaN(val)) {
@@ -90,8 +89,7 @@ static const char *qt_real_to_string(qreal val, char *buf)
     return ret;
 }
 
-static const char *qt_int_to_string(int val, char *buf)
-{
+const char *qt_int_to_string(int val, char *buf) {
     const char *ret = buf;
     if (val < 0) {
         *(buf++) = '-';
@@ -213,6 +211,13 @@ namespace QPdf {
         dev->open(QIODevice::ReadWrite | QIODevice::Truncate);
     }
 
+    void ByteStream::constructor_helper(QByteArray *ba)
+    {
+        delete dev;
+        dev = new QBuffer(ba);
+        dev->open(QIODevice::ReadWrite);
+    }
+
     void ByteStream::prepareBuffer()
     {
         Q_ASSERT(!dev->isSequential());
@@ -239,18 +244,6 @@ namespace QPdf {
     }
 }
 
-QPdfPage::QPdfPage()
-    : QPdf::ByteStream(true) // Enable file backing
-{
-}
-
-void QPdfPage::streamImage(int w, int h, int object)
-{
-    *this << w << "0 0 " << -h << "0 " << h << "cm /Im" << object << " Do\n";
-    if (!images.contains(object))
-        images.append(object);
-}
-
 QByteArray QPdf::generatePath(const QPainterPath &path, const QTransform &matrix, PathFlags flags)
 {
     QByteArray result;
@@ -270,7 +263,7 @@ QByteArray QPdf::generatePath(const QPainterPath &path, const QTransform &matrix
                 s << "h\n";
             s << matrix.map(QPointF(elm.x, elm.y)) << "m\n";
             start = i;
-            break;
+                break;
         case QPainterPath::LineToElement:
             s << matrix.map(QPointF(elm.x, elm.y)) << "l\n";
             break;
@@ -511,7 +504,191 @@ QByteArray QPdf::patternForBrush(const QBrush &b)
     return pattern_for_brush[style];
 }
 
-static void moveToHook(qreal x, qreal y, void *data)
+#ifdef USE_NATIVE_GRADIENTS
+static void writeTriangleLine(uchar *&data, int xpos, int ypos, int xoff, int yoff, uint rgb, uchar flag, bool alpha)
+{
+    data[0] =  flag;
+    data[1] = (uchar)(xpos >> 16);
+    data[2] = (uchar)(xpos >> 8);
+    data[3] = (uchar)(xpos >> 0);
+    data[4] = (uchar)(ypos >> 16);
+    data[5] = (uchar)(ypos >> 8);
+    data[6] = (uchar)(ypos >> 0);
+    data += 7;
+    if (alpha) {
+        *data++ = (uchar)qAlpha(rgb);
+    } else {
+        *data++ = (uchar)qRed(rgb);
+        *data++ = (uchar)qGreen(rgb);
+        *data++ = (uchar)qBlue(rgb);
+    }
+    xpos += xoff;
+    ypos += yoff;
+    data[0] =  flag;
+    data[1] = (uchar)(xpos >> 16);
+    data[2] = (uchar)(xpos >> 8);
+    data[3] = (uchar)(xpos >> 0);
+    data[4] = (uchar)(ypos >> 16);
+    data[5] = (uchar)(ypos >> 8);
+    data[6] = (uchar)(ypos >> 0);
+    data += 7;
+    if (alpha) {
+        *data++ = (uchar)qAlpha(rgb);
+    } else {
+        *data++ = (uchar)qRed(rgb);
+        *data++ = (uchar)qGreen(rgb);
+        *data++ = (uchar)qBlue(rgb);
+    }
+}
+
+
+QByteArray QPdf::generateLinearGradientShader(const QLinearGradient *gradient, const QPointF *page_rect, bool alpha)
+{
+    // generate list of triangles with colors
+    QPointF start = gradient->start();
+    QPointF stop = gradient->finalStop();
+    QGradientStops stops = gradient->stops();
+    QPointF offset = stop - start;
+    QGradient::Spread spread = gradient->spread();
+
+    if (gradient->spread() == QGradient::ReflectSpread) {
+        offset *= 2;
+        for (int i = stops.size() - 2; i >= 0; --i) {
+            QGradientStop stop = stops.at(i);
+            stop.first = 2. - stop.first;
+            stops.append(stop);
+        }
+        for (int i = 0 ; i < stops.size(); ++i)
+            stops[i].first /= 2.;
+    }
+
+    QPointF orthogonal(offset.y(), -offset.x());
+    qreal length = offset.x()*offset.x() + offset.y()*offset.y();
+
+    // find the max and min values in offset and orth direction that are needed to cover
+    // the whole page
+    int off_min = INT_MAX;
+    int off_max = INT_MIN;
+    qreal ort_min = INT_MAX;
+    qreal ort_max = INT_MIN;
+    for (int i = 0; i < 4; ++i) {
+        qreal off = ((page_rect[i].x() - start.x()) * offset.x() + (page_rect[i].y() - start.y()) * offset.y())/length;
+        qreal ort = ((page_rect[i].x() - start.x()) * orthogonal.x() + (page_rect[i].y() - start.y()) * orthogonal.y())/length;
+        off_min = qMin(off_min, qFloor(off));
+        off_max = qMax(off_max, qCeil(off));
+        ort_min = qMin(ort_min, ort);
+        ort_max = qMax(ort_max, ort);
+    }
+    ort_min -= 1;
+    ort_max += 1;
+
+    start += off_min * offset + ort_min * orthogonal;
+    orthogonal *= (ort_max - ort_min);
+    int num = off_max - off_min;
+
+    QPointF gradient_rect[4] = { start,
+                                 start + orthogonal,
+                                 start + num*offset,
+                                 start + num*offset + orthogonal };
+    qreal xmin = gradient_rect[0].x();
+    qreal xmax = gradient_rect[0].x();
+    qreal ymin = gradient_rect[0].y();
+    qreal ymax = gradient_rect[0].y();
+    for (int i = 1; i < 4; ++i) {
+        xmin = qMin(xmin, gradient_rect[i].x());
+        xmax = qMax(xmax, gradient_rect[i].x());
+        ymin = qMin(ymin, gradient_rect[i].y());
+        ymax = qMax(ymax, gradient_rect[i].y());
+    }
+    xmin -= 1000;
+    xmax += 1000;
+    ymin -= 1000;
+    ymax += 1000;
+    start -= QPointF(xmin, ymin);
+    qreal factor_x = qreal(1<<24)/(xmax - xmin);
+    qreal factor_y = qreal(1<<24)/(ymax - ymin);
+    int xoff = (int)(orthogonal.x()*factor_x);
+    int yoff = (int)(orthogonal.y()*factor_y);
+
+    const int trianglessize = (spread == QGradient::PadSpread ? 20*(stops.size()+2) : 20*num*stops.size());
+    QByteArray triangles(trianglessize, Qt::Uninitialized);
+    uchar *data = (uchar *) triangles.data();
+    if (spread == QGradient::PadSpread) {
+        if (off_min > 0 || off_max < 1) {
+            // linear gradient outside of page
+            const QGradientStop &current_stop = off_min > 0 ? stops.at(stops.size()-1) : stops.at(0);
+            uint rgb = current_stop.second.rgba();
+            int xpos = (int)(start.x()*factor_x);
+            int ypos = (int)(start.y()*factor_y);
+            writeTriangleLine(data, xpos, ypos, xoff, yoff, rgb, 0, alpha);
+            start += num*offset;
+            xpos = (int)(start.x()*factor_x);
+            ypos = (int)(start.y()*factor_y);
+            writeTriangleLine(data, xpos, ypos, xoff, yoff, rgb, 1, alpha);
+        } else {
+            int flag = 0;
+            if (off_min < 0) {
+                uint rgb = stops.at(0).second.rgba();
+                int xpos = (int)(start.x()*factor_x);
+                int ypos = (int)(start.y()*factor_y);
+                writeTriangleLine(data, xpos, ypos, xoff, yoff, rgb, flag, alpha);
+                start -= off_min*offset;
+                flag = 1;
+            }
+            for (int s = 0; s < stops.size(); ++s) {
+                const QGradientStop &current_stop = stops.at(s);
+                uint rgb = current_stop.second.rgba();
+                int xpos = (int)(start.x()*factor_x);
+                int ypos = (int)(start.y()*factor_y);
+                writeTriangleLine(data, xpos, ypos, xoff, yoff, rgb, flag, alpha);
+                if (s < stops.size()-1)
+                    start += offset*(stops.at(s+1).first - stops.at(s).first);
+                flag = 1;
+            }
+            if (off_max > 1) {
+                start += (off_max - 1)*offset;
+                uint rgb = stops.at(stops.size()-1).second.rgba();
+                int xpos = (int)(start.x()*factor_x);
+                int ypos = (int)(start.y()*factor_y);
+                writeTriangleLine(data, xpos, ypos, xoff, yoff, rgb, flag, alpha);
+            }
+        }
+    } else {
+        for (int i = 0; i < num; ++i) {
+            uchar flag = 0;
+            for (int s = 0; s < stops.size(); ++s) {
+                uint rgb = stops.at(s).second.rgba();
+                int xpos = (int)(start.x()*factor_x);
+                int ypos = (int)(start.y()*factor_y);
+                writeTriangleLine(data, xpos, ypos, xoff, yoff, rgb, flag, alpha);
+                if (s < stops.size()-1)
+                    start += offset*(stops.at(s+1).first - stops.at(s).first);
+                flag = 1;
+            }
+        }
+    }
+    triangles.resize((char *)data - triangles.constData());
+
+    QByteArray shader;
+    QPdf::ByteStream s(&shader);
+    s << "<<\n"
+        "/ShadingType 4\n"
+        "/ColorSpace " << (alpha ? "/DeviceGray\n" : "/DeviceRGB\n") <<
+        "/AntiAlias true\n"
+        "/BitsPerCoordinate 24\n"
+        "/BitsPerComponent 8\n"
+        "/BitsPerFlag 8\n"
+        "/Decode [" << xmin << xmax << ymin << ymax << (alpha ? "0 1]\n" : "0 1 0 1 0 1]\n") <<
+        "/AntiAlias true\n"
+        "/Length " << triangles.length() << "\n"
+        ">>\n"
+        "stream\n" << triangles << "endstream\n"
+        "endobj\n";
+    return shader;
+}
+#endif
+
+static void moveToHook(qfixed x, qfixed y, void *data)
 {
     QPdf::Stroker *t = (QPdf::Stroker *)data;
     if (!t->first)
@@ -522,7 +699,7 @@ static void moveToHook(qreal x, qreal y, void *data)
     t->first = false;
 }
 
-static void lineToHook(qreal x, qreal y, void *data)
+static void lineToHook(qfixed x, qfixed y, void *data)
 {
     QPdf::Stroker *t = (QPdf::Stroker *)data;
     if (!t->cosmeticPen)
@@ -530,9 +707,9 @@ static void lineToHook(qreal x, qreal y, void *data)
     *t->stream << x << y << "l\n";
 }
 
-static void cubicToHook(qreal c1x, qreal c1y,
-                        qreal c2x, qreal c2y,
-                        qreal ex, qreal ey,
+static void cubicToHook(qfixed c1x, qfixed c1y,
+                        qfixed c2x, qfixed c2y,
+                        qfixed ex, qfixed ey,
                         void *data)
 {
     QPdf::Stroker *t = (QPdf::Stroker *)data;
@@ -733,13 +910,13 @@ QPdfBaseEngine::QPdfBaseEngine(QPdfBaseEnginePrivate &dd, PaintEngineFeatures f)
     } else
 #endif
     {
-        d->printerName = qGetEnv("PRINTER");
+        d->printerName = QString::fromLocal8Bit(qgetenv("PRINTER"));
         if (d->printerName.isEmpty())
-            d->printerName = qGetEnv("LPDEST");
+            d->printerName = QString::fromLocal8Bit(qgetenv("LPDEST"));
         if (d->printerName.isEmpty())
-            d->printerName = qGetEnv("NPRINTER");
+            d->printerName = QString::fromLocal8Bit(qgetenv("NPRINTER"));
         if (d->printerName.isEmpty())
-            d->printerName = qGetEnv("NGPRINTER");
+            d->printerName = QString::fromLocal8Bit(qgetenv("NGPRINTER"));
     }
 }
 
@@ -917,6 +1094,7 @@ void QPdfBaseEngine::drawTextItem(const QPointF &p, const QTextItem &textItem)
     setBrush();
 
     const QTextItemInt &ti = static_cast<const QTextItemInt &>(textItem);
+    Q_ASSERT(ti.fontEngine->type() != QFontEngine::Multi);
     d->drawTextItem(p, ti);
     d->hasPen = hp;
     d->brush = b;
@@ -1160,6 +1338,10 @@ int QPdfBaseEngine::metric(QPaintDevice::PaintDeviceMetric metricType) const
     case QPaintDevice::PdmDpiY:
         val = d->resolution;
         break;
+    case QPaintDevice::PdmPhysicalDpiX:
+    case QPaintDevice::PdmPhysicalDpiY:
+        val = 1200;
+        break;
     case QPaintDevice::PdmWidthMM:
         val = qRound(r.width()*25.4/d->resolution);
         break;
@@ -1204,6 +1386,9 @@ void QPdfBaseEngine::setProperty(PrintEnginePropertyKey key, const QVariant &val
         break;
     case PPK_Orientation:
         d->orientation = QPrinter::Orientation(value.toInt());
+        break;
+    case PPK_OutputFileName:
+        d->outputFileName = value.toString();
         break;
     case PPK_PageOrder:
         d->pageOrder = QPrinter::PageOrder(value.toInt());
@@ -1304,6 +1489,9 @@ QVariant QPdfBaseEngine::property(PrintEnginePropertyKey key) const
     case PPK_Orientation:
         ret = d->orientation;
         break;
+    case PPK_OutputFileName:
+        ret = d->outputFileName;
+        break;
     case PPK_PageOrder:
         ret = d->pageOrder;
         break;
@@ -1372,7 +1560,7 @@ QVariant QPdfBaseEngine::property(PrintEnginePropertyKey key) const
     return ret;
 }
 
-QPdfBaseEnginePrivate::QPdfBaseEnginePrivate()
+QPdfBaseEnginePrivate::QPdfBaseEnginePrivate(QPrinter::PrinterMode m)
     : clipEnabled(false), allClipped(false), hasPen(true), hasBrush(false), simplePen(false),
       useAlphaEngine(false),
       outDevice(0), fd(-1),
@@ -1382,7 +1570,12 @@ QPdfBaseEnginePrivate::QPdfBaseEnginePrivate()
       hasCustomPageMargins(false),
       leftMargin(0), topMargin(0), rightMargin(0), bottomMargin(0)
 {
-    resolution = QX11Info::appDpiY();
+    resolution = 72;
+    if (m == QPrinter::HighResolution)
+        resolution = 1200;
+    else if (m == QPrinter::ScreenResolution)
+        resolution = QX11Info::appDpiY();
+
     postscript = false;
     currentObject = 1;
     currentPage = 0;
@@ -1418,11 +1611,18 @@ bool QPdfBaseEngine::end()
 
 bool QPdfBaseEnginePrivate::openPrintDevice()
 {
-    if (outDevice)
+    if(outDevice)
         return false;
 
+    if (!outputFileName.isEmpty()) {
+        QFile *file = new QFile(outputFileName);
+        if (! file->open(QFile::WriteOnly|QFile::Truncate)) {
+            delete file;
+            return false;
+        }
+        outDevice = file;
 #if !defined(QT_NO_CUPS)
-    if (QCUPSSupport::isAvailable()) {
+    } else if (QCUPSSupport::isAvailable()) {
         QCUPSSupport cups;
         QPair<int, QString> ret = cups.tempFd();
         if (ret.first < 0) {
@@ -1431,15 +1631,9 @@ bool QPdfBaseEnginePrivate::openPrintDevice()
         }
         cupsTempFile = ret.second;
         outDevice = new QFile();
-        qobject_cast<QFile*>(outDevice)->open(ret.first, QIODevice::WriteOnly);
+        static_cast<QFile *>(outDevice)->open(ret.first, QIODevice::WriteOnly);
         fd = ret.first;
-    }
 #endif
-
-    // dummy device as required by PS header generator for example
-    if (!outDevice) {
-        outDevice = new QTemporaryFile();
-        qobject_cast<QTemporaryFile*>(outDevice)->open();
     }
 
     return true;
@@ -1460,6 +1654,7 @@ void QPdfBaseEnginePrivate::closePrintDevice()
     if (!cupsTempFile.isEmpty()) {
         QString tempFile = cupsTempFile;
         cupsTempFile.clear();
+        QCUPSSupport cups;
 
         // Set up print options.
         QByteArray prnName;
@@ -1526,7 +1721,6 @@ void QPdfBaseEnginePrivate::closePrintDevice()
         }
 
         // Print the file.
-        QCUPSSupport cups;
         cups_option_t* optPtr = cupsOptStruct.size() ? &cupsOptStruct.first() : 0;
         cups.printFile(prnName.constData(), tempFile.toLocal8Bit().constData(),
                 title.toLocal8Bit().constData(), cupsOptStruct.size(), optPtr);
@@ -1572,9 +1766,11 @@ void QPdfBaseEnginePrivate::drawTextItem(const QPointF &p, const QTextItemInt &t
         currentPage->fonts.append(font->object_id);
 
     const qreal size = ti.fontEngine->fontDef.pixelSize;
-    QStdVector<glyph_t> glyphs(ti.glyphs.numGlyphs);
-    QStdVector<QFixedPoint> positions(ti.glyphs.numGlyphs);
-    ti.fontEngine->getGlyphPositions(ti.glyphs, p, glyphs, positions);
+    QVarLengthArray<glyph_t> glyphs;
+    QVarLengthArray<QFixedPoint> positions;
+    QTransform m = QTransform::fromTranslate(p.x(), p.y());
+    ti.fontEngine->getGlyphPositions(ti.glyphs, m, ti.flags,
+                                     glyphs, positions);
     if (glyphs.size() == 0)
         return;
     const int synthesized = ti.fontEngine->synthesized();
@@ -1582,7 +1778,9 @@ void QPdfBaseEnginePrivate::drawTextItem(const QPointF &p, const QTextItemInt &t
 
     *currentPage << "BT\n"
                  << "/F" << font->object_id << size << "Tf "
-                 << stretch << "0 0 -1 0 0 Tm\n";
+                 << stretch << (synthesized & QFontEngine::SynthesizedItalic
+                                ? "0 .3 -1 0 0 Tm\n"
+                                : "0 0 -1 0 0 Tm\n");
 
 
 #if 0
@@ -1613,6 +1811,8 @@ void QPdfBaseEnginePrivate::drawTextItem(const QPointF &p, const QTextItemInt &t
     for (int i = 0; i < glyphs.size(); ++i) {
         qreal x = positions[i].x.toReal();
         qreal y = positions[i].y.toReal();
+        if (synthesized & QFontEngine::SynthesizedItalic)
+            x += .3*y;
         x /= stretch;
         QSTACKARRAY(char, buf, 5);
         int g = font->addGlyph(glyphs[i]);
@@ -1620,6 +1820,28 @@ void QPdfBaseEnginePrivate::drawTextItem(const QPointF &p, const QTextItemInt &t
                      << QPdf::toHex((ushort)g, buf) << "> Tj\n";
         last_x = x;
         last_y = y;
+    }
+    if (synthesized & QFontEngine::SynthesizedBold) {
+        *currentPage << stretch << (synthesized & QFontEngine::SynthesizedItalic
+                            ? "0 .3 -1 0 0 Tm\n"
+                            : "0 0 -1 0 0 Tm\n");
+        *currentPage << "/Span << /ActualText <> >> BDC\n";
+        last_x = 0.5*fe->lineThickness().toReal();
+        last_y = 0.;
+        for (int i = 0; i < glyphs.size(); ++i) {
+            qreal x = positions[i].x.toReal();
+            qreal y = positions[i].y.toReal();
+            if (synthesized & QFontEngine::SynthesizedItalic)
+                x += .3*y;
+            x /= stretch;
+            QSTACKARRAY(char, buf, 5);
+            int g = font->addGlyph(glyphs[i]);
+            *currentPage << x - last_x << last_y - y << "Td <"
+                        << QPdf::toHex((ushort)g, buf) << "> Tj\n";
+            last_x = x;
+            last_y = y;
+        }
+        *currentPage << "EMC\n";
     }
 #endif
 

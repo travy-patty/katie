@@ -70,6 +70,7 @@ class Q_GUI_EXPORT QTextDocument : public QObject
     Q_PROPERTY(bool modified READ isModified WRITE setModified DESIGNABLE false)
     Q_PROPERTY(QSizeF pageSize READ pageSize WRITE setPageSize)
     Q_PROPERTY(QFont defaultFont READ defaultFont WRITE setDefaultFont)
+    Q_PROPERTY(bool useDesignMetrics READ useDesignMetrics WRITE setUseDesignMetrics)
     Q_PROPERTY(QSizeF size READ size)
     Q_PROPERTY(qreal textWidth READ textWidth WRITE setTextWidth)
     Q_PROPERTY(int blockCount READ blockCount)
@@ -180,6 +181,9 @@ public:
 
     void markContentsDirty(int from, int length);
 
+    void setUseDesignMetrics(bool b);
+    bool useDesignMetrics() const;
+
     void drawContents(QPainter *painter, const QRectF &rect = QRectF());
 
     void setTextWidth(qreal width);
@@ -220,6 +224,9 @@ public:
 
     QTextOption defaultTextOption() const;
     void setDefaultTextOption(const QTextOption &option);
+
+    Qt::CursorMoveStyle defaultCursorMoveStyle() const;
+    void setDefaultCursorMoveStyle(Qt::CursorMoveStyle style);
 
 Q_SIGNALS:
     void contentsChange(int from, int charsRemoves, int charsAdded);

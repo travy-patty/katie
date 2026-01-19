@@ -37,25 +37,27 @@
 
 QT_BEGIN_NAMESPACE
 
+class QPngHandlerPrivate;
 class QPngHandler : public QImageIOHandler
 {
 public:
     QPngHandler();
     ~QPngHandler();
 
-    bool canRead() const final;
-    bool read(QImage *image) final;
-    bool write(const QImage &image) final;
+    bool canRead() const;
+    bool read(QImage *image);
+    bool write(const QImage &image);
 
-    bool supportsOption(QImageIOHandler::ImageOption option) const final;
-    void setOption(QImageIOHandler::ImageOption option, const QVariant &value) final;
+    QByteArray name() const;
 
-    QByteArray name() const final;
+    QVariant option(ImageOption option) const;
+    void setOption(ImageOption option, const QVariant &value);
+    bool supportsOption(ImageOption option) const;
 
     static bool canRead(QIODevice *device);
 
 private:
-    int m_compression;
+    QPngHandlerPrivate *d;
 };
 
 QT_END_NAMESPACE

@@ -1,4 +1,4 @@
-# Copyright (C) 2015 Ivailo Monev <xakepa10@gmail.com>
+# Copyright (C) 2015, Ivailo Monev, <xakepa10@gmail.com>
 # Redistribution and use is allowed according to the terms of the BSD license.
 
 # a function to append definitions to KATIE_DEFINITIONS which is stored in
@@ -29,6 +29,9 @@ endfunction()
 
 # a function to check for C function/definition, works for external functions
 function(KATIE_CHECK_DEFINED FORDEFINITION FROMHEADER)
+    # see comment in top-level CMake file
+    set(CMAKE_REQUIRED_INCLUDES /usr/X11R6/include /usr/X11R7/include /usr/pkg/include /usr/local/include /usr/include)
+    set(CMAKE_REQUIRED_LINK_OPTIONS -L/usr/X11R6/lib -L/usr/X11R7/lib -L/usr/pkg/lib -L/usr/local/lib -L/usr/lib -L/lib)
     check_cxx_source_compiles(
         "
 #include <stdio.h>
@@ -210,7 +213,7 @@ macro(KATIE_UNITY_EXCLUDE ARG1)
 endmacro()
 
 # a function to create an array of source files for a target setting up proper
-# dependency for the moc/uic generated resources
+# dependency for the moc/uic/rcc generated resources
 function(KATIE_SETUP_TARGET FORTARGET)
     get_directory_property(dirdefs COMPILE_DEFINITIONS)
     get_directory_property(dirincs INCLUDE_DIRECTORIES)
@@ -238,6 +241,16 @@ function(KATIE_SETUP_TARGET FORTARGET)
                 OUTPUT "${rscout}"
             )
             set_property(SOURCE "${fileabs}" APPEND PROPERTY OBJECT_DEPENDS "${rscout}")
+        elseif("${fileext}" STREQUAL ".qrc")
+            set(rscout "${rscpath}/qrc_${filename}.cpp")
+            make_directory("${rscpath}")
+            include_directories("${rscpath}")
+            add_custom_command(
+                COMMAND "${CMAKE_BINARY_DIR}/exec.sh" "${CMAKE_BINARY_DIR}/bin/rcc${KATIE_TOOLS_SUFFIX}" "${fileabs}" -o "${rscout}" -name "${filename}"
+                DEPENDS "rcc"
+                OUTPUT "${rscout}"
+            )
+            set_property(SOURCE "${fileabs}" APPEND PROPERTY OBJECT_DEPENDS "${rscout}")
         elseif("${fileext}" MATCHES "(.c|.h|.hpp|.cc|.cpp)")
             file(READ "${fileabs}" rsccontent)
             if("${rsccontent}" MATCHES "(Q_OBJECT|Q_OBJECT_FAKE|Q_GADGET)")
@@ -252,7 +265,7 @@ function(KATIE_SETUP_TARGET FORTARGET)
                 set_property(SOURCE "${fileabs}" APPEND PROPERTY OBJECT_DEPENDS "${rscout}")
             endif()
         else()
-            message(SEND_ERROR "Unknown source type in sources list: ${fileabs}")
+            message(SEND_ERROR "Unkown source type in sources list: ${fileabs}")
         endif()
     endforeach()
 
@@ -269,6 +282,30 @@ add_custom_target(plugins_dependant_tests)
 function(KATIE_SETUP_PLUGIN FORPLUGIN)
     add_dependencies(plugins_dependant_tests ${FORPLUGIN})
 endfunction()
+
+# a macro to ensure that object targets are build with PIC if the target they
+# are going to be used in (like $<TARGET_OBJECTS:foo>) is build with PIC or
+# PIC has been enabled for all module/library/executable targets. in addition
+# the macro will add the object include directories and definitions to the
+# target properties
+macro(KATIE_SETUP_OBJECT FORTARGET)
+    get_target_property(target_pic ${FORTARGET} POSITION_INDEPENDENT_CODE)
+
+    foreach(objtarget ${ARGN})
+        if(CMAKE_POSITION_INDEPENDENT_CODE OR target_pic)
+            set_target_properties(${objtarget} PROPERTIES
+                POSITION_INDEPENDENT_CODE TRUE
+            )
+        endif()
+
+        get_target_property(object_definitions ${objtarget} COMPILE_DEFINITIONS)
+        get_target_property(object_includes ${objtarget} INCLUDE_DIRECTORIES)
+        if(object_definitions)
+            target_compile_definitions(${FORTARGET} PRIVATE ${object_definitions})
+        endif()
+        target_include_directories(${FORTARGET} PRIVATE ${object_includes})
+    endforeach()
+endmacro()
 
 # a macro to remove conditional code from headers which is only relevant to the
 # process of building Katie itself
@@ -305,6 +342,29 @@ macro(KATIE_TEST TESTNAME TESTSOURCES)
     )
 endmacro()
 
+# a macro to add D-Bus tests easily by setting them up with the assumptions they make
+macro(KATIE_DBUS_TEST TESTNAME TESTSOURCES)
+    katie_setup_target(${TESTNAME} ${TESTSOURCES} ${ARGN})
+
+    add_executable(${TESTNAME} ${${TESTNAME}_SOURCES})
+    add_dependencies(${TESTNAME} plugins_dependant_tests)
+
+    target_link_libraries(${TESTNAME} KtCore KtDBus KtTest)
+    target_compile_definitions(
+        ${TESTNAME} PRIVATE
+        -DSRCDIR="${CMAKE_CURRENT_SOURCE_DIR}/"
+    )
+    set_target_properties(
+        ${TESTNAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+
+    add_test(
+        NAME ${TESTNAME}
+        COMMAND "${CMAKE_BINARY_DIR}/dbus.sh" "${CMAKE_CURRENT_BINARY_DIR}/${TESTNAME}"
+    )
+endmacro()
+
 # a macro to add tests that require GUI easily by setting them up with the assumptions they make
 macro(KATIE_GUI_TEST TESTNAME TESTSOURCES)
     katie_setup_target(${TESTNAME} ${TESTSOURCES} ${ARGN})
@@ -325,6 +385,6 @@ macro(KATIE_GUI_TEST TESTNAME TESTSOURCES)
 
     add_test(
         NAME ${TESTNAME}
-        COMMAND "${CMAKE_BINARY_DIR}/exec.sh" "${CMAKE_CURRENT_BINARY_DIR}/${TESTNAME}"
+        COMMAND "${CMAKE_BINARY_DIR}/xvfb.sh" "${CMAKE_CURRENT_BINARY_DIR}/${TESTNAME}"
     )
 endmacro()

@@ -25,7 +25,6 @@
 #include "qmatrix.h"
 #include "qtransform.h"
 #include "qguicommon_p.h"
-#include "qcorecommon_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -1176,6 +1175,55 @@ void QMatrix4x4::projectedRotate(qreal angle, qreal x, qreal y, qreal z)
         flagBits = Rotation;
 }
 
+#ifndef QT_NO_QUATERNION
+
+/*!
+    Multiples this matrix by another that rotates coordinates according
+    to a specified \a quaternion.  The \a quaternion is assumed to have
+    been normalized.
+
+    \sa scale(), translate(), QQuaternion
+*/
+void QMatrix4x4::rotate(const QQuaternion& quaternion)
+{
+    // Algorithm from:
+    // http://www.j3d.org/matrix_faq/matrfaq_latest.html#Q54
+    QMatrix4x4 m(1);
+    qreal xx = quaternion.x() * quaternion.x();
+    qreal xy = quaternion.x() * quaternion.y();
+    qreal xz = quaternion.x() * quaternion.z();
+    qreal xw = quaternion.x() * quaternion.scalar();
+    qreal yy = quaternion.y() * quaternion.y();
+    qreal yz = quaternion.y() * quaternion.z();
+    qreal yw = quaternion.y() * quaternion.scalar();
+    qreal zz = quaternion.z() * quaternion.z();
+    qreal zw = quaternion.z() * quaternion.scalar();
+    m.m[0][0] = 1.0f - 2 * (yy + zz);
+    m.m[1][0] =        2 * (xy - zw);
+    m.m[2][0] =        2 * (xz + yw);
+    m.m[3][0] = 0.0f;
+    m.m[0][1] =        2 * (xy + zw);
+    m.m[1][1] = 1.0f - 2 * (xx + zz);
+    m.m[2][1] =        2 * (yz - xw);
+    m.m[3][1] = 0.0f;
+    m.m[0][2] =        2 * (xz - yw);
+    m.m[1][2] =        2 * (yz + xw);
+    m.m[2][2] = 1.0f - 2 * (xx + yy);
+    m.m[3][2] = 0.0f;
+    m.m[0][3] = 0.0f;
+    m.m[1][3] = 0.0f;
+    m.m[2][3] = 0.0f;
+    m.m[3][3] = 1.0f;
+    int flags = flagBits;
+    *this *= m;
+    if (flags != Identity)
+        flagBits = flags | Rotation;
+    else
+        flagBits = Rotation;
+}
+
+#endif
+
 /*!
     \overload
 
@@ -1765,6 +1813,7 @@ QMatrix4x4::operator QVariant() const
 }
 
 #ifndef QT_NO_DEBUG_STREAM
+
 QDebug operator<<(QDebug dbg, const QMatrix4x4 &m)
 {
     // Create a string that represents the matrix type.
@@ -1783,22 +1832,13 @@ QDebug operator<<(QDebug dbg, const QMatrix4x4 &m)
         bits = bits.left(bits.size() - 1);
 
     // Output in row-major order because it is more human-readable.
-    QSTACKARRAY(char, snprintfbuf, 1024);
-    ::snprintf(
-        snprintfbuf, sizeof(snprintfbuf),
-        "QMatrix4x4(type: %s\n"
-        "          %f %f %f %f\n"
-        "          %f %f %f %f\n"
-        "          %f %f %f %f\n"
-        "          %f %f %f %f\n"
-        ")",
-        bits.constData(),
-        m(0, 0), m(0, 1), m(0, 2), m(0, 3),
-        m(1, 0), m(1, 1), m(1, 2), m(1, 3),
-        m(2, 0), m(2, 1), m(2, 2), m(2, 3),
-        m(3, 0), m(3, 1), m(3, 2), m(3, 3)
-    );
-    dbg.nospace() << snprintfbuf;
+    dbg.nospace() << "QMatrix4x4(type:" << bits.constData() << endl
+        << qSetFieldWidth(10)
+        << m(0, 0) << m(0, 1) << m(0, 2) << m(0, 3) << endl
+        << m(1, 0) << m(1, 1) << m(1, 2) << m(1, 3) << endl
+        << m(2, 0) << m(2, 1) << m(2, 2) << m(2, 3) << endl
+        << m(3, 0) << m(3, 1) << m(3, 2) << m(3, 3) << endl
+        << qSetFieldWidth(0) << ')';
     return dbg.space();
 }
 
@@ -1820,7 +1860,7 @@ QDataStream &operator<<(QDataStream &stream, const QMatrix4x4 &matrix)
 {
     for (int row = 0; row < 4; ++row)
         for (int col = 0; col < 4; ++col)
-            stream << qreal(matrix(row, col));
+            stream << double(matrix(row, col));
     return stream;
 }
 
@@ -1836,11 +1876,11 @@ QDataStream &operator<<(QDataStream &stream, const QMatrix4x4 &matrix)
 
 QDataStream &operator>>(QDataStream &stream, QMatrix4x4 &matrix)
 {
-    qreal x = 0.0;
+    double x;
     for (int row = 0; row < 4; ++row) {
         for (int col = 0; col < 4; ++col) {
             stream >> x;
-            matrix(row, col) = x;
+            matrix(row, col) = qreal(x);
         }
     }
     matrix.optimize();

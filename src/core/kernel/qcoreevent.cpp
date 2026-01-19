@@ -22,8 +22,9 @@
 #include "qcoreevent.h"
 #include "qcoreapplication.h"
 #include "qcoreapplication_p.h"
+
 #include "qmutex.h"
-#include "qstdcontainers_p.h"
+#include "qset.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -72,6 +73,9 @@ QT_BEGIN_NAMESPACE
     types and the specialized classes for each type are as follows:
 
     \value None                             Not an event.
+    \value AccessibilityDescription         Used to query accessibility description texts (QAccessibleEvent).
+    \value AccessibilityHelp                Used to query accessibility help texts (QAccessibleEvent).
+    \value AccessibilityPrepare             Accessibility information is requested.
     \value ActionAdded                      A new action has been added (QActionEvent).
     \value ActionChanged                    An action has been changed (QActionEvent).
     \value ActionRemoved                    An action has been removed (QActionEvent).
@@ -134,6 +138,10 @@ QT_BEGIN_NAMESPACE
     \value Leave                            Mouse leaves widget's boundaries.
     \value LeaveWhatsThisMode               Send to toplevel widgets when the application leaves "What's This?" mode.
     \value LocaleChange                     The system locale has changed.
+    \value NonClientAreaMouseButtonDblClick A mouse double click occurred outside the client area.
+    \value NonClientAreaMouseButtonPress    A mouse button press occurred outside the client area.
+    \value NonClientAreaMouseButtonRelease  A mouse button release occurred outside the client area.
+    \value NonClientAreaMouseMove           A mouse move occurred outside the client area.
     \value MetaCall                         An asynchronous method invocation via QMetaObject::invokeMethod().
     \value ModifiedChange                   Widgets modification state has been changed.
     \value MouseButtonDblClick              Mouse press again (QMouseEvent).
@@ -199,6 +207,8 @@ QT_BEGIN_NAMESPACE
     \omitvalue ShowWindowRequest
     \omitvalue Style
     \omitvalue ThreadChange
+    \omitvalue NetworkReplyUpdated
+    \omitvalue FutureCallOut
 */
 
 /*!
@@ -277,9 +287,13 @@ QEvent::~QEvent()
     The return value of this function is not defined for paint events.
 */
 
-typedef QStdVector<int> QEventUserEventList;
-Q_GLOBAL_STATIC(QMutex, qGlobalUserEventsMutex)
-Q_GLOBAL_STATIC(QEventUserEventList, qGlobalUserEvents)
+class QEventUserEventRegistration
+{
+public:
+    QMutex mutex;
+    QSet<int> set;
+};
+Q_GLOBAL_STATIC(QEventUserEventRegistration, userEventRegistrationHelper)
 
 /*!
     \since 4.4
@@ -293,23 +307,25 @@ Q_GLOBAL_STATIC(QEventUserEventList, qGlobalUserEvents)
 */
 int QEvent::registerEventType(int hint)
 {
-    QMutexLocker locker(qGlobalUserEventsMutex());
-    QEventUserEventList *userEventRegistration = qGlobalUserEvents();
+    QEventUserEventRegistration *userEventRegistration
+        = userEventRegistrationHelper();
     if (!userEventRegistration)
         return -1;
 
+    QMutexLocker locker(&userEventRegistration->mutex);
+
     // if the type hint hasn't been registered yet, take it
-    if (hint >= QEvent::User && hint <= QEvent::MaxUser && !userEventRegistration->contains(hint)) {
-        userEventRegistration->append(hint);
+    if (hint >= QEvent::User && hint <= QEvent::MaxUser && !userEventRegistration->set.contains(hint)) {
+        userEventRegistration->set.insert(hint);
         return hint;
     }
 
     // find a free event type, starting at MaxUser and decreasing
     int id = QEvent::MaxUser;
-    while (userEventRegistration->contains(id) && id >= QEvent::User)
+    while (userEventRegistration->set.contains(id) && id >= QEvent::User)
         --id;
     if (id >= QEvent::User) {
-        userEventRegistration->append(id);
+        userEventRegistration->set.insert(id);
         return id;
     }
     return -1;

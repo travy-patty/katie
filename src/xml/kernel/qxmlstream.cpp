@@ -307,6 +307,18 @@ QXmlStreamEntityResolver *QXmlStreamReader::entityResolver() const
   from the PrematureEndOfDocumentError error and continues parsing the
   new data with the next call to readNext().
 
+  For example, if your application reads data from the network using a
+  \l{QNetworkAccessManager} {network access manager}, you would issue
+  a \l{QNetworkRequest} {network request} to the manager and receive a
+  \l{QNetworkReply} {network reply} in return. Since a QNetworkReply
+  is a QIODevice, you connect its \l{QNetworkReply::readyRead()}
+  {readyRead()} signal to a custom slot, e.g. \c{slotReadyRead()} in
+  the code snippet shown in the discussion for QNetworkAccessManager.
+  In this slot, you read all available data with
+  \l{QNetworkReply::readAll()} {readAll()} and pass it to the XML
+  stream reader using addData(). Then you call your custom parsing
+  function that reads the XML events from the reader.
+
   \section1 Performance and memory consumption
 
   QXmlStreamReader is memory-conservative by design, since it doesn't
@@ -369,7 +381,7 @@ QXmlStreamReader::QXmlStreamReader(const QString &data)
     d->dataBuffer = data.toLatin1();
 #else
     d->dataBuffer = d->codec->fromUnicode(data);
-    d->decoder = new QTextConverter(d->codec->name());
+    d->decoder = d->codec->makeDecoder();
 #endif
     d->lockEncoding = true;
 
@@ -1358,10 +1370,10 @@ ushort QXmlStreamReaderPrivate::getChar_helper()
         QTextCodec *fallback = QTextCodec::codecForName("UTF-8");
         codec = QTextCodec::codecForUtfText(rawReadBuffer, fallback);
         Q_ASSERT(codec);
-        decoder = new QTextConverter(codec->name());
+        decoder = codec->makeDecoder();
     }
 
-    readBuffer = decoder->toUnicode(rawReadBuffer.constData(), nbytesread);
+    decoder->toUnicode(&readBuffer, rawReadBuffer.constData(), nbytesread);
 
     if(lockEncoding && decoder->hasFailure()) {
         raiseWellFormedError(QXmlStream::tr("Encountered incorrectly encoded content."));
@@ -1649,8 +1661,8 @@ void QXmlStreamReaderPrivate::startDocument()
                 else if (newCodec != codec && !lockEncoding) {
                     codec = newCodec;
                     delete decoder;
-                    decoder = new QTextConverter(codec->name());
-                    readBuffer = decoder->toUnicode(rawReadBuffer.data(), nbytesread);
+                    decoder = codec->makeDecoder();
+                    decoder->toUnicode(&readBuffer, rawReadBuffer.data(), nbytesread);
                 }
 #endif // QT_NO_TEXTCODEC
             }
@@ -2814,7 +2826,7 @@ public:
 
 #ifndef QT_NO_TEXTCODEC
     QTextCodec *codec;
-    QTextConverter *encoder;
+    QTextEncoder *encoder;
 #endif
     void checkIfASCIICompatibleCodec();
 
@@ -2835,7 +2847,7 @@ QXmlStreamWriterPrivate::QXmlStreamWriterPrivate()
     deleteDevice = false;
 #ifndef QT_NO_TEXTCODEC
     codec = QTextCodec::codecForMib(106); // utf8
-    encoder = new QTextConverter(codec->name());
+    encoder = codec->makeEncoder(QTextCodec::IgnoreHeader); // no byte order mark for utf8
 #endif
     checkIfASCIICompatibleCodec();
     inStartElement = inEmptyElement = false;
@@ -3122,7 +3134,7 @@ void QXmlStreamWriter::setCodec(QTextCodec *codec)
     if (codec) {
         d->codec = codec;
         delete d->encoder;
-        d->encoder = new QTextConverter(codec->name());
+        d->encoder = codec->makeEncoder(QTextCodec::IgnoreHeader); // no byte order mark for utf8
         d->checkIfASCIICompatibleCodec();
     }
 }

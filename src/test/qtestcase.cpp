@@ -26,6 +26,7 @@
 #include "qobject.h"
 #include "qstringlist.h"
 #include "qvector.h"
+#include "qvarlengtharray.h"
 #include "qcoreapplication.h"
 #include "qfile.h"
 #include "qdir.h"
@@ -39,7 +40,6 @@
 #include "qtestresult_p.h"
 #include "qsignaldumper_p.h"
 #include "qbenchmark_p.h"
-#include "qstdcontainers_p.h"
 #include "qcorecommon_p.h"
 
 #include <stdarg.h>
@@ -974,7 +974,9 @@ Q_TEST_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
          " -functions : Returns a list of current testfunctions\n"
          " -datatags  : Returns a list of current data tags.\n"
          "              A global data tag is preceded by ' __global__ '.\n"
+         " -xunitxml  : Outputs results as XML XUnit document\n"
          " -xml       : Outputs results as XML document\n"
+         " -lightxml  : Outputs results as stream of XML tags\n"
          " -flush     : Flushes the results\n"
          " -o filename: Writes all output into a file\n"
          " -silent    : Only outputs warnings and failures\n"
@@ -1024,9 +1026,13 @@ Q_TEST_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
                 qPrintDataTags();
                 ::exit(0);
             }
+        } else if(strcmp(argv[i], "-xunitxml") == 0){
+            QTestLog::setLogMode(QTestLog::XunitXML);
         } else if (strcmp(argv[i], "-xml") == 0) {
             QTestLog::setLogMode(QTestLog::XML);
-        } else if(strcmp(argv[i], "-flush") == 0){
+        } else if (strcmp(argv[i], "-lightxml") == 0) {
+            QTestLog::setLogMode(QTestLog::LightXML);
+        }else if(strcmp(argv[i], "-flush") == 0){
             QTestLog::setFlushMode(QTestLog::FLushOn);
         } else if (strcmp(argv[i], "-silent") == 0) {
             QTestLog::setVerboseLevel(-1);
@@ -1398,12 +1404,12 @@ void *fetchData(QTestData *data, const char *tagName, int typeId)
 
     int idx = data->parent()->indexOf(tagName);
 
-    if (Q_UNLIKELY(idx == -1 || idx >= data->dataCount())) {
+    if (idx == -1 || idx >= data->dataCount()) {
         qFatal("QFETCH: Requested testdata '%s' not available, check your _data function.",
                 tagName);
     }
 
-    if (Q_UNLIKELY(typeId != data->parent()->elementTypeId(idx))) {
+    if (typeId != data->parent()->elementTypeId(idx)) {
         qFatal("Requested type '%s' does not match available type '%s'.",
                QMetaType::typeName(typeId),
                QMetaType::typeName(data->parent()->elementTypeId(idx)));
@@ -1514,17 +1520,19 @@ static void qInvokeTestMethods(QObject *testObject)
                 testFuncCleaner.cleanup();
             } else {
                 int methodCount = metaObject->methodCount();
-                QVector<QMetaMethod> testMethods(methodCount);
+                QMetaMethod *testMethods = new QMetaMethod[methodCount];
                 for (int i = 0; i != methodCount; i++)
                     testMethods[i] = metaObject->method(i);
                 if (QTest::randomOrder)
-                    randomizeList(testMethods.data(), methodCount);
+                    randomizeList(testMethods, methodCount);
                 for (int i = 0; i != methodCount; i++) {
                     if (!isValidSlot(testMethods[i]))
                         continue;
                     if (!qInvokeTestMethod(testMethods[i].signature()))
                         break;
                 }
+                delete[] testMethods;
+                testMethods = 0;
             }
         }
 
@@ -1593,6 +1601,7 @@ FatalSignalHandler::FatalSignalHandler()
     }
 }
 
+
 FatalSignalHandler::~FatalSignalHandler()
 {
     // Unregister any of our remaining signal handlers
@@ -1612,7 +1621,8 @@ FatalSignalHandler::~FatalSignalHandler()
             sigaction(i, &oldact, 0);
     }
 }
-#endif // Q_OS_UNIX
+
+#endif
 
 
 } // namespace
@@ -1677,7 +1687,7 @@ int QTest::qExec(QObject *testObject, int argc, char **argv)
 #if defined(Q_OS_UNIX)
             QScopedPointer<FatalSignalHandler> handler;
             if (!noCrashHandler)
-                handler.reset(new FatalSignalHandler());
+                handler.reset(new FatalSignalHandler);
 #endif
             qInvokeTestMethods(testObject);
         }
@@ -1718,7 +1728,7 @@ int QTest::qExec(QObject *testObject, int argc, char **argv)
 int QTest::qExec(QObject *testObject, const QStringList &arguments)
 {
     const int argc = arguments.count();
-    QStdVector<char *> argv(argc);
+    QVarLengthArray<char *> argv(argc);
 
     QVector<QByteArray> args;
     args.reserve(argc);

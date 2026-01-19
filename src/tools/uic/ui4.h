@@ -44,6 +44,12 @@ QT_BEGIN_NAMESPACE
 
 #define QUI_EXPORT Q_DECL_EXPORT
 
+#ifdef QFORMINTERNAL_NAMESPACE
+namespace QFormInternal
+{
+#endif
+
+
 /*******************************************************************************
 ** Forward declarations
 */
@@ -51,12 +57,16 @@ QT_BEGIN_NAMESPACE
 class DomUI;
 class DomIncludes;
 class DomInclude;
+class DomResources;
 class DomResource;
 class DomActionGroup;
 class DomAction;
 class DomActionRef;
 class DomButtonGroup;
 class DomButtonGroups;
+class DomImages;
+class DomImage;
+class DomImageData;
 class DomCustomWidgets;
 class DomHeader;
 class DomCustomWidget;
@@ -103,6 +113,7 @@ class DomConnections;
 class DomConnection;
 class DomConnectionHints;
 class DomConnectionHint;
+class DomScript;
 class DomWidgetData;
 class DomDesignerData;
 class DomSlots;
@@ -188,6 +199,11 @@ public:
     inline bool hasElementLayoutFunction() const { return m_children & LayoutFunction; }
     void clearElementLayoutFunction();
 
+    inline QString elementPixmapFunction() const { return m_pixmapFunction; }
+    void setElementPixmapFunction(const QString& a);
+    inline bool hasElementPixmapFunction() const { return m_children & PixmapFunction; }
+    void clearElementPixmapFunction();
+
     inline DomCustomWidgets* elementCustomWidgets() const { return m_customWidgets; }
     DomCustomWidgets* takeElementCustomWidgets();
     void setElementCustomWidgets(DomCustomWidgets* a);
@@ -200,11 +216,23 @@ public:
     inline bool hasElementTabStops() const { return m_children & TabStops; }
     void clearElementTabStops();
 
+    inline DomImages* elementImages() const { return m_images; }
+    DomImages* takeElementImages();
+    void setElementImages(DomImages* a);
+    inline bool hasElementImages() const { return m_children & Images; }
+    void clearElementImages();
+
     inline DomIncludes* elementIncludes() const { return m_includes; }
     DomIncludes* takeElementIncludes();
     void setElementIncludes(DomIncludes* a);
     inline bool hasElementIncludes() const { return m_children & Includes; }
     void clearElementIncludes();
+
+    inline DomResources* elementResources() const { return m_resources; }
+    DomResources* takeElementResources();
+    void setElementResources(DomResources* a);
+    inline bool hasElementResources() const { return m_children & Resources; }
+    void clearElementResources();
 
     inline DomConnections* elementConnections() const { return m_connections; }
     DomConnections* takeElementConnections();
@@ -259,9 +287,12 @@ private:
     DomWidget* m_widget;
     DomLayoutDefault* m_layoutDefault;
     DomLayoutFunction* m_layoutFunction;
+    QString m_pixmapFunction;
     DomCustomWidgets* m_customWidgets;
     DomTabStops* m_tabStops;
+    DomImages* m_images;
     DomIncludes* m_includes;
+    DomResources* m_resources;
     DomConnections* m_connections;
     DomDesignerData* m_designerdata;
     DomSlots* m_slots;
@@ -274,13 +305,16 @@ private:
         Widget = 16,
         LayoutDefault = 32,
         LayoutFunction = 64,
-        CustomWidgets = 128,
-        TabStops = 256,
-        Includes = 512,
-        Connections = 1024,
-        Designerdata = 2048,
-        Slots = 4096,
-        ButtonGroups = 8192
+        PixmapFunction = 128,
+        CustomWidgets = 256,
+        TabStops = 512,
+        Images = 1024,
+        Includes = 2048,
+        Resources = 4096,
+        Connections = 8192,
+        Designerdata = 16384,
+        Slots = 32768,
+        ButtonGroups = 65536
     };
 
     DomUI(const DomUI &other);
@@ -356,6 +390,45 @@ private:
 
     DomInclude(const DomInclude &other);
     void operator = (const DomInclude&other);
+};
+
+class QUI_EXPORT DomResources {
+public:
+    DomResources();
+    ~DomResources();
+
+    void read(QXmlStreamReader &reader);
+    void write(QXmlStreamWriter &writer, const QString &tagName = QString()) const;
+    inline QString text() const { return m_text; }
+    inline void setText(const QString &s) { m_text = s; }
+
+    // attribute accessors
+    inline bool hasAttributeName() const { return m_has_attr_name; }
+    inline QString attributeName() const { return m_attr_name; }
+    inline void setAttributeName(const QString& a) { m_attr_name = a; m_has_attr_name = true; }
+    inline void clearAttributeName() { m_has_attr_name = false; }
+
+    // child element accessors
+    inline QList<DomResource*> elementInclude() const { return m_include; }
+    void setElementInclude(const QList<DomResource*>& a);
+
+private:
+    QString m_text;
+    void clear(bool clear_all = true);
+
+    // attribute data
+    QString m_attr_name;
+    bool m_has_attr_name;
+
+    // child element data
+    uint m_children;
+    QList<DomResource*> m_include;
+    enum Child {
+        Include = 1
+    };
+
+    DomResources(const DomResources &other);
+    void operator = (const DomResources&other);
 };
 
 class QUI_EXPORT DomResource {
@@ -603,6 +676,119 @@ private:
     void operator = (const DomButtonGroups&other);
 };
 
+class QUI_EXPORT DomImages {
+public:
+    DomImages();
+    ~DomImages();
+
+    void read(QXmlStreamReader &reader);
+    void write(QXmlStreamWriter &writer, const QString &tagName = QString()) const;
+    inline QString text() const { return m_text; }
+    inline void setText(const QString &s) { m_text = s; }
+
+    // attribute accessors
+    // child element accessors
+    inline QList<DomImage*> elementImage() const { return m_image; }
+    void setElementImage(const QList<DomImage*>& a);
+
+private:
+    QString m_text;
+    void clear(bool clear_all = true);
+
+    // attribute data
+    // child element data
+    uint m_children;
+    QList<DomImage*> m_image;
+    enum Child {
+        Image = 1
+    };
+
+    DomImages(const DomImages &other);
+    void operator = (const DomImages&other);
+};
+
+class QUI_EXPORT DomImage {
+public:
+    DomImage();
+    ~DomImage();
+
+    void read(QXmlStreamReader &reader);
+    void write(QXmlStreamWriter &writer, const QString &tagName = QString()) const;
+    inline QString text() const { return m_text; }
+    inline void setText(const QString &s) { m_text = s; }
+
+    // attribute accessors
+    inline bool hasAttributeName() const { return m_has_attr_name; }
+    inline QString attributeName() const { return m_attr_name; }
+    inline void setAttributeName(const QString& a) { m_attr_name = a; m_has_attr_name = true; }
+    inline void clearAttributeName() { m_has_attr_name = false; }
+
+    // child element accessors
+    inline DomImageData* elementData() const { return m_data; }
+    DomImageData* takeElementData();
+    void setElementData(DomImageData* a);
+    inline bool hasElementData() const { return m_children & Data; }
+    void clearElementData();
+
+private:
+    QString m_text;
+    void clear(bool clear_all = true);
+
+    // attribute data
+    QString m_attr_name;
+    bool m_has_attr_name;
+
+    // child element data
+    uint m_children;
+    DomImageData* m_data;
+    enum Child {
+        Data = 1
+    };
+
+    DomImage(const DomImage &other);
+    void operator = (const DomImage&other);
+};
+
+class QUI_EXPORT DomImageData {
+public:
+    DomImageData();
+    ~DomImageData();
+
+    void read(QXmlStreamReader &reader);
+    void write(QXmlStreamWriter &writer, const QString &tagName = QString()) const;
+    inline QString text() const { return m_text; }
+    inline void setText(const QString &s) { m_text = s; }
+
+    // attribute accessors
+    inline bool hasAttributeFormat() const { return m_has_attr_format; }
+    inline QString attributeFormat() const { return m_attr_format; }
+    inline void setAttributeFormat(const QString& a) { m_attr_format = a; m_has_attr_format = true; }
+    inline void clearAttributeFormat() { m_has_attr_format = false; }
+
+    inline bool hasAttributeLength() const { return m_has_attr_length; }
+    inline int attributeLength() const { return m_attr_length; }
+    inline void setAttributeLength(int a) { m_attr_length = a; m_has_attr_length = true; }
+    inline void clearAttributeLength() { m_has_attr_length = false; }
+
+    // child element accessors
+private:
+    QString m_text;
+    void clear(bool clear_all = true);
+
+    // attribute data
+    QString m_attr_format;
+    bool m_has_attr_format;
+
+    int m_attr_length;
+    bool m_has_attr_length;
+
+    // child element data
+    uint m_children;
+
+    DomImageData(const DomImageData &other);
+    void operator = (const DomImageData&other);
+};
+
 class QUI_EXPORT DomCustomWidgets {
 public:
     DomCustomWidgets();
@@ -721,6 +907,12 @@ public:
     inline bool hasElementPixmap() const { return m_children & Pixmap; }
     void clearElementPixmap();
 
+    inline DomScript* elementScript() const { return m_script; }
+    DomScript* takeElementScript();
+    void setElementScript(DomScript* a);
+    inline bool hasElementScript() const { return m_children & Script; }
+    void clearElementScript();
+
     inline DomProperties* elementProperties() const { return m_properties; }
     DomProperties* takeElementProperties();
     void setElementProperties(DomProperties* a);
@@ -754,6 +946,7 @@ private:
     int m_container;
     DomSizePolicyData* m_sizePolicy;
     QString m_pixmap;
+    DomScript* m_script;
     DomProperties* m_properties;
     DomSlots* m_slots;
     DomPropertySpecifications* m_propertyspecifications;
@@ -766,9 +959,10 @@ private:
         Container = 32,
         SizePolicy = 64,
         Pixmap = 128,
-        Properties = 256,
-        Slots = 512,
-        Propertyspecifications = 1024
+        Script = 256,
+        Properties = 512,
+        Slots = 1024,
+        Propertyspecifications = 2048
     };
 
     DomCustomWidget(const DomCustomWidget &other);
@@ -1315,6 +1509,9 @@ public:
     inline QList<DomProperty*> elementProperty() const { return m_property; }
     void setElementProperty(const QList<DomProperty*>& a);
 
+    inline QList<DomScript*> elementScript() const { return m_script; }
+    void setElementScript(const QList<DomScript*>& a);
+
     inline QList<DomWidgetData*> elementWidgetData() const { return m_widgetData; }
     void setElementWidgetData(const QList<DomWidgetData*>& a);
 
@@ -1366,6 +1563,7 @@ private:
     uint m_children;
     QStringList m_class;
     QList<DomProperty*> m_property;
+    QList<DomScript*> m_script;
     QList<DomWidgetData*> m_widgetData;
     QList<DomProperty*> m_attribute;
     QList<DomRow*> m_row;
@@ -1380,17 +1578,18 @@ private:
     enum Child {
         Class = 1,
         Property = 2,
-        WidgetData = 4,
-        Attribute = 8,
-        Row = 16,
-        Column = 32,
-        Item = 64,
-        Layout = 128,
-        Widget = 256,
-        Action = 512,
-        ActionGroup = 1024,
-        AddAction = 2048,
-        ZOrder = 4096
+        Script = 4,
+        WidgetData = 8,
+        Attribute = 16,
+        Row = 32,
+        Column = 64,
+        Item = 128,
+        Layout = 256,
+        Widget = 512,
+        Action = 1024,
+        ActionGroup = 2048,
+        AddAction = 4096,
+        ZOrder = 8192
     };
 
     DomWidget(const DomWidget &other);
@@ -1589,6 +1788,11 @@ public:
     inline void setAttributeRadius(double a) { m_attr_radius = a; m_has_attr_radius = true; }
     inline void clearAttributeRadius() { m_has_attr_radius = false; }
 
+    inline bool hasAttributeAngle() const { return m_has_attr_angle; }
+    inline double attributeAngle() const { return m_attr_angle; }
+    inline void setAttributeAngle(double a) { m_attr_angle = a; m_has_attr_angle = true; }
+    inline void clearAttributeAngle() { m_has_attr_angle = false; }
+
     inline bool hasAttributeType() const { return m_has_attr_type; }
     inline QString attributeType() const { return m_attr_type; }
     inline void setAttributeType(const QString& a) { m_attr_type = a; m_has_attr_type = true; }
@@ -1639,6 +1843,9 @@ private:
 
     double m_attr_radius;
     bool m_has_attr_radius;
+
+    double m_attr_angle;
+    bool m_has_attr_angle;
 
     QString m_attr_type;
     bool m_has_attr_type;
@@ -1890,6 +2097,11 @@ public:
     inline bool hasElementAntialiasing() const { return m_children & Antialiasing; }
     void clearElementAntialiasing();
 
+    inline QString elementStyleStrategy() const { return m_styleStrategy; }
+    void setElementStyleStrategy(const QString& a);
+    inline bool hasElementStyleStrategy() const { return m_children & StyleStrategy; }
+    void clearElementStyleStrategy();
+
     inline bool elementKerning() const { return m_kerning; }
     void setElementKerning(bool a);
     inline bool hasElementKerning() const { return m_children & Kerning; }
@@ -1910,6 +2122,7 @@ private:
     bool m_underline;
     bool m_strikeOut;
     bool m_antialiasing;
+    QString m_styleStrategy;
     bool m_kerning;
     enum Child {
         Family = 1,
@@ -1920,7 +2133,8 @@ private:
         Underline = 32,
         StrikeOut = 64,
         Antialiasing = 128,
-        Kerning = 256
+        StyleStrategy = 256,
+        Kerning = 512
     };
 
     DomFont(const DomFont &other);
@@ -3127,6 +3341,46 @@ private:
     void operator = (const DomConnectionHint&other);
 };
 
+class QUI_EXPORT DomScript {
+public:
+    DomScript();
+    ~DomScript();
+
+    void read(QXmlStreamReader &reader);
+    void write(QXmlStreamWriter &writer, const QString &tagName = QString()) const;
+    inline QString text() const { return m_text; }
+    inline void setText(const QString &s) { m_text = s; }
+
+    // attribute accessors
+    inline bool hasAttributeSource() const { return m_has_attr_source; }
+    inline QString attributeSource() const { return m_attr_source; }
+    inline void setAttributeSource(const QString& a) { m_attr_source = a; m_has_attr_source = true; }
+    inline void clearAttributeSource() { m_has_attr_source = false; }
+
+    inline bool hasAttributeLanguage() const { return m_has_attr_language; }
+    inline QString attributeLanguage() const { return m_attr_language; }
+    inline void setAttributeLanguage(const QString& a) { m_attr_language = a; m_has_attr_language = true; }
+    inline void clearAttributeLanguage() { m_has_attr_language = false; }
+
+    // child element accessors
+private:
+    QString m_text;
+    void clear(bool clear_all = true);
+
+    // attribute data
+    QString m_attr_source;
+    bool m_has_attr_source;
+
+    QString m_attr_language;
+    bool m_has_attr_language;
+
+    // child element data
+    uint m_children;
+
+    DomScript(const DomScript &other);
+    void operator = (const DomScript&other);
+};
+
 class QUI_EXPORT DomWidgetData {
 public:
     DomWidgetData();
@@ -3303,6 +3557,11 @@ private:
     DomStringPropertySpecification(const DomStringPropertySpecification &other);
     void operator = (const DomStringPropertySpecification&other);
 };
+
+
+#ifdef QFORMINTERNAL_NAMESPACE
+}
+#endif
 
 QT_END_NAMESPACE
 

@@ -222,12 +222,17 @@
 #include <QtGui/qstyleoption.h>
 #include <QtGui/qtooltip.h>
 #include <QtGui/qtransform.h>
+#include <QtGui/qgraphicseffect.h>
+#ifndef QT_NO_ACCESSIBILITY
+# include <QtGui/qaccessible.h>
+#endif
 
 #include "qapplication_p.h"
 #include "qobject_p.h"
 #ifdef Q_WS_X11
 #include "qt_x11_p.h"
 #endif
+#include "qgraphicseffect_p.h"
 #include "qpathclipper_p.h"
 
 // #define GESTURE_DEBUG
@@ -763,6 +768,13 @@ void QGraphicsScenePrivate::setFocusItemHelper(QGraphicsItem *item,
     if (item)
         focusItem = item;
 
+#ifndef QT_NO_ACCESSIBILITY
+    if (focusItem) {
+        if (QGraphicsObject *focusObj = focusItem->toGraphicsObject()) {
+            QAccessible::updateAccessibility(focusObj, 0, QAccessible::Focus);
+        }
+    }
+#endif
     if (item) {
         QFocusEvent event(QEvent::FocusIn, focusReason);
         sendEvent(item, &event);
@@ -1025,7 +1037,7 @@ QList<QGraphicsItem *> QGraphicsScenePrivate::itemsAtPosition(const QPoint &scre
 */
 void QGraphicsScenePrivate::storeMouseButtonsForMouseGrabber(QGraphicsSceneMouseEvent *event)
 {
-    for (int i = Qt::LeftButton; i <= Qt::MiddleButton; i <<= 1) {
+    for (int i = 0x1; i <= 0x10; i <<= 1) {
         if (event->buttons() & i) {
             mouseGrabberButtonDownPos.insert(Qt::MouseButton(i),
                                              mouseGrabberItems.last()->d_ptr->genericMapFromScene(event->scenePos(),
@@ -1188,7 +1200,7 @@ void QGraphicsScenePrivate::sendMouseEvent(QGraphicsSceneMouseEvent *mouseEvent)
     if (item->isBlockedByModalPanel())
         return;
 
-    for (int i = Qt::LeftButton; i <= Qt::MiddleButton; i <<= 1) {
+    for (int i = 0x1; i <= 0x10; i <<= 1) {
         Qt::MouseButton button = Qt::MouseButton(i);
         mouseEvent->setButtonDownPos(button, mouseGrabberButtonDownPos.value(button, item->d_ptr->genericMapFromScene(mouseEvent->scenePos(), mouseEvent->widget())));
         mouseEvent->setButtonDownScenePos(button, mouseGrabberButtonDownScenePos.value(button, mouseEvent->scenePos()));
@@ -4340,6 +4352,18 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
         if (widget && !viewRect.intersects(deviceRect))
             return;
 
+        // Resort to direct rendering if the device rect exceeds the
+        // (optional) maximum bounds. (QGraphicsSvgItem uses this).
+        QSize maximumCacheSize =
+            itemd->extra(QGraphicsItemPrivate::ExtraMaxDeviceCoordCacheSize).toSize();
+        if (!maximumCacheSize.isEmpty()
+            && (deviceRect.width() > maximumCacheSize.width()
+                || deviceRect.height() > maximumCacheSize.height())) {
+            _q_paintItem(static_cast<QGraphicsWidget *>(item), painter, option, widget,
+                         oldPainterOpacity != newPainterOpacity, painterStateProtection);
+            return;
+        }
+
         // Create or reuse offscreen pixmap, possibly scroll/blit from the old one.
         // If the world transform is rotated we always recreate the cache to avoid
         // wrong blending.
@@ -4562,7 +4586,7 @@ void QGraphicsScenePrivate::drawSubtreeRecursive(QGraphicsItem *item, QPainter *
     const bool itemClipsChildrenToShape = (item->d_ptr->flags & QGraphicsItem::ItemClipsChildrenToShape);
     bool drawItem = itemHasContents && !itemIsFullyTransparent;
     if (drawItem) {
-        const QRectF brect = adjustedItemBoundingRect(item);
+        const QRectF brect = adjustedItemEffectiveBoundingRect(item);
         ENSURE_TRANSFORM_PTR
         QRect viewBoundingRect = translateOnlyTransform ? brect.translated(transformPtr->dx(), transformPtr->dy()).toAlignedRect()
                                                         : transformPtr->mapRect(brect).toAlignedRect();
@@ -4585,8 +4609,48 @@ void QGraphicsScenePrivate::drawSubtreeRecursive(QGraphicsItem *item, QPainter *
     if (itemHasChildren && itemClipsChildrenToShape)
         ENSURE_TRANSFORM_PTR;
 
-    draw(item, painter, viewTransform, transformPtr, exposedRegion, widget, opacity,
-         effectTransform, wasDirtyParentSceneTransform, drawItem);
+#ifndef QT_NO_GRAPHICSEFFECT
+    if (item->d_ptr->graphicsEffect && item->d_ptr->graphicsEffect->isEnabled()) {
+        ENSURE_TRANSFORM_PTR;
+        QGraphicsItemPaintInfo info(viewTransform, transformPtr, effectTransform, exposedRegion, widget, &styleOptionTmp,
+                                    painter, opacity, wasDirtyParentSceneTransform, itemHasContents && !itemIsFullyTransparent);
+        QGraphicsEffectSource *source = item->d_ptr->graphicsEffect->d_func()->source;
+        QGraphicsItemEffectSourcePrivate *sourced = static_cast<QGraphicsItemEffectSourcePrivate *>
+                                                    (source->d_func());
+        sourced->info = &info;
+        const QTransform restoreTransform = painter->worldTransform();
+        if (effectTransform)
+            painter->setWorldTransform(*transformPtr * *effectTransform);
+        else
+            painter->setWorldTransform(*transformPtr);
+        painter->setOpacity(opacity);
+
+        if (sourced->currentCachedSystem() != Qt::LogicalCoordinates
+            && sourced->lastEffectTransform != painter->worldTransform())
+        {
+            if (sourced->lastEffectTransform.type() <= QTransform::TxTranslate
+                && painter->worldTransform().type() <= QTransform::TxTranslate)
+            {
+                QRectF sourceRect = sourced->boundingRect(Qt::DeviceCoordinates);
+                QRect effectRect = sourced->paddedEffectRect(Qt::DeviceCoordinates, sourced->currentCachedMode(), sourceRect);
+
+                sourced->setCachedOffset(effectRect.topLeft());
+            } else {
+                sourced->invalidateCache(QGraphicsEffectSourcePrivate::TransformChanged);
+            }
+
+            sourced->lastEffectTransform = painter->worldTransform();
+        }
+
+        item->d_ptr->graphicsEffect->draw(painter);
+        painter->setWorldTransform(restoreTransform);
+        sourced->info = 0;
+    } else
+#endif //QT_NO_GRAPHICSEFFECT
+    {
+        draw(item, painter, viewTransform, transformPtr, exposedRegion, widget, opacity,
+             effectTransform, wasDirtyParentSceneTransform, drawItem);
+    }
 }
 
 static inline void setClip(QPainter *painter, QGraphicsItem *item)
@@ -4813,6 +4877,8 @@ void QGraphicsScenePrivate::markDirty(QGraphicsItem *item, const QRectF &rect, b
             item->d_ptr->fullUpdatePending = 1;
         else if (!item->d_ptr->fullUpdatePending)
             item->d_ptr->needsRepaint |= rect;
+    } else if (item->d_ptr->graphicsEffect) {
+        invalidateChildren = true;
     }
 
     if (invalidateChildren) {
@@ -4891,6 +4957,8 @@ void QGraphicsScenePrivate::processDirtyItemsRecursive(QGraphicsItem *item, bool
             resetDirtyItem(item);
             return; // Item has neither contents nor children!(?)
         }
+        if (item->d_ptr->graphicsEffect)
+            itemHasContents = true;
     }
 
     const qreal opacity = item->d_ptr->combineOpacityFromParent(parentOpacity);
@@ -4931,7 +4999,7 @@ void QGraphicsScenePrivate::processDirtyItemsRecursive(QGraphicsItem *item, bool
     // Process item.
     if (item->d_ptr->dirty || item->d_ptr->paintedViewBoundingRectsNeedRepaint) {
         const bool useCompatUpdate = views.isEmpty() || isSignalConnected(changedSignalIndex);
-        const QRectF itemBoundingRect = adjustedItemBoundingRect(item);
+        const QRectF itemBoundingRect = adjustedItemEffectiveBoundingRect(item);
 
         if (useCompatUpdate && !itemIsUntransformable && qFuzzyIsNull(item->boundingRegionGranularity())) {
             // This block of code is kept for compatibility. Since 4.5, by default

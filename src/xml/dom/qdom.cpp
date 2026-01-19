@@ -2571,7 +2571,7 @@ QDomNode QDomNode::removeChild(const QDomNode& oldChild)
 */
 QDomNode QDomNode::appendChild(const QDomNode& newChild)
 {
-    if (Q_UNLIKELY(!impl)) {
+    if (!impl) {
         qWarning("Calling appendChild() on a null node does nothing.");
         return QDomNode();
     }
@@ -3447,13 +3447,18 @@ QDomDocumentTypePrivate::~QDomDocumentTypePrivate()
 void QDomDocumentTypePrivate::init()
 {
     entities = new QDomNamedNodeMapPrivate(this);
-    notations = new QDomNamedNodeMapPrivate(this);
-    publicId.clear();
-    systemId.clear();
-    internalSubset.clear();
+    QT_TRY {
+        notations = new QDomNamedNodeMapPrivate(this);
+        publicId.clear();
+        systemId.clear();
+        internalSubset.clear();
 
-    entities->setAppendToParent(true);
-    notations->setAppendToParent(true);
+        entities->setAppendToParent(true);
+        notations->setAppendToParent(true);
+    } QT_CATCH(...) {
+        delete entities;
+        QT_RETHROW;
+    }
 }
 
 QDomNodePrivate* QDomDocumentTypePrivate::cloneNode(bool deep)

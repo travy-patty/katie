@@ -313,7 +313,7 @@ QPair<StatePointer, bool> Automaton::internState (const State &state)
 
 struct _Bucket
 {
-  QList<ItemPointer> items;
+  QLinkedList<ItemPointer> items;
 
   void insert (ItemPointer item)
   { items.push_back (item); }
@@ -322,7 +322,7 @@ struct _Bucket
   {
     State st (aut->_M_grammar);
 
-    for (QList<ItemPointer>::iterator item = items.begin (); item != items.end (); ++item)
+    for (QLinkedList<ItemPointer>::iterator item = items.begin (); item != items.end (); ++item)
       st.insert ((*item)->next ());
 
     return st;

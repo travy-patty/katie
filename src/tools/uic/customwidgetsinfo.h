@@ -29,6 +29,7 @@
 QT_BEGIN_NAMESPACE
 
 class Driver;
+class DomScript;
 
 class CustomWidgetsInfo : public TreeWalker
 {
@@ -46,6 +47,8 @@ public:
 
     inline DomCustomWidget *customWidget(const QString &name) const
     { return m_customWidgets.value(name); }
+
+    DomScript *customWidgetScript(const QString &name) const;
 
     QString customWidgetAddPageMethod(const QString &name) const;
 

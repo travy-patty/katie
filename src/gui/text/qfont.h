@@ -30,6 +30,7 @@
 typedef struct FT_FaceRec_* FT_Face;
 #endif
 
+
 QT_BEGIN_NAMESPACE
 
 class QPaintDevice;
@@ -39,7 +40,35 @@ class QFontPrivate;
 
 class Q_GUI_EXPORT QFont
 {
+    Q_GADGET
+    Q_ENUMS(StyleStrategy)
 public:
+    enum StyleHint {
+        Helvetica,  SansSerif = Helvetica,
+        Times,      Serif = Times,
+        Courier,    TypeWriter = Courier,
+        OldEnglish, Decorative = OldEnglish,
+        System,
+        AnyStyle,
+        Cursive,
+        Monospace,
+        Fantasy
+    };
+
+    enum StyleStrategy {
+        PreferDefault       = 0x0001,
+        PreferBitmap        = 0x0002,
+        PreferDevice        = 0x0004,
+        PreferOutline       = 0x0008,
+        ForceOutline        = 0x0010,
+        PreferMatch         = 0x0020,
+        PreferQuality       = 0x0040,
+        PreferAntialias     = 0x0080,
+        NoAntialias         = 0x0100,
+        ForceIntegerMetrics = 0x0200,
+        NoFontMerging       = 0x0400
+    };
+
     enum HintingPreference {
         PreferDefaultHinting        = 0,
         PreferNoHinting             = 1,
@@ -73,19 +102,37 @@ public:
         UltraExpanded  = 200
     };
 
+    enum Capitalization {
+        MixedCase,
+        AllUppercase,
+        AllLowercase,
+        SmallCaps,
+        Capitalize
+    };
+
+    enum SpacingType {
+        PercentageSpacing,
+        AbsoluteSpacing
+    };
+
     enum ResolveProperties {
         FamilyResolved              = 0x0001,
         SizeResolved                = 0x0002,
-        WeightResolved              = 0x0004,
-        StyleResolved               = 0x0008,
-        UnderlineResolved           = 0x0010,
-        OverlineResolved            = 0x0020,
-        StrikeOutResolved           = 0x0040,
-        FixedPitchResolved          = 0x0080,
-        StretchResolved             = 0x0100,
-        KerningResolved             = 0x0200,
-        HintingPreferenceResolved   = 0x0400,
-        StyleNameResolved           = 0x0800,
+        StyleHintResolved           = 0x0004,
+        StyleStrategyResolved       = 0x0008,
+        WeightResolved              = 0x0010,
+        StyleResolved               = 0x0020,
+        UnderlineResolved           = 0x0040,
+        OverlineResolved            = 0x0080,
+        StrikeOutResolved           = 0x0100,
+        FixedPitchResolved          = 0x0200,
+        StretchResolved             = 0x0400,
+        KerningResolved             = 0x0800,
+        CapitalizationResolved      = 0x1000,
+        LetterSpacingResolved       = 0x2000,
+        WordSpacingResolved         = 0x4000,
+        HintingPreferenceResolved   = 0x8000,
+        StyleNameResolved           = 0x10000,
         AllPropertiesResolved       = 0x1ffff
     };
 
@@ -136,12 +183,28 @@ public:
     bool kerning() const;
     void setKerning(bool);
 
+    StyleHint styleHint() const;
+    StyleStrategy styleStrategy() const;
+    void setStyleHint(StyleHint, StyleStrategy = PreferDefault);
+    void setStyleStrategy(StyleStrategy s);
+
     int stretch() const;
     void setStretch(int);
+
+    qreal letterSpacing() const;
+    SpacingType letterSpacingType() const;
+    void setLetterSpacing(SpacingType type, qreal spacing);
+
+    qreal wordSpacing() const;
+    void setWordSpacing(qreal spacing);
+
+    void setCapitalization(Capitalization);
+    Capitalization capitalization() const;
 
     void setHintingPreference(HintingPreference hintingPreference);
     HintingPreference hintingPreference() const;
 
+    // dupicated from QFontInfo
     bool exactMatch() const;
 
     QFont &operator=(const QFont &);
@@ -150,9 +213,12 @@ public:
     bool operator<(const QFont &) const;
     operator QVariant() const;
     bool isCopyOf(const QFont &) const;
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QFont &operator=(QFont &&other)
     { qSwap(d, other.d); qSwap(resolve_mask, other.resolve_mask);  return *this; }
+#endif
 
+    Qt::HANDLE handle() const;
 #if defined(Q_WS_X11)
     FT_Face freetypeFace() const;
 #endif
@@ -162,7 +228,18 @@ public:
     QString toString() const;
     bool fromString(const QString &);
 
-    static QString lastResortFamily();
+    static QString substitute(const QString &);
+    static QStringList substitutes(const QString &);
+    static QStringList substitutions();
+    static void insertSubstitution(const QString&, const QString &);
+    static void insertSubstitutions(const QString&, const QStringList &);
+    static void removeSubstitution(const QString &);
+    static void initialize();
+    static void cleanup();
+
+    QString defaultFamily() const;
+    QString lastResortFamily() const;
+    QString lastResortFont() const;
 
     QFont resolve(const QFont &) const;
     inline uint resolve() const { return resolve_mask; }
@@ -183,6 +260,7 @@ private:
     friend class QFontDialogPrivate;
     friend class QFontMetrics;
     friend class QFontMetricsF;
+    friend class QFontInfo;
     friend class QPainter;
     friend class QPainterPrivate;
     friend class QApplication;
@@ -190,6 +268,7 @@ private:
     friend class QWidgetPrivate;
     friend class QTextLayout;
     friend class QTextEngine;
+    friend class QStackTextEngine;
     friend class QTextLine;
     friend struct QScriptLine;
     friend class QAlphaPaintEngine;
@@ -197,7 +276,6 @@ private:
     friend class QTextItemInt;
     friend class QCommandLinkButtonPrivate;
     friend class QFontEngine;
-    friend class QFontDatabasePrivate;
 
 #ifndef QT_NO_DATASTREAM
     friend Q_GUI_EXPORT QDataStream &operator<<(QDataStream &, const QFont &);

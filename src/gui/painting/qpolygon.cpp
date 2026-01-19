@@ -449,9 +449,8 @@ QDebug operator<<(QDebug dbg, const QPolygon &a)
 {
 #ifndef Q_BROKEN_DEBUG_STREAM
     dbg.nospace() << "QPolygon(";
-    for (int i = 0; i < a.count(); ++i) {
+    for (int i = 0; i < a.count(); ++i)
         dbg.nospace() << a.at(i);
-    }
     dbg.nospace() << ')';
     return dbg.space();
 #else
@@ -561,9 +560,8 @@ QPolygonF::QPolygonF(const QRectF &r)
 QPolygonF::QPolygonF(const QPolygon &a)
 {
     reserve(a.size());
-    for (int i = 0; i < a.size(); ++i) {
+    for (int i=0; i<a.size(); ++i)
         append(a.at(i));
-    }
 }
 
 /*!
@@ -673,10 +671,10 @@ QRectF QPolygonF::boundingRect() const
 
 QPolygon QPolygonF::toPolygon() const
 {
-    QPolygon a(size());
-    for (int i = 0; i < size(); ++i) {
-        a[i] = at(i).toPoint();
-    }
+    QPolygon a;
+    a.reserve(size());
+    for (int i=0; i<size(); ++i)
+        a.append(at(i).toPoint());
     return a;
 }
 
@@ -761,9 +759,8 @@ QDataStream &operator<<(QDataStream &s, const QPolygonF &a)
     uint i;
 
     s << len;
-    for (i = 0; i < len; ++i) {
+    for (i = 0; i < len; ++i)
         s << a.at(i);
-    }
     return s;
 }
 
@@ -798,9 +795,8 @@ QDebug operator<<(QDebug dbg, const QPolygonF &a)
 {
 #ifndef Q_BROKEN_DEBUG_STREAM
     dbg.nospace() << "QPolygonF(";
-    for (int i = 0; i < a.count(); ++i) {
+    for (int i = 0; i < a.count(); ++i)
         dbg.nospace() << a.at(i);
-    }
     dbg.nospace() << ')';
     return dbg.space();
 #else

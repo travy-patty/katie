@@ -20,8 +20,13 @@
 ****************************************************************************/
 
 #include "qsvgrenderer.h"
+
+#ifndef QT_NO_SVGRENDERER
+
 #include "qsvgtinydocument_p.h"
+
 #include "qbytearray.h"
+#include "qtimer.h"
 #include "qdebug.h"
 #include "qobject_p.h"
 
@@ -40,14 +45,16 @@ QT_BEGIN_NAMESPACE
     subclass, including QWidget and QImage.
 
     QSvgRenderer provides an API that supports basic features of SVG rendering, such as loading
-    and rendering of static drawings. Since the rendering is performed using QPainter, SVG
-    drawings can be rendered on any subclass of QPaintDevice.
+    and rendering of static drawings, and more interactive features like animation. Since the
+    rendering is performed using QPainter, SVG drawings can be rendered on any subclass of
+    QPaintDevice.
 
     SVG drawings are either loaded when an QSvgRenderer is constructed, or loaded later
     using the load() functions. Data is either supplied directly as serialized XML, or
     indirectly using a file name. If a valid file has been loaded, either when the renderer
     is constructed or at some later time, isValid() returns true; otherwise it returns false.
-    QSvgRenderer provides the render() slot to render the current document using a given painter.
+    QSvgRenderer provides the render() slot to render the current document, or the current
+    frame of an animated document, using a given painter.
 
     The defaultSize() function provides information about the amount of space that is required
     to render the currently loaded SVG file. This is useful for paint devices, such as QWidget,
@@ -55,12 +62,23 @@ QT_BEGIN_NAMESPACE
     The default size of a drawing may differ from its visible area, found using the \l viewBox
     property.
 
-    Animated SVG drawings are not supported.
+    Animated SVG drawings are supported, and can be controlled with a simple collection of
+    functions and properties:
+
+    \list
+    \o The animated() function indicates whether a drawing contains animation information.
+    \omit
+    \o The animationDuration() function provides the duration in milliseconds of the
+       animation, without taking any looping into account.
+    \o The \l currentFrame property contains the current frame of the animation.
+    \endomit
+    \o The \l framesPerSecond property contains the rate at which the animation plays.
+    \endlist
 
     Finally, the QSvgRenderer class provides the repaintNeeded() signal which is emitted
     whenever the rendering of the document needs to be updated.
 
-    \sa {QtSvg Module}, {SVG Viewer Example}
+    \sa QSvgWidget, {QtSvg Module}, {SVG Viewer Example}
 */
 
 class QSvgRendererPrivate : public QObjectPrivate
@@ -69,14 +87,19 @@ class QSvgRendererPrivate : public QObjectPrivate
 public:
     explicit QSvgRendererPrivate()
         : QObjectPrivate(),
-          render(nullptr)
+          render(0), timer(0),
+          fps(30)
     {}
     ~QSvgRendererPrivate()
     {
         delete render;
     }
 
+    static void callRepaintNeeded(QSvgRenderer *const q);
+
     QSvgTinyDocument *render;
+    QTimer *timer;
+    int fps;
 };
 
 /*!
@@ -124,6 +147,7 @@ QSvgRenderer::QSvgRenderer(QXmlStreamReader *contents, QObject *parent)
 */
 QSvgRenderer::~QSvgRenderer()
 {
+
 }
 
 /*!
@@ -141,10 +165,10 @@ bool QSvgRenderer::isValid() const
 QSize QSvgRenderer::defaultSize() const
 {
     Q_D(const QSvgRenderer);
-    if (d->render) {
+    if (d->render)
         return d->render->size();
-    }
-    return QSize();
+    else
+        return QSize();
 }
 
 /*!
@@ -155,10 +179,10 @@ QSize QSvgRenderer::defaultSize() const
 QRect QSvgRenderer::viewBox() const
 {
     Q_D(const QSvgRenderer);
-    if (d->render) {
+    if (d->render)
         return d->render->viewBox().toRect();
-    }
-    return QRect();
+    else
+        return QRect();
 }
 
 /*!
@@ -169,9 +193,124 @@ QRect QSvgRenderer::viewBox() const
 void QSvgRenderer::setViewBox(const QRect &viewbox)
 {
     Q_D(QSvgRenderer);
-    if (d->render) {
+    if (d->render)
         d->render->setViewBox(viewbox);
+}
+
+/*!
+    Returns true if the current document contains animated elements; otherwise
+    returns false.
+
+    \sa framesPerSecond()
+*/
+bool QSvgRenderer::animated() const
+{
+    Q_D(const QSvgRenderer);
+    if (d->render)
+        return d->render->animated();
+    else
+        return false;
+}
+
+/*!
+    \property QSvgRenderer::framesPerSecond
+    \brief the number of frames per second to be shown
+
+    The number of frames per second is 0 if the current document is not animated.
+
+    \sa animated()
+*/
+int QSvgRenderer::framesPerSecond() const
+{
+    Q_D(const QSvgRenderer);
+    return d->fps;
+}
+
+void QSvgRenderer::setFramesPerSecond(int num)
+{
+    Q_D(QSvgRenderer);
+    if (num < 0) {
+        qWarning("QSvgRenderer::setFramesPerSecond: Cannot set negative value %d", num);
+        return;
     }
+    d->fps = num;
+}
+
+/*!
+  \property QSvgRenderer::currentFrame
+  \brief the current frame of the document's animation, or 0 if the document is not animated
+  \internal
+
+  \sa animationDuration(), framesPerSecond, animated()
+*/
+
+/*!
+  \internal
+*/
+int QSvgRenderer::currentFrame() const
+{
+    Q_D(const QSvgRenderer);
+    return d->render->currentFrame();
+}
+
+/*!
+  \internal
+*/
+void QSvgRenderer::setCurrentFrame(int frame)
+{
+    Q_D(QSvgRenderer);
+    d->render->setCurrentFrame(frame);
+}
+
+/*!
+    \internal
+
+    Returns the number of frames in the animation, or 0 if the current document is not
+    animated.
+
+    \sa animated(), framesPerSecond
+*/
+int QSvgRenderer::animationDuration() const
+{
+    Q_D(const QSvgRenderer);
+    return d->render->animationDuration();
+}
+
+/*!
+ \internal
+ \since 4.5
+
+ We can't have template functions, that's loadDocument(), as friends, for this
+ code, so we let this function be a friend of QSvgRenderer instead.
+ */
+void QSvgRendererPrivate::callRepaintNeeded(QSvgRenderer *const q)
+{
+    q->repaintNeeded();
+}
+
+template<typename TInputType>
+static bool loadDocument(QSvgRenderer *const q,
+                         QSvgRendererPrivate *const d,
+                         const TInputType &in)
+{
+    delete d->render;
+    d->render = QSvgTinyDocument::load(in);
+    if (d->render && d->render->animated() && d->fps > 0) {
+        if (!d->timer)
+            d->timer = new QTimer(q);
+        else
+            d->timer->stop();
+        q->connect(d->timer, SIGNAL(timeout()),
+                   q, SIGNAL(repaintNeeded()));
+        d->timer->start(1000/d->fps);
+    } else if (d->timer) {
+        d->timer->stop();
+    }
+
+    //force first update
+    QSvgRendererPrivate::callRepaintNeeded(q);
+
+    return d->render;
 }
 
 /*!
@@ -181,11 +320,7 @@ void QSvgRenderer::setViewBox(const QRect &viewbox)
 bool QSvgRenderer::load(const QString &filename)
 {
     Q_D(QSvgRenderer);
-    delete d->render;
-    d->render = QSvgTinyDocument::load(filename);
-    // force first update
-    repaintNeeded();
-    return d->render;
+    return loadDocument(this, d, filename);
 }
 
 /*!
@@ -195,11 +330,7 @@ bool QSvgRenderer::load(const QString &filename)
 bool QSvgRenderer::load(const QByteArray &contents)
 {
     Q_D(QSvgRenderer);
-    delete d->render;
-    d->render = QSvgTinyDocument::load(contents);
-    // force first update
-    repaintNeeded();
-    return d->render;
+    return loadDocument(this, d, contents);
 }
 
 /*!
@@ -214,15 +345,12 @@ bool QSvgRenderer::load(const QByteArray &contents)
 bool QSvgRenderer::load(QXmlStreamReader *contents)
 {
     Q_D(QSvgRenderer);
-    delete d->render;
-    d->render = QSvgTinyDocument::load(contents);
-    // force first update
-    repaintNeeded();
-    return d->render;
+    return loadDocument(this, d, contents);
 }
 
 /*!
-    Renders the current document using the given \a painter.
+    Renders the current document, or the current frame of an animated
+    document, using the given \a painter.
 */
 void QSvgRenderer::render(QPainter *painter)
 {
@@ -236,7 +364,7 @@ void QSvgRenderer::render(QPainter *painter)
     \fn void QSvgRenderer::repaintNeeded()
 
     This signal is emitted whenever the rendering of the document
-    needs to be updated.
+    needs to be updated, usually for the purposes of animation.
 */
 
 /*!
@@ -254,9 +382,10 @@ void QSvgRenderer::render(QPainter *painter, const QString &elementId,
 }
 
 /*!
-    Renders the current document sing the given \a painter on the
-    specified \a bounds within the painter.  If the bounding rectangle is not
-    specified the SVG file is mapped to the whole paint device.
+    Renders the current document, or the current frame of an animated
+    document, using the given \a painter on the specified \a bounds within
+    the painter.  If the bounding rectangle is not specified
+    the SVG file is mapped to the whole paint device.
 */
 void QSvgRenderer::render(QPainter *painter, const QRectF &bounds)
 {
@@ -269,18 +398,17 @@ void QSvgRenderer::render(QPainter *painter, const QRectF &bounds)
 QRectF QSvgRenderer::viewBoxF() const
 {
     Q_D(const QSvgRenderer);
-    if (d->render) {
+    if (d->render)
         return d->render->viewBox();
-    }
-    return QRect();
+    else
+        return QRect();
 }
 
 void QSvgRenderer::setViewBox(const QRectF &viewbox)
 {
     Q_D(QSvgRenderer);
-    if (d->render) {
+    if (d->render)
         d->render->setViewBox(viewbox);
-    }
 }
 
 /*!
@@ -295,10 +423,10 @@ void QSvgRenderer::setViewBox(const QRectF &viewbox)
 QRectF QSvgRenderer::boundsOnElement(const QString &id) const
 {
     Q_D(const QSvgRenderer);
-    if (d->render) {
-        return d->render->boundsOnElement(id);
-    }
-    return QRectF();
+    QRectF bounds;
+    if (d->render)
+        bounds = d->render->boundsOnElement(id);
+    return bounds;
 }
 
 
@@ -318,10 +446,10 @@ QRectF QSvgRenderer::boundsOnElement(const QString &id) const
 bool QSvgRenderer::elementExists(const QString &id) const
 {
     Q_D(const QSvgRenderer);
-    if (d->render) {
-        return d->render->elementExists(id);
-    }
-    return false;
+    bool exists = false;
+    if (d->render)
+        exists = d->render->elementExists(id);
+    return exists;
 }
 
 /*!
@@ -340,12 +468,16 @@ bool QSvgRenderer::elementExists(const QString &id) const
 QMatrix QSvgRenderer::matrixForElement(const QString &id) const
 {
     Q_D(const QSvgRenderer);
-    if (d->render) {
-        return d->render->matrixForElement(id);
-    }
-    return QMatrix();
+    QMatrix mat;
+    if (d->render)
+        mat = d->render->matrixForElement(id);
+    return mat;
 }
 
 QT_END_NAMESPACE
+
+
+
+#endif // QT_NO_SVGRENDERER
 
 #include "moc_qsvgrenderer.h"

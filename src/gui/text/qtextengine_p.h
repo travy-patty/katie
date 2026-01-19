@@ -33,9 +33,9 @@
 // We mean it.
 //
 
-#include "qstdcontainers_p.h"
+#include "QtCore/qvarlengtharray.h"
 #include "qfont_p.h"
-#include "qpaintengine.h"
+#include "QtGui/qpaintengine.h"
 #include "qtextdocument_p.h"
 #include "qharfbuzz_p.h"
 
@@ -51,75 +51,91 @@ class QAbstractTextDocumentLayout;
 
 
 // this uses the same coordinate system as Qt, but a different one to freetype.
-// the characters bounding rect is given by QRect(x,y,width,height), its
-// advance by xoff
+// * y is usually negative, and is equal to the ascent.
+// * negative yoff means the following stuff is drawn higher up.
+// the characters bounding rect is given by QRect(x,y,width,height), its advance by
+// xoo and yoff
 struct glyph_metrics_t
 {
     inline glyph_metrics_t()
         : x(100000),  y(100000) {}
-    inline glyph_metrics_t(QFixed _x, QFixed _y, QFixed _width, QFixed _height, QFixed _xoff)
+    inline glyph_metrics_t(QFixed _x, QFixed _y, QFixed _width, QFixed _height, QFixed _xoff, QFixed _yoff)
         : x(_x),
           y(_y),
           width(_width),
           height(_height),
-          xoff(_xoff)
+          xoff(_xoff),
+          yoff(_yoff)
         {}
     QFixed x;
     QFixed y;
     QFixed width;
     QFixed height;
     QFixed xoff;
+    QFixed yoff;
 
+    glyph_metrics_t transformed(const QTransform &xform) const;
     inline bool isValid() const {return x != 100000 && y != 100000;}
 };
-
+Q_DECLARE_TYPEINFO(glyph_metrics_t, Q_PRIMITIVE_TYPE);
 
 struct Q_AUTOTEST_EXPORT QScriptAnalysis
 {
     enum Flags {
         None = 0,
-        LineOrParagraphSeparator = 1,
-        Space = 2,
+        Lowercase = 1,
+        Uppercase = 2,
+        SmallCaps = 3,
+        LineOrParagraphSeparator = 4,
+        Space = 5,
         SpaceTabOrObject = Space,
-        Tab = 3,
+        Tab = 6,
         TabOrObject = Tab,
-        Object = 4
+        Object = 7
     };
-
-    inline QScriptAnalysis()
-        : script(QUnicodeTables::Common),  flags(None) {}
-
     QUnicodeTables::Script script;
+    unsigned short bidiLevel;  // Unicode Bidi algorithm embedding level (0-61)
     Flags flags;
     inline bool operator == (const QScriptAnalysis &other) const {
-        return script == other.script && flags == other.flags;
+        return script == other.script && bidiLevel == other.bidiLevel && flags == other.flags;
     }
 };
+Q_DECLARE_TYPEINFO(QScriptAnalysis, Q_PRIMITIVE_TYPE);
 
 struct QGlyphJustification
 {
-    enum JustificationType {
-        JustifyNone,
-        JustifySpace
-    };
-
     inline QGlyphJustification()
-        : type(JustifyNone), space_18d6(0)
+        : type(JustifyNone), nKashidas(0), space_18d6(0)
     {}
 
+    enum JustificationType {
+        JustifyNone,
+        JustifySpace,
+        JustifyKashida
+    };
+
     JustificationType type;
+    uint nKashidas; // more do not make sense...
     uint space_18d6;
 };
+Q_DECLARE_TYPEINFO(QGlyphJustification, Q_PRIMITIVE_TYPE);
 
-#define QSPACEFORGLYPHS(__glyphcount) \
-    (__glyphcount * (sizeof(HB_Glyph) + sizeof(HB_GlyphAttributes) \
-        + sizeof(QFixed) + sizeof(QGlyphJustification)))
+struct QGlyphLayoutInstance
+{
+    QFixedPoint offset;
+    QFixedPoint advance;
+    HB_Glyph glyph;
+    QGlyphJustification justification;
+    HB_GlyphAttributes attributes;
+};
 
 struct QGlyphLayout
 {
     // init to 0 not needed, done when shaping
+    QFixedPoint *offsets; // 8 bytes per element
     HB_Glyph *glyphs; // 4 bytes per element
     QFixed *advances_x; // 4 bytes per element
+    QFixed *advances_y; // 4 bytes per element
     QGlyphJustification *justifications; // 4 bytes per element
     HB_GlyphAttributes *attributes; // 2 bytes per element
 
@@ -129,9 +145,13 @@ struct QGlyphLayout
 
     inline explicit QGlyphLayout(char *address, int totalGlyphs)
     {
-        int offset = totalGlyphs * sizeof(HB_Glyph);
-        glyphs = reinterpret_cast<HB_Glyph *>(address);
+        offsets = reinterpret_cast<QFixedPoint *>(address);
+        int offset = totalGlyphs * sizeof(HB_FixedPoint);
+        glyphs = reinterpret_cast<HB_Glyph *>(address + offset);
+        offset += totalGlyphs * sizeof(HB_Glyph);
         advances_x = reinterpret_cast<QFixed *>(address + offset);
+        offset += totalGlyphs * sizeof(QFixed);
+        advances_y = reinterpret_cast<QFixed *>(address + offset);
         offset += totalGlyphs * sizeof(QFixed);
         justifications = reinterpret_cast<QGlyphJustification *>(address + offset);
         offset += totalGlyphs * sizeof(QGlyphJustification);
@@ -143,6 +163,8 @@ struct QGlyphLayout
         QGlyphLayout copy = *this;
         copy.glyphs += position;
         copy.advances_x += position;
+        copy.advances_y += position;
+        copy.offsets += position;
         copy.justifications += position;
         copy.attributes += position;
         if (n == -1)
@@ -152,39 +174,78 @@ struct QGlyphLayout
         return copy;
     }
 
+    static inline int spaceNeededForGlyphLayout(int totalGlyphs) {
+        return totalGlyphs * (sizeof(HB_Glyph) + sizeof(HB_GlyphAttributes)
+                + sizeof(QFixed) + sizeof(QFixed) + sizeof(QFixedPoint)
+                + sizeof(QGlyphJustification));
+    }
+
     inline QFixed effectiveAdvance(int item) const
     { return (advances_x[item] + QFixed::fromFixed(justifications[item].space_18d6)) * !attributes[item].dontPrint; }
+
+    inline QGlyphLayoutInstance instance(int position) const {
+        QGlyphLayoutInstance g;
+        g.offset.x = offsets[position].x;
+        g.offset.y = offsets[position].y;
+        g.glyph = glyphs[position];
+        g.advance.x = advances_x[position];
+        g.advance.y = advances_y[position];
+        g.justification = justifications[position];
+        g.attributes = attributes[position];
+        return g;
+    }
+
+    inline void setInstance(int position, const QGlyphLayoutInstance &g) {
+        offsets[position].x = g.offset.x;
+        offsets[position].y = g.offset.y;
+        glyphs[position] = g.glyph;
+        advances_x[position] = g.advance.x;
+        advances_y[position] = g.advance.y;
+        justifications[position] = g.justification;
+        attributes[position] = g.attributes;
+    }
 
     inline void clear(int first = 0, int last = -1) {
         if (last == -1)
             last = numGlyphs;
-        if (first == 0 && last == numGlyphs) {
-            memset(glyphs, 0, QSPACEFORGLYPHS(numGlyphs));
+        if (first == 0 && last == numGlyphs
+            && reinterpret_cast<char *>(offsets + numGlyphs) == reinterpret_cast<char *>(glyphs)) {
+            memset(offsets, 0, spaceNeededForGlyphLayout(numGlyphs));
         } else {
             const int num = last - first;
+            memset(offsets + first, 0, num * sizeof(QFixedPoint));
             memset(glyphs + first, 0, num * sizeof(HB_Glyph));
             memset(advances_x + first, 0, num * sizeof(QFixed));
+            memset(advances_y + first, 0, num * sizeof(QFixed));
             memset(justifications + first, 0, num * sizeof(QGlyphJustification));
             memset(attributes + first, 0, num * sizeof(HB_GlyphAttributes));
         }
     }
 
     inline char *data() {
-        return reinterpret_cast<char *>(glyphs);
+        return reinterpret_cast<char *>(offsets);
     }
 
     void grow(char *address, int totalGlyphs);
 };
 
-class QVarLengthGlyphLayoutArray : private QStdVector<void *>, public QGlyphLayout
+class QVarLengthGlyphLayoutArray : private QVarLengthArray<void *>, public QGlyphLayout
 {
 private:
-    typedef QStdVector<void *> Array;
+    typedef QVarLengthArray<void *> Array;
 public:
     QVarLengthGlyphLayoutArray(int totalGlyphs)
-        : Array(QSPACEFORGLYPHS(totalGlyphs) / QT_POINTER_SIZE + 1)
+        : Array(spaceNeededForGlyphLayout(totalGlyphs) / QT_POINTER_SIZE + 1)
         , QGlyphLayout(reinterpret_cast<char *>(Array::data()), totalGlyphs)
     {
+        memset(Array::data(), 0, Array::size() * QT_POINTER_SIZE);
+    }
+
+    void resize(int totalGlyphs)
+    {
+        Array::resize(spaceNeededForGlyphLayout(totalGlyphs) / QT_POINTER_SIZE + 1);
+
+        *((QGlyphLayout *)this) = QGlyphLayout(reinterpret_cast<char *>(Array::data()), totalGlyphs);
         memset(Array::data(), 0, Array::size() * QT_POINTER_SIZE);
     }
 };
@@ -199,7 +260,10 @@ public:
     }
 
 private:
-    void *buffer[QSPACEFORGLYPHS(N) / QT_POINTER_SIZE + 1];
+    void *buffer[(N * (sizeof(HB_Glyph) + sizeof(HB_GlyphAttributes)
+                + sizeof(QFixed) + sizeof(QFixed) + sizeof(QFixedPoint)
+                + sizeof(QGlyphJustification)))
+                    / QT_POINTER_SIZE + 1];
 };
 
 struct QScriptItem;
@@ -217,6 +281,7 @@ public:
 
     /// copy the structure items, adjusting the glyphs arrays to the right subarrays.
     /// the width of the returned QTextItemInt is not adjusted, for speed reasons
+    QTextItemInt midItem(QFontEngine *fontEngine, int firstGlyphIndex, int numGlyphs) const;
     void initWithScriptItem(const QScriptItem &si);
 
     QFixed descent;
@@ -230,7 +295,7 @@ public:
     int num_chars;
     const QChar *chars;
     const unsigned short *logClusters;
-    QFont *f;
+    const QFont *f;
 
     QGlyphLayout glyphs;
     QFontEngine *fontEngine;
@@ -258,6 +323,9 @@ struct Q_AUTOTEST_EXPORT QScriptItem
     QFixed height() const { return ascent + descent + 1; }
 };
 
+
+Q_DECLARE_TYPEINFO(QScriptItem, Q_MOVABLE_TYPE);
+
 typedef QVector<QScriptItem> QScriptItemArray;
 
 struct Q_AUTOTEST_EXPORT QScriptLine
@@ -266,7 +334,7 @@ struct Q_AUTOTEST_EXPORT QScriptLine
     QScriptLine()
         : from(0), trailingSpaces(0), length(0),
         justified(false), gridfitted(false),
-        leadingIncluded(false) {}
+        hasTrailingSpaces(false), leadingIncluded(false) {}
     QFixed descent;
     QFixed ascent;
     QFixed leading;
@@ -280,6 +348,7 @@ struct Q_AUTOTEST_EXPORT QScriptLine
     int length;
     mutable bool justified;
     mutable bool gridfitted;
+    bool hasTrailingSpaces;
     bool leadingIncluded;
     QFixed height() const { return (ascent + descent).ceil() + 1
                             + (leadingIncluded?  qMax(QFixed(),leading) : QFixed()); }
@@ -288,6 +357,7 @@ struct Q_AUTOTEST_EXPORT QScriptLine
     void setDefaultHeight(QTextEngine *eng);
     void operator+=(const QScriptLine &other);
 };
+Q_DECLARE_TYPEINFO(QScriptLine, Q_PRIMITIVE_TYPE);
 
 
 inline void QScriptLine::operator+=(const QScriptLine &other)
@@ -299,7 +369,7 @@ inline void QScriptLine::operator+=(const QScriptLine &other)
     length += other.length;
 }
 
-typedef QStdVector<QScriptLine> QScriptLineArray;
+typedef QVector<QScriptLine> QScriptLineArray;
 
 class QFontPrivate;
 class QTextFormatCollection;
@@ -312,15 +382,19 @@ public:
         LayoutFailed
     };
     struct LayoutData {
+        LayoutData(const QString &str, void **stack_memory, int mem_size);
         LayoutData();
         ~LayoutData();
         mutable QScriptItemArray items;
         int allocated;
+        int available_glyphs;
         void **memory;
         unsigned short *logClustersPtr;
         QGlyphLayout glyphLayout;
         mutable int used;
+        bool hasBidi;
         LayoutState layoutState;
+        bool memory_on_stack;
         bool haveCharAttributes;
         QString string;
         bool reallocate(int totalGlyphs);
@@ -333,6 +407,8 @@ public:
 
     // keep in sync with QAbstractFontEngine::TextShapingFlag!!
     enum ShaperFlag {
+        RightToLeft = 0x0001,
+        DesignMetrics = 0x0002,
         GlyphIndicesOnly = 0x0004
     };
     Q_DECLARE_FLAGS(ShaperFlags, ShaperFlag)
@@ -343,6 +419,9 @@ public:
     void validate() const;
     void itemize() const;
 
+    bool isRightToLeft() const;
+    static void bidiReorder(int numRuns, const quint8 *levels, int *visualOrder);
+
     const HB_CharAttributes *attributes() const;
 
     void shape(int item) const;
@@ -352,6 +431,7 @@ public:
 
     QFixed width(int charFrom, int numChars) const;
     glyph_metrics_t boundingBox(int from,  int len) const;
+    glyph_metrics_t tightBoundingBox(int from,  int len) const;
 
     int length(int item) const {
         int from = layoutData->items[item].position;
@@ -424,6 +504,23 @@ public:
 
     mutable QScriptLineArray lines;
 
+    struct FontEngineCache {
+        FontEngineCache();
+        mutable QFontEngine *prevFontEngine;
+        mutable QFontEngine *prevScaledFontEngine;
+        mutable int prevScript;
+        mutable int prevPosition;
+        mutable int prevLength;
+        inline void reset() {
+            prevFontEngine = 0;
+            prevScaledFontEngine = 0;
+            prevScript = -1;
+            prevPosition = -1;
+            prevLength = -1;
+        }
+    };
+    mutable FontEngineCache feCache;
+
     QString text;
     QFont fnt;
     QTextBlock block;
@@ -433,16 +530,29 @@ public:
     QFixed minWidth;
     QFixed maxWidth;
     QPointF position;
+    bool ignoreBidi;
     bool cacheGlyphs;
+    bool stackEngine;
+    bool forceJustification;
+    bool visualMovement;
+
+    int *underlinePositions;
 
     mutable LayoutData *layoutData;
 
     inline bool hasFormats() const { return (block.docHandle() || specialData); }
+    inline bool visualCursorMovement() const
+    {
+        return (visualMovement ||
+                (block.docHandle() ? block.docHandle()->defaultCursorMoveStyle == Qt::VisualMoveStyle : false));
+    }
 
     struct SpecialData {
+        int preeditPosition;
+        QString preeditText;
         QList<QTextLayout::FormatRange> addFormats;
-        QStdVector<int> addFormatIndices;
-        QStdVector<int> resolvedFormatIndices;
+        QVector<int> addFormatIndices;
+        QVector<int> resolvedFormatIndices;
     };
     SpecialData *specialData;
 
@@ -450,13 +560,19 @@ public:
     bool atSpace(int position) const;
     void indexAdditionalFormats();
 
-    QString elidedText(Qt::TextElideMode mode, const QFixed &width, int flags) const;
+    QString elidedText(Qt::TextElideMode mode, const QFixed &width, int flags = 0) const;
 
     void shapeLine(const QScriptLine &line);
+    QFixed leadingSpaceWidth(const QScriptLine &line);
 
     QFixed offsetInLigature(const QScriptItem *si, int pos, int max, int glyph_pos);
     int positionInLigature(const QScriptItem *si, int end, QFixed x, QFixed edge, int glyph_pos, bool cursorOnCharacter);
+    int previousLogicalPosition(int oldPos) const;
+    int nextLogicalPosition(int oldPos) const;
     int lineNumberForTextPosition(int pos);
+    int positionAfterVisualMovement(int oldPos, QTextCursor::MoveOperation op);
+    void insertionPointsForLine(int lineNum, QVector<int> &insertionPoints);
+    void resetFontEngineCache();
 
 private:
     void setBoundary(int strPos) const;
@@ -465,7 +581,17 @@ private:
     void shapeTextWithHarfbuzz(int item) const;
 
     void resolveAdditionalFormats() const;
-    int getClusterLength(unsigned short *logClusters, const HB_CharAttributes *attributes, int to, int glyph_pos, int *start);
+    int endOfLine(int lineNum);
+    int beginningOfLine(int lineNum);
+    int getClusterLength(unsigned short *logClusters, const HB_CharAttributes *attributes, int from, int to, int glyph_pos, int *start);
+};
+
+class QStackTextEngine : public QTextEngine {
+public:
+    enum { MemSize = 256 * 40 / QT_POINTER_SIZE };
+    QStackTextEngine(const QString &string, const QFont &f);
+    LayoutData _layoutData;
+    void *_memory[MemSize];
 };
 
 struct QTextLineItemIterator
@@ -486,6 +612,7 @@ struct QTextLineItemIterator
     QTextEngine *eng;
 
     QFixed x;
+    QFixed pos_x;
     const QScriptLine &line;
     QScriptItem *si;
 
@@ -504,6 +631,9 @@ struct QTextLineItemIterator
     int itemEnd;
 
     QFixed itemWidth;
+
+    QVarLengthArray<int> visualOrder;
+    QVarLengthArray<uchar> levels;
 
     const QTextLayout::FormatRange *selection;
 };

@@ -33,6 +33,9 @@
 #include "qrubberband.h"
 #include "qlistview_p.h"
 #include "qdebug.h"
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -172,6 +175,13 @@ QListView::QListView(QListViewPrivate &dd, QWidget *parent)
     setSelectionMode(SingleSelection);
     Q_D(QListView);               // We rely on a qobject_cast for PM_DefaultFrameWidth to change
     d->updateStyledFrameWidths(); // hence we have to force an update now that the object has been constructed
+}
+
+/*!
+  Destroys the view.
+*/
+QListView::~QListView()
+{
 }
 
 /*!
@@ -623,7 +633,7 @@ QItemViewPaintPairs QListViewPrivate::draggablePaintPairs(const QModelIndexList 
     QRect &rect = *r;
     const QRect viewportRect = viewport->rect();
     QItemViewPaintPairs ret;
-    const QVector<QModelIndex> visibleIndexes = intersectingSet(viewportRect);
+    const QSet<QModelIndex> visibleIndexes = intersectingSet(viewportRect).toList().toSet();
     for (int i = 0; i < indexes.count(); ++i) {
         const QModelIndex &index = indexes.at(i);
         if (visibleIndexes.contains(index)) {
@@ -3139,6 +3149,58 @@ void QIconModeViewBase::updateContentsSize()
     for (int i = 0; i < items.count(); ++i)
         bounding |= items.at(i).rect();
     contentsSize = bounding.size();
+}
+
+/*!
+  \reimp
+*/
+void QListView::currentChanged(const QModelIndex &current, const QModelIndex &previous)
+{
+#ifndef QT_NO_ACCESSIBILITY
+    if (QAccessible::isActive()) {
+        if (current.isValid()) {
+            int entry = visualIndex(current) + 1;
+#ifdef Q_WS_X11
+            QAccessible::updateAccessibility(this, entry, QAccessible::Focus);
+#else
+            QAccessible::updateAccessibility(viewport(), entry, QAccessible::Focus);
+#endif
+        }
+    }
+#endif
+    QAbstractItemView::currentChanged(current, previous);
+}
+
+/*!
+  \reimp
+*/
+void QListView::selectionChanged(const QItemSelection &selected,
+                                 const QItemSelection &deselected)
+{
+#ifndef QT_NO_ACCESSIBILITY
+    if (QAccessible::isActive()) {
+        // ### does not work properly for selection ranges.
+        QModelIndex sel = selected.indexes().value(0);
+        if (sel.isValid()) {
+            int entry = visualIndex(sel) + 1;
+#ifdef Q_WS_X11
+            QAccessible::updateAccessibility(this, entry, QAccessible::Selection);
+#else
+            QAccessible::updateAccessibility(viewport(), entry, QAccessible::Selection);
+#endif
+        }
+        QModelIndex desel = deselected.indexes().value(0);
+        if (desel.isValid()) {
+            int entry = visualIndex(desel) + 1;
+#ifdef Q_WS_X11
+            QAccessible::updateAccessibility(this, entry, QAccessible::SelectionRemove);
+#else
+            QAccessible::updateAccessibility(viewport(), entry, QAccessible::SelectionRemove);
+#endif
+        }
+    }
+#endif
+    QAbstractItemView::selectionChanged(selected, deselected);
 }
 
 int QListView::visualIndex(const QModelIndex &index) const

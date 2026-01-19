@@ -30,6 +30,10 @@
 
 QT_BEGIN_NAMESPACE
 
+#ifdef QFORMINTERNAL_NAMESPACE
+namespace QFormInternal {
+#endif
+
 enum { themeDebug = 0 };
 
 QResourceBuilder::QResourceBuilder()
@@ -148,5 +152,9 @@ bool QResourceBuilder::isResourceType(const QVariant &value) const
     }
     return false;
 }
+
+#ifdef QFORMINTERNAL_NAMESPACE
+} // namespace QFormInternal
+#endif
 
 QT_END_NAMESPACE

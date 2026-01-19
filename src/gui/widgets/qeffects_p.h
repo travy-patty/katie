@@ -42,6 +42,19 @@ QT_BEGIN_NAMESPACE
 
 class QWidget;
 
+struct QEffects
+{
+    enum Direction {
+        LeftScroll  = 0x0001,
+        RightScroll = 0x0002,
+        UpScroll    = 0x0004,
+        DownScroll  = 0x0008
+    };
+
+    typedef uint DirFlags;
+};
+
+extern void Q_GUI_EXPORT qScrollEffect(QWidget*, QEffects::DirFlags dir = QEffects::DownScroll);
 extern void Q_GUI_EXPORT qFadeEffect(QWidget*);
 
 QT_END_NAMESPACE

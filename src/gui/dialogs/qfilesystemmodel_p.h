@@ -50,7 +50,7 @@
 
 QT_BEGIN_NAMESPACE
 
-class QExtendedInformation;
+class ExtendedInformation;
 class QFileSystemModelPrivate;
 class QFileIconProvider;
 
@@ -95,22 +95,31 @@ public:
         inline bool isSystem() const { if (info) return info->isSystem(); return true; }
         inline bool isHidden() const { if (info) return info->isHidden(); return false; }
         inline bool isSymLink() const { return info && info->isSymLink(); }
+        inline bool caseSensitive() const { if (info) return info->isCaseSensitive(); return false; }
         inline QIcon icon() const { if (info) return info->icon; return QIcon(); }
 
         inline bool operator <(const QFileSystemNode &node) const {
-            return fileName < node.fileName;
+            if (caseSensitive() || node.caseSensitive())
+                return fileName < node.fileName;
+            return QString::compare(fileName, node.fileName, Qt::CaseInsensitive) < 0;
         }
         inline bool operator >(const QString &name) const {
-            return fileName > name;
+            if (caseSensitive())
+                return fileName > name;
+            return QString::compare(fileName, name, Qt::CaseInsensitive) > 0;
         }
         inline bool operator <(const QString &name) const {
-            return fileName < name;
+            if (caseSensitive())
+                return fileName < name;
+            return QString::compare(fileName, name, Qt::CaseInsensitive) < 0;
         }
         inline bool operator !=(const QExtendedInformation &fileInfo) const {
             return !operator==(fileInfo);
         }
         bool operator ==(const QString &name) const {
-            return fileName == name;
+            if (caseSensitive())
+                return fileName == name;
+            return QString::compare(fileName, name, Qt::CaseInsensitive) == 0;
         }
         bool operator ==(const QExtendedInformation &fileInfo) const {
             return info && (*info == fileInfo);
@@ -253,7 +262,9 @@ public:
     static int naturalCompare(const QString &s1, const QString &s2, Qt::CaseSensitivity cs);
 
     QDir rootDir;
+#ifndef QT_NO_FILESYSTEMWATCHER
     QFileInfoGatherer fileInfoGatherer;
+#endif
     QTimer delayedSortTimer;
     bool forceSort;
     int sortColumn;
@@ -280,9 +291,9 @@ public:
     QList<Fetching> toFetch;
 
 };
+#endif // QT_NO_FILESYSTEMMODEL
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_FILESYSTEMMODEL
+#endif
 
-#endif // QFILESYSTEMMODEL_P_H

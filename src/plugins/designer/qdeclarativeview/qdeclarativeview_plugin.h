@@ -26,11 +26,12 @@
 
 QT_BEGIN_NAMESPACE
 
-class QDeclarativeViewWidget: public QCustomWidget
+class QDeclarativeViewPlugin: public QObject, public QDesignerCustomWidgetInterface
 {
     Q_OBJECT
+    Q_INTERFACES(QDesignerCustomWidgetInterface)
 public:
-    QDeclarativeViewWidget(QObject *parent = nullptr);
+    QDeclarativeViewPlugin(QObject *parent = nullptr);
 
     virtual QString name() const;
     virtual QString group() const;
@@ -41,24 +42,11 @@ public:
     virtual bool isContainer() const;
     virtual QWidget *createWidget(QWidget *parent);
     virtual bool isInitialized() const;
-    virtual void initialize();
+    virtual void initialize(QDesignerFormEditorInterface *core);
     virtual QString domXml() const;
 
 private:
     bool m_initialized;
-};
-
-class QDeclarativeViewPlugin: public QCustomWidgetPlugin
-{
-    Q_OBJECT
-public:
-    QDeclarativeViewPlugin(QObject *parent = nullptr);
-    virtual ~QDeclarativeViewPlugin();
-
-    virtual QList<QCustomWidget*> customWidgets() const;
-
-private:
-    QList<QCustomWidget*> m_plugins;
 };
 
 QT_END_NAMESPACE

@@ -23,11 +23,153 @@
 #include "qcursor.h"
 #include "qcursor_p.h"
 #include "qx11info_x11.h"
+#include "qpixmap_x11_p.h"
 #include "qt_x11_p.h"
 
 QT_BEGIN_NAMESPACE
 
+extern QPixmap qt_toX11Pixmap(const QPixmap &pixmap); // qpixmap_x11.cpp
+
+/*****************************************************************************
+  Internal QCursorData class
+ *****************************************************************************/
+
+QCursorData::QCursorData(Qt::CursorShape s)
+    : ref(1), cshape(s), bm(nullptr), bmm(nullptr), hx(0), hy(0), hcurs(0), pm(0)
+{
+}
+
+QCursorData::~QCursorData()
+{
+    Display *dpy = qt_x11Data ? qt_x11Data->display : (Display*)0;
+
+    // Add in checking for the display too as on HP-UX
+    // we seem to get a core dump as the cursor data is
+    // deleted again from main() on exit...
+    if (hcurs && dpy)
+        XFreeCursor(dpy, hcurs);
+    if (pm && dpy)
+        XFreePixmap(dpy, pm);
+    delete bm;
+    delete bmm;
+}
+
 #ifndef QT_NO_CURSOR
+QCursor::QCursor(Qt::HANDLE cursor)
+{
+    if (!QCursorData::initialized)
+        QCursorData::initialize();
+    d = new QCursorData(Qt::CustomCursor);
+    d->hcurs = cursor;
+}
+
+#endif
+
+QCursorData *QCursorData::setBitmap(const QBitmap &bitmap, const QBitmap &mask, int hotX, int hotY)
+{
+    if (!QCursorData::initialized)
+        QCursorData::initialize();
+    if (Q_UNLIKELY(bitmap.depth() != 1 || mask.depth() != 1 || bitmap.size() != mask.size())) {
+        qWarning("QCursor: Cannot create bitmap cursor; invalid bitmap(s)");
+        QCursorData *c = qt_cursorTable[0];
+        c->ref.ref();
+        return c;
+    }
+    QCursorData *d = new QCursorData(Qt::BitmapCursor);
+
+    d->bm  = new QBitmap(qt_toX11Pixmap(bitmap));
+    d->bmm = new QBitmap(qt_toX11Pixmap(mask));
+    d->hx = hotX >= 0 ? hotX : bitmap.width() / 2;
+    d->hy = hotY >= 0 ? hotY : bitmap.height() / 2;
+    d->fg.red   = 0x0000;
+    d->fg.green = 0x0000;
+    d->fg.blue  = 0x0000;
+    d->bg.red   = 0xffff;
+    d->bg.green = 0xffff;
+    d->bg.blue  = 0xffff;
+    return d;
+}
+
+
+
+#ifndef QT_NO_CURSOR
+Qt::HANDLE QCursor::handle() const
+{
+    if (!QCursorData::initialized)
+        QCursorData::initialize();
+    if (!d->hcurs)
+        d->update();
+    return d->hcurs;
+}
+#endif
+
+QPoint QCursor::pos()
+{
+    Window root;
+    Window child;
+    int root_x, root_y, win_x, win_y;
+    uint buttons;
+    Display* dpy = qt_x11Data->display;
+    for (int i = 0; i < ScreenCount(dpy); ++i) {
+        if (XQueryPointer(dpy, QX11Info::appRootWindow(i), &root, &child, &root_x, &root_y,
+                          &win_x, &win_y, &buttons))
+
+            return QPoint(root_x, root_y);
+    }
+    return QPoint();
+}
+
+/*! \internal
+*/
+#ifndef QT_NO_CURSOR
+int QCursor::x11Screen()
+{
+    Window root;
+    Window child;
+    int root_x, root_y, win_x, win_y;
+    uint buttons;
+    Display* dpy = qt_x11Data->display;
+    for (int i = 0; i < ScreenCount(dpy); ++i) {
+        if (XQueryPointer(dpy, QX11Info::appRootWindow(i), &root, &child, &root_x, &root_y,
+                          &win_x, &win_y, &buttons))
+            return i;
+    }
+    return -1;
+}
+#endif
+
+void QCursor::setPos(int x, int y)
+{
+    QPoint current, target(x, y);
+
+    // this is copied from pos(), since we need the screen number for the correct
+    // root window in the XWarpPointer call
+    Window root;
+    Window child;
+    int root_x, root_y, win_x, win_y;
+    uint buttons;
+    Display* dpy = qt_x11Data->display;
+    int screen;
+    for (screen = 0; screen < ScreenCount(dpy); ++screen) {
+        if (XQueryPointer(dpy, QX11Info::appRootWindow(screen), &root, &child, &root_x, &root_y,
+                          &win_x, &win_y, &buttons)) {
+            current = QPoint(root_x, root_y);
+            break;
+        }
+    }
+
+    if (screen >= ScreenCount(dpy))
+        return;
+
+    // Need to check, since some X servers generate null mouse move
+    // events, causing looping in applications which call setPos() on
+    // every mouse move event.
+    if (current == target)
+        return;
+
+    XWarpPointer(qt_x11Data->display, XNone, QX11Info::appRootWindow(screen), 0, 0, 0, 0, x, y);
+}
+
 // values are from:
 // https://www.freedesktop.org/wiki/Specifications/cursor-spec/
 // https://tronche.com/gui/x/xlib/appendix/b/
@@ -67,198 +209,67 @@ static const char x11_blank_cursor_bits[] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-/*****************************************************************************
-  Internal QCursorData class
- *****************************************************************************/
+/*!
+    \internal
 
-QCursorData::QCursorData(Qt::CursorShape s)
-    : ref(1), cshape(s), hx(0), hy(0), hcurs(0), x11px(0), x11bm(0)
+    Creates the cursor.
+*/
+void QCursorData::update()
+{
+    if (!QCursorData::initialized)
+        QCursorData::initialize();
+    if (hcurs)
+        return;
+
+    Display *dpy = qt_x11Data->display;
+
+    // Non-standard X11 cursors are created from bitmaps
+    if (cshape == Qt::BitmapCursor) {
 #ifndef QT_NO_XRENDER
-    , x11pic(0)
+        if (!pixmap.isNull() && qt_x11Data->use_xrender) {
+            pixmap = qt_toX11Pixmap(pixmap);
+            hcurs = XRenderCreateCursor(qt_x11Data->display, pixmap.x11PictureHandle(), hx, hy);
+        } else
 #endif
-{
-}
-
-QCursorData::~QCursorData()
-{
-    Display *dpy = (qt_x11Data ? qt_x11Data->display : nullptr);
-
-    // Add in checking for the display too as on HP-UX
-    // we seem to get a core dump as the cursor data is
-    // deleted again from main() on exit...
-    if (hcurs && dpy) {
-        XFreeCursor(dpy, hcurs);
-    }
-#ifndef QT_NO_XRENDER
-    if (x11pic) {
-        XRenderFreePicture(dpy, x11pic);
-    }
-#endif
-    if (x11px && dpy) {
-        XFreePixmap(dpy, x11px);
-    }
-    if (x11bm && dpy) {
-        XFreePixmap(dpy, x11bm);
-    }
-}
-
-QCursor::QCursor(Qt::HANDLE cursor)
-    : d(new QCursorData(Qt::CustomCursor))
-{
-    d->hcurs = cursor;
-}
-
-Qt::HANDLE QCursor::handle() const
-{
-    if (!d) {
-        return 0;
-    }
-
-    Display *dpy = (qt_x11Data ? qt_x11Data->display : nullptr);
-    if (!dpy) {
-        return 0;
-    }
-
-    if (!d->hcurs) {
-        // Non-standard X11 cursors are created from bitmaps
-        if (d->cshape == Qt::BitmapCursor) {
-#ifndef QT_NO_XRENDER
-            if (!d->px.isNull() && qt_x11Data->use_xrender) {
-                d->x11px = d->px.toX11Pixmap();
-                XRenderPictFormat *format = (d->px.depth() == 1)
-                                        ? XRenderFindStandardFormat(dpy, PictStandardA1)
-                                        : XRenderFindStandardFormat(dpy, PictStandardARGB32);
-                d->x11pic = XRenderCreatePicture(dpy, d->x11px, format, 0, 0);
-                if (d->x11pic) {
-                    d->hcurs = XRenderCreateCursor(dpy, d->x11pic, d->hx, d->hy);
-                }
-                return d->hcurs;
-            }
-#endif
-            if (!d->px.isNull()) {
-                d->x11px = d->px.toX11Pixmap();
-                d->x11bm = d->bm.toX11Pixmap();
-                d->hcurs = XCreatePixmapCursor(dpy, d->x11px, d->x11bm, &d->fg, &d->bg, d->hx, d->hy);
-            }
-            return d->hcurs;
+        {
+            hcurs = XCreatePixmapCursor(dpy, bm->handle(), bmm->handle(), &fg, &bg, hx, hy);
         }
+        return;
+    }
 
 #ifndef QT_NO_XCURSOR
-        if (!d->hcurs) {
-            d->hcurs = XcursorLibraryLoadCursor(dpy, CursorTbl[d->cshape].name);
-        }
-        if (!d->hcurs && CursorTbl[d->cshape].alternative) {
-            d->hcurs = XcursorLibraryLoadCursor(dpy, CursorTbl[d->cshape].alternative);
-        }
-        if (d->hcurs) {
-            return d->hcurs;
-        }
+    if (!hcurs)
+        hcurs = XcursorLibraryLoadCursor(dpy, CursorTbl[cshape].name);
+    if (!hcurs && CursorTbl[cshape].alternative)
+        hcurs = XcursorLibraryLoadCursor(dpy, CursorTbl[cshape].alternative);
+    if (hcurs)
+        return;
 #endif // QT_NO_XCURSOR
 
-        // Q cursor to X cursor
-        if (d->cshape == Qt::BlankCursor) {
-            XColor bg, fg;
-            bg.red   = 255 << 8;
-            bg.green = 255 << 8;
-            bg.blue  = 255 << 8;
-            fg.red   = 0;
-            fg.green = 0;
-            fg.blue  = 0;
-            d->x11bm = XCreateBitmapFromData(dpy, QX11Info::appRootWindow(), x11_blank_cursor_bits, 16, 16);
-            // reusing the pixmap as mask to create invisible cursor
-            d->hcurs = XCreatePixmapCursor(dpy, d->x11bm, d->x11bm, &fg, &bg, 8, 8);
-        } else {
-            d->hcurs = XCreateFontCursor(dpy, CursorTbl[d->cshape].font);
-            if (Q_UNLIKELY(!d->hcurs)) {
-                qWarning("QCursor::update: Invalid cursor shape %d", d->cshape);
+    // Q cursor to X cursor
+    if (cshape == Qt::BlankCursor) {
+        XColor bg, fg;
+        bg.red   = 255 << 8;
+        bg.green = 255 << 8;
+        bg.blue  = 255 << 8;
+        fg.red   = 0;
+        fg.green = 0;
+        fg.blue  = 0;
+        pm  = XCreateBitmapFromData(dpy, QX11Info::appRootWindow(), x11_blank_cursor_bits, 16, 16);
+        // reusing the pixmap as mask to create invisible cursor
+        hcurs = XCreatePixmapCursor(dpy, pm, pm, &fg, &bg, 8, 8);
+    } else {
+        hcurs = XCreateFontCursor(dpy, CursorTbl[cshape].font);
+        if (Q_UNLIKELY(!hcurs)) {
+            qWarning("QCursor::update: Invalid cursor shape %d", cshape);
 #ifndef QT_NO_XFIXES
-            } else if (qt_x11Data->use_xfixes) {
-                XFixesSetCursorName(dpy, d->hcurs, CursorTbl[d->cshape].name);
+        } else if (qt_x11Data->use_xfixes) {
+            XFixesSetCursorName(dpy, hcurs, CursorTbl[cshape].name);
 #endif
-            }
         }
     }
-    return d->hcurs;
-}
-
-/*! \internal
-*/
-int QCursor::x11Screen()
-{
-    Display *dpy = (qt_x11Data ? qt_x11Data->display : nullptr);
-    if (!dpy) {
-        return -1;
-    }
-    Window root;
-    Window child;
-    int root_x, root_y, win_x, win_y;
-    uint buttons;
-    for (int i = 0; i < ScreenCount(dpy); ++i) {
-        if (XQueryPointer(dpy, QX11Info::appRootWindow(i), &root, &child, &root_x, &root_y,
-                          &win_x, &win_y, &buttons)) {
-            return i;
-        }
-    }
-    return -1;
-}
-#endif // QT_NO_CURSOR
-
-QPoint QCursor::pos()
-{
-    Display *dpy = (qt_x11Data ? qt_x11Data->display : nullptr);
-    if (!dpy) {
-        return QPoint();
-    }
-    Window root;
-    Window child;
-    int root_x, root_y, win_x, win_y;
-    uint buttons;
-    for (int i = 0; i < ScreenCount(dpy); ++i) {
-        if (XQueryPointer(dpy, QX11Info::appRootWindow(i), &root, &child, &root_x, &root_y,
-                          &win_x, &win_y, &buttons)) {
-            return QPoint(root_x, root_y);
-        }
-    }
-    return QPoint();
-}
-
-void QCursor::setPos(int x, int y)
-{
-    Display *dpy = (qt_x11Data ? qt_x11Data->display : nullptr);
-    if (!dpy) {
-        return;
-    }
-
-    QPoint current;
-    QPoint target(x, y);
-    // this is copied from pos(), since we need the screen number for the correct
-    // root window in the XWarpPointer call
-    Window root;
-    Window child;
-    int root_x, root_y, win_x, win_y;
-    uint buttons;
-    int screen = 0;
-    for (; screen < ScreenCount(dpy); ++screen) {
-        if (XQueryPointer(dpy, QX11Info::appRootWindow(screen), &root, &child, &root_x, &root_y,
-                          &win_x, &win_y, &buttons)) {
-            current = QPoint(root_x, root_y);
-            break;
-        }
-    }
-
-    if (screen >= ScreenCount(dpy)) {
-        return;
-    }
-
-    // Need to check, since some X servers generate null mouse move
-    // events, causing looping in applications which call setPos() on
-    // every mouse move event.
-    if (current == target) {
-        return;
-    }
-
-    XWarpPointer(qt_x11Data->display, XNone, QX11Info::appRootWindow(screen), 0, 0, 0, 0, x, y);
 }
 
 QT_END_NAMESPACE
+
 

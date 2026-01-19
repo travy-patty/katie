@@ -21,6 +21,9 @@
 
 #include "qdeclarativeview_plugin.h"
 
+#include <QtDesigner/default_extensionfactory.h>
+#include <QtDesigner/QExtensionManager>
+
 #include <QtCore/qplugin.h>
 #include <QtDeclarative/QDeclarativeView>
 
@@ -28,58 +31,58 @@ static const char toolTipC[] = "QtDeclarative view widget";
 
 QT_BEGIN_NAMESPACE
 
-QDeclarativeViewWidget::QDeclarativeViewWidget(QObject *parent)
-    : QCustomWidget(parent),
+QDeclarativeViewPlugin::QDeclarativeViewPlugin(QObject *parent) :
+    QObject(parent),
     m_initialized(false)
 {
 }
 
-QString QDeclarativeViewWidget::name() const
+QString QDeclarativeViewPlugin::name() const
 {
     return QLatin1String("QDeclarativeView");
 }
 
-QString QDeclarativeViewWidget::group() const
+QString QDeclarativeViewPlugin::group() const
 {
     return QLatin1String("Display Widgets");
 }
 
-QString QDeclarativeViewWidget::toolTip() const
+QString QDeclarativeViewPlugin::toolTip() const
 {
     return tr(toolTipC);
 }
 
-QString QDeclarativeViewWidget::whatsThis() const
+QString QDeclarativeViewPlugin::whatsThis() const
 {
     return tr(toolTipC);
 }
 
-QString QDeclarativeViewWidget::includeFile() const
+QString QDeclarativeViewPlugin::includeFile() const
 {
     return QLatin1String("QtDeclarative/QDeclarativeView");
 }
 
-QIcon QDeclarativeViewWidget::icon() const
+QIcon QDeclarativeViewPlugin::icon() const
 {
     return QIcon();
 }
 
-bool QDeclarativeViewWidget::isContainer() const
+bool QDeclarativeViewPlugin::isContainer() const
 {
     return false;
 }
 
-QWidget *QDeclarativeViewWidget::createWidget(QWidget *parent)
+QWidget *QDeclarativeViewPlugin::createWidget(QWidget *parent)
 {
     return new QDeclarativeView(parent);
 }
 
-bool QDeclarativeViewWidget::isInitialized() const
+bool QDeclarativeViewPlugin::isInitialized() const
 {
     return m_initialized;
 }
 
-void QDeclarativeViewWidget::initialize()
+void QDeclarativeViewPlugin::initialize(QDesignerFormEditorInterface * /*core*/)
 {
     if (m_initialized)
         return;
@@ -87,7 +90,7 @@ void QDeclarativeViewWidget::initialize()
     m_initialized = true;
 }
 
-QString QDeclarativeViewWidget::domXml() const
+QString QDeclarativeViewPlugin::domXml() const
 {
     return QLatin1String("\
     <ui language=\"c++\">\
@@ -104,23 +107,7 @@ QString QDeclarativeViewWidget::domXml() const
     </ui>");
 }
 
-
-QDeclarativeViewPlugin::QDeclarativeViewPlugin(QObject *parent)
-    : QCustomWidgetPlugin(parent)
-{
-    m_plugins.append(new QDeclarativeViewWidget(this));
-}
-
-QDeclarativeViewPlugin::~QDeclarativeViewPlugin()
-{
-}
-
-QList<QCustomWidget*> QDeclarativeViewPlugin::customWidgets() const
-{
-    return m_plugins;
-}
-
-Q_EXPORT_PLUGIN(QDeclarativeViewPlugin)
+Q_EXPORT_PLUGIN2(customwidgetplugin, QDeclarativeViewPlugin)
 
 QT_END_NAMESPACE
 

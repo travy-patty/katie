@@ -26,8 +26,6 @@
 #include <qdebug.h>
 #include <qpoint.h>
 
-#include <limits.h>
-
 //TESTED_CLASS=
 //TESTED_FILES=
 

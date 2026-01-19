@@ -71,6 +71,7 @@ Q_SIGNALS:
 
 private Q_SLOTS:
     void movieUpdate();
+    void movieRequestFinished();
     void playingStatusChanged();
 
 protected:

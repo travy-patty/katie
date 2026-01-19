@@ -49,7 +49,7 @@ public:
         InBack, OutBack, InOutBack, OutInBack,
         InBounce, OutBounce, InOutBounce, OutInBounce,
         InCurve, OutCurve, SineCurve, CosineCurve,
-        NCurveTypes
+        Custom, NCurveTypes
     };
 
     QEasingCurve(Type type = Linear);
@@ -72,12 +72,15 @@ public:
 
     Type type() const;
     void setType(Type type);
+    typedef qreal (*EasingFunction)(qreal progress);
+    void setCustomType(EasingFunction func);
+    EasingFunction customType() const;
 
     qreal valueForProgress(qreal progress) const;
 private:
     QEasingCurvePrivate *d_ptr;
 #ifndef QT_NO_DEBUG_STREAM
-    friend Q_CORE_EXPORT QDebug operator<<(QDebug, const QEasingCurve &);
+    friend Q_CORE_EXPORT QDebug operator<<(QDebug debug, const QEasingCurve &item);
 #endif
 #ifndef QT_NO_DATASTREAM
     friend Q_CORE_EXPORT QDataStream &operator<<(QDataStream &, const QEasingCurve&);
@@ -86,7 +89,7 @@ private:
 };
 
 #ifndef QT_NO_DEBUG_STREAM
-Q_CORE_EXPORT QDebug operator<<(QDebug, const QEasingCurve &);
+Q_CORE_EXPORT QDebug operator<<(QDebug debug, const QEasingCurve &item);
 #endif
 
 #ifndef QT_NO_DATASTREAM

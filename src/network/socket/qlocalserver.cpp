@@ -67,7 +67,7 @@ QT_BEGIN_NAMESPACE
     \sa listen()
  */
 QLocalServer::QLocalServer(QObject *parent)
-    : QObject(*new QLocalServerPrivate, parent)
+        : QObject(*new QLocalServerPrivate, parent)
 {
 }
 
@@ -82,9 +82,8 @@ QLocalServer::QLocalServer(QObject *parent)
  */
 QLocalServer::~QLocalServer()
 {
-    if (isListening()) {
+    if (isListening())
         close();
-    }
 }
 
 /*!
@@ -96,9 +95,8 @@ QLocalServer::~QLocalServer()
 void QLocalServer::close()
 {
     Q_D(QLocalServer);
-    if (!isListening()) {
+    if (!isListening())
         return;
-    }
     qDeleteAll(d->pendingConnections);
     d->pendingConnections.clear();
     d->closeServer();
@@ -148,7 +146,7 @@ bool QLocalServer::hasPendingConnections() const
     \sa newConnection(), nextPendingConnection(),
     QLocalSocket::setSocketDescriptor()
  */
-void QLocalServer::incomingConnection(int socketDescriptor)
+void QLocalServer::incomingConnection(quintptr socketDescriptor)
 {
     Q_D(QLocalServer);
     QLocalSocket *socket = new QLocalSocket(this);
@@ -175,15 +173,18 @@ bool QLocalServer::isListening() const
     Return true on success otherwise false.
 
     \a name can be a single name and QLocalServer will determine
-    the correct platform specific path. serverName() will return
+    the correct platform specific path.  serverName() will return
     the name that is passed into listen.
 
     Usually you would just pass in a name like "foo", but on Unix this
-    could also be a path such as "/tmp/foo".
+    could also be a path such as "/tmp/foo" and on Windows this could
+    be a pipe path such as "\\\\.\\pipe\\foo"
 
     Note:
     On Unix if the server crashes without closing listen will fail
-    with AddressInUseError.
+    with AddressInUseError.  To create a new server the file should be removed.
+    On Windows two local servers can listen to the same pipe at the same
+    time, but any connections will go to one of the server.
 
     \sa serverName(), isListening(), close()
  */
@@ -248,13 +249,11 @@ int QLocalServer::maxPendingConnections() const
 QLocalSocket *QLocalServer::nextPendingConnection()
 {
     Q_D(QLocalServer);
-    if (d->pendingConnections.isEmpty()) {
-        return nullptr;
-    }
+    if (d->pendingConnections.isEmpty())
+        return 0;
     QLocalSocket *nextSocket = d->pendingConnections.dequeue();
-    if (d->pendingConnections.size() <= d->maxPendingConnections) {
+    if (d->pendingConnections.size() <= d->maxPendingConnections)
         d->socketNotifier->setEnabled(true);
-    }
     return nextSocket;
 }
 
@@ -266,7 +265,8 @@ QLocalSocket *QLocalServer::nextPendingConnection()
     This function is meant to recover from a crash, when the previous server
     instance has not been cleaned up.
 
-    On Unix, this function removes the socket file given by \a name.
+    On Windows, this function does nothing; on Unix, it removes the socket file
+    given by \a name.
 
     \warning Be careful to avoid removing sockets of running instances.
 */
@@ -350,13 +350,11 @@ void QLocalServer::setMaxPendingConnections(int numConnections)
 bool QLocalServer::waitForNewConnection(int msec, bool *timedOut)
 {
     Q_D(QLocalServer);
-    if (timedOut) {
+    if (timedOut)
         *timedOut = false;
-    }
 
-    if (!isListening()) {
+    if (!isListening())
         return false;
-    }
 
     d->waitForNewConnection(msec, timedOut);
 

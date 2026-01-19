@@ -269,7 +269,7 @@ public:
     bool deleteDevice;
 #ifndef QT_NO_TEXTCODEC
     QTextCodec *codec;
-    QTextConverter *decoder;
+    QTextDecoder *decoder;
 #endif
     bool atEnd;
 
@@ -617,8 +617,8 @@ bool QXmlStreamReaderPrivate::parse()
                         return false;
                     }
                 }
-                break;
-            }
+
+            } break;
             case '\n':
                 ++lineNumber;
                 lastLineStart = characterOffset + readBufferPos;

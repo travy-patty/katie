@@ -39,6 +39,7 @@ public:
 
     bool exists() const;
 
+    void initFileEngine();
     void initFileLists(const QDir &dir) const;
 
     static void sortFileList(QDir::SortFlags, QFileInfoList &, QStringList *, QFileInfoList *);
@@ -52,6 +53,9 @@ public:
     QStringList nameFilters;
     QDir::SortFlags sort;
     QDir::Filters filters;
+
+
+    QAbstractFileEngine* fileEngine;
 
     mutable bool fileListsInitialized;
     mutable QStringList files;

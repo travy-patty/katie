@@ -188,7 +188,6 @@ void qDrawEdge(QPainter *p, qreal x1, qreal y1, qreal x2, qreal y2, qreal dw1, q
             p->drawRect(QRectF(x1, y1, x2-x1, y2-y1));
         } else { // draw trapezoid
             QPolygonF quad;
-            quad.reserve(4);
             switch (edge) {
             case TopEdge:
                 quad << QPointF(x1, y1) << QPointF(x1 + dw1, y2)
@@ -384,6 +383,8 @@ void qDrawBorder(QPainter *p, const QRect &br, const QCss::BorderStyle *styles,
     }
 }
 
+#endif //QT_NO_CSSPARSER
+
 QT_END_NAMESPACE
 
-#endif // QT_NO_CSSPARSER
+

@@ -147,8 +147,10 @@ public:
     inline ~QMap() { if (!d->ref.deref()) freeData(d); }
 
     QMap<Key, T> &operator=(const QMap<Key, T> &other);
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QMap<Key, T> &operator=(QMap<Key, T> &&other)
     { qSwap(d, other.d); return *this; }
+#endif
     inline void swap(QMap<Key, T> &other) { qSwap(d, other.d); }
     explicit QMap(const typename std::map<Key, T> &other);
     std::map<Key, T> toStdMap() const;
@@ -382,9 +384,19 @@ Q_INLINE_TEMPLATE typename QMapData::Node *
 QMap<Key, T>::node_create(QMapData *adt, QMapData::Node *aupdate[], const Key &akey, const T &avalue)
 {
     QMapData::Node *abstractNode = adt->node_create(aupdate, payload());
-    Node *concreteNode = concrete(abstractNode);
-    new (&concreteNode->key) Key(akey);
-    new (&concreteNode->value) T(avalue);
+    QT_TRY {
+        Node *concreteNode = concrete(abstractNode);
+        new (&concreteNode->key) Key(akey);
+        QT_TRY {
+            new (&concreteNode->value) T(avalue);
+        } QT_CATCH(...) {
+            concreteNode->key.~Key();
+            QT_RETHROW;
+        }
+    } QT_CATCH(...) {
+        adt->node_delete(aupdate, payload(), abstractNode);
+        QT_RETHROW;
+    }
 
     // clean up the update array for further insertions
     /*
@@ -654,8 +666,13 @@ Q_OUTOFLINE_TEMPLATE void QMap<Key, T>::detach_helper()
         QMapData::Node *cur = e->forward[0];
         update[0] = x.e;
         while (cur != e) {
-            Node *concreteNode = concrete(cur);
-            node_create(x.d, update, concreteNode->key, concreteNode->value);
+            QT_TRY {
+                Node *concreteNode = concrete(cur);
+                node_create(x.d, update, concreteNode->key, concreteNode->value);
+            } QT_CATCH(...) {
+                freeData(x.d);
+                QT_RETHROW;
+            }
             cur = cur->forward[0];
         }
         x.d->insertInOrder = false;

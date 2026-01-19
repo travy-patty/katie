@@ -29,9 +29,14 @@
 
 QT_BEGIN_NAMESPACE
 
-class Q_CORE_EXPORT QPluginLoader : public QLibrary
+
+class QLibraryPrivate;
+
+class Q_CORE_EXPORT QPluginLoader : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(QString fileName READ fileName WRITE setFileName)
+    Q_PROPERTY(QLibrary::LoadHints loadHints READ loadHints WRITE setLoadHints)
 public:
     explicit QPluginLoader(QObject *parent = nullptr);
     explicit QPluginLoader(const QString &fileName, QObject *parent = nullptr);
@@ -39,7 +44,21 @@ public:
 
     QObject *instance();
 
+    bool load();
+    bool unload();
+    bool isLoaded() const;
+
+    void setFileName(const QString &fileName);
+    QString fileName() const;
+
+    QString errorString() const;
+
+    void setLoadHints(QLibrary::LoadHints loadHints);
+    QLibrary::LoadHints loadHints() const;
+
 private:
+    QLibraryPrivate *d;
+    bool did_load;
     Q_DISABLE_COPY(QPluginLoader)
 };
 

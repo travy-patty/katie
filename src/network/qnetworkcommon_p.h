@@ -1,10 +1,18 @@
-#ifndef QNETWORKCOMMON_P_H
-#define QNETWORKCOMMON_P_H
+#ifndef QNETWORKCOMMON_H
+#define QNETWORKCOMMON_H
+
+#include "qnetworkaccesscache_p.h"
+
+Q_DECLARE_METATYPE(QNetworkAccessCache::CacheableObject*)
+Q_DECLARE_METATYPE(QSharedPointer<char>)
 
 QT_BEGIN_NAMESPACE
 
-#define QT_CONNECT_TIMEOUT 30000
+static void downloadBufferDeleter(char *ptr)
+{
+    delete[] ptr;
+}
 
 QT_END_NAMESPACE
 
-#endif // QNETWORKCOMMON_P_H
+#endif // QNETWORKCOMMON_H

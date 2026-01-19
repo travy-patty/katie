@@ -137,7 +137,6 @@ static bool fuzzyCompare(qreal x, qreal y)
 // construct, copy, and modify.
 void tst_QVectorND::create2()
 {
-#ifndef QT_NO_VECTOR2D
     QVector2D null;
     QCOMPARE(null.x(), (qreal)0.0f);
     QCOMPARE(null.y(), (qreal)0.0f);
@@ -221,16 +220,12 @@ void tst_QVectorND::create2()
     QCOMPARE(v10.y(), (qreal)2.5f);
     QCOMPARE(v10.z(), (qreal)0.0f);
     QCOMPARE(v10.w(), (qreal)0.0f);
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test the creation of QVector3D objects in various ways:
 // construct, copy, and modify.
 void tst_QVectorND::create3()
 {
-#ifndef QT_NO_VECTOR3D
     QVector3D null;
     QCOMPARE(null.x(), (qreal)0.0f);
     QCOMPARE(null.y(), (qreal)0.0f);
@@ -290,7 +285,6 @@ void tst_QVectorND::create3()
     QCOMPARE(v6.z(), (qreal)0.0f);
     QVERIFY(!v6.isNull());
 
-#ifndef QT_NO_VECTOR2D
     QVector3D v7(QVector2D(1.0f, 2.5f));
     QCOMPARE(v7.x(), (qreal)1.0f);
     QCOMPARE(v7.y(), (qreal)2.5f);
@@ -302,15 +296,12 @@ void tst_QVectorND::create3()
     QCOMPARE(v8.y(), (qreal)2.5f);
     QCOMPARE(v8.z(), (qreal)54.25f);
     QVERIFY(!v8.isNull());
-#endif // QT_NO_VECTOR2D
 
-#ifndef QT_NO_VECTOR4D
     QVector3D v9(QVector4D(1.0f, 2.5f, 54.25f, 34.0f));
     QCOMPARE(v9.x(), (qreal)1.0f);
     QCOMPARE(v9.y(), (qreal)2.5f);
     QCOMPARE(v9.z(), (qreal)54.25f);
     QVERIFY(!v9.isNull());
-#endif // QT_NO_VECTOR4D
 
     v1.setX(3.0f);
     QCOMPARE(v1.x(), (qreal)3.0f);
@@ -338,7 +329,6 @@ void tst_QVectorND::create3()
     QCOMPARE(v1.z(), (qreal)0.0f);
     QVERIFY(v1.isNull());
 
-#ifndef QT_NO_VECTOR2D
     QPoint p1 = v8.toPoint();
     QCOMPARE(p1.x(), 1);
     QCOMPARE(p1.y(), 3);
@@ -356,17 +346,12 @@ void tst_QVectorND::create3()
     QCOMPARE(v11.y(), (qreal)2.5f);
     QCOMPARE(v11.z(), (qreal)54.25f);
     QCOMPARE(v11.w(), (qreal)0.0f);
-#endif // QT_NO_VECTOR2D
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test the creation of QVector4D objects in various ways:
 // construct, copy, and modify.
 void tst_QVectorND::create4()
 {
-#ifndef QT_NO_VECTOR4D
     QVector4D null;
     QCOMPARE(null.x(), (qreal)0.0f);
     QCOMPARE(null.y(), (qreal)0.0f);
@@ -450,16 +435,13 @@ void tst_QVectorND::create4()
     QCOMPARE(v6.w(), (qreal)0.0f);
     QVERIFY(!v6.isNull());
 
-#ifndef QT_NO_VECTOR2D
     QVector4D v7(QVector2D(1.0f, 2.5f));
     QCOMPARE(v7.x(), (qreal)1.0f);
     QCOMPARE(v7.y(), (qreal)2.5f);
     QCOMPARE(v7.z(), (qreal)0.0f);
     QCOMPARE(v7.w(), (qreal)0.0f);
     QVERIFY(!v7.isNull());
-#endif // QT_NO_VECTOR2D
 
-#ifndef QT_NO_VECTOR3D
     QVector4D v8(QVector3D(1.0f, 2.5f, -89.25f));
     QCOMPARE(v8.x(), (qreal)1.0f);
     QCOMPARE(v8.y(), (qreal)2.5f);
@@ -473,16 +455,13 @@ void tst_QVectorND::create4()
     QCOMPARE(v9.z(), (qreal)-89.25f);
     QCOMPARE(v9.w(), (qreal)34.0f);
     QVERIFY(!v9.isNull());
-#endif // QT_NO_VECTOR3D
 
-#ifndef QT_NO_VECTOR2D
     QVector4D v10(QVector2D(1.0f, 2.5f), 23.5f, -8);
     QCOMPARE(v10.x(), (qreal)1.0f);
     QCOMPARE(v10.y(), (qreal)2.5f);
     QCOMPARE(v10.z(), (qreal)23.5f);
     QCOMPARE(v10.w(), (qreal)-8.0f);
     QVERIFY(!v10.isNull());
-#endif // QT_NO_VECTOR2D
 
     v1.setX(3.0f);
     QCOMPARE(v1.x(), (qreal)3.0f);
@@ -522,7 +501,6 @@ void tst_QVectorND::create4()
     QCOMPARE(v1.w(), (qreal)0.0f);
     QVERIFY(v1.isNull());
 
-#ifndef QT_NO_VECTOR3D
     QPoint p1 = v8.toPoint();
     QCOMPARE(p1.x(), 1);
     QCOMPARE(p1.y(), 3);
@@ -531,41 +509,30 @@ void tst_QVectorND::create4()
     QCOMPARE((qreal)p2.x(), (qreal)1.0f);
     QCOMPARE((qreal)p2.y(), (qreal)2.5f);
 
-#ifndef QT_NO_VECTOR2D
     QVector2D v11 = v8.toVector2D();
     QCOMPARE(v11.x(), (qreal)1.0f);
     QCOMPARE(v11.y(), (qreal)2.5f);
-#endif // QT_NO_VECTOR2D
 
     QVector3D v12 = v8.toVector3D();
     QCOMPARE(v12.x(), (qreal)1.0f);
     QCOMPARE(v12.y(), (qreal)2.5f);
     QCOMPARE(v12.z(), (qreal)-89.25f);
-#endif // QT_NO_VECTOR3D
 
-    QVector4D zerow(1.0f, 2.0f, 3.0f, 0.0f);
-#ifndef QT_NO_VECTOR2D
     QVector2D v13 = v9.toVector2DAffine();
     QVERIFY(fuzzyCompare(v13.x(), (qreal)(1.0f / 34.0f)));
     QVERIFY(fuzzyCompare(v13.y(), (qreal)(2.5f / 34.0f)));
 
+    QVector4D zerow(1.0f, 2.0f, 3.0f, 0.0f);
     v13 = zerow.toVector2DAffine();
     QVERIFY(v13.isNull());
-#endif // QT_NO_VECTOR2D
 
-#ifndef QT_NO_VECTOR3D
     QVector3D v14 = v9.toVector3DAffine();
     QVERIFY(fuzzyCompare(v14.x(), (qreal)(1.0f / 34.0f)));
     QVERIFY(fuzzyCompare(v14.y(), (qreal)(2.5f / 34.0f)));
     QVERIFY(fuzzyCompare(v14.z(), (qreal)(-89.25f / 34.0f)));
 
     v14 = zerow.toVector3DAffine();
-#endif // QT_NO_VECTOR3D
-
     QVERIFY(v14.isNull());
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test vector length computation for 2D vectors.
@@ -584,7 +551,6 @@ void tst_QVectorND::length2_data()
 }
 void tst_QVectorND::length2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x);
     QFETCH(qreal, y);
     QFETCH(qreal, len);
@@ -592,9 +558,6 @@ void tst_QVectorND::length2()
     QVector2D v(x, y);
     QCOMPARE(v.length(), len);
     QCOMPARE(v.lengthSquared(), x * x + y * y);
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test vector length computation for 3D vectors.
@@ -616,7 +579,6 @@ void tst_QVectorND::length3_data()
 }
 void tst_QVectorND::length3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x);
     QFETCH(qreal, y);
     QFETCH(qreal, z);
@@ -625,9 +587,6 @@ void tst_QVectorND::length3()
     QVector3D v(x, y, z);
     QCOMPARE(v.length(), len);
     QCOMPARE(v.lengthSquared(), x * x + y * y + z * z);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test vector length computation for 4D vectors.
@@ -652,7 +611,6 @@ void tst_QVectorND::length4_data()
 }
 void tst_QVectorND::length4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x);
     QFETCH(qreal, y);
     QFETCH(qreal, z);
@@ -662,9 +620,6 @@ void tst_QVectorND::length4()
     QVector4D v(x, y, z, w);
     QCOMPARE(v.length(), len);
     QCOMPARE(v.lengthSquared(), x * x + y * y + z * z + w * w);
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test the unit vector conversion for 2D vectors.
@@ -675,7 +630,6 @@ void tst_QVectorND::normalized2_data()
 }
 void tst_QVectorND::normalized2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x);
     QFETCH(qreal, y);
     QFETCH(qreal, len);
@@ -688,9 +642,6 @@ void tst_QVectorND::normalized2()
         QVERIFY(fuzzyCompare(u.length(), qreal(1.0f)));
     QVERIFY(fuzzyCompare(u.x() * len, v.x()));
     QVERIFY(fuzzyCompare(u.y() * len, v.y()));
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test the unit vector conversion for 3D vectors.
@@ -701,7 +652,6 @@ void tst_QVectorND::normalized3_data()
 }
 void tst_QVectorND::normalized3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x);
     QFETCH(qreal, y);
     QFETCH(qreal, z);
@@ -716,9 +666,6 @@ void tst_QVectorND::normalized3()
     QVERIFY(fuzzyCompare(u.x() * len, v.x()));
     QVERIFY(fuzzyCompare(u.y() * len, v.y()));
     QVERIFY(fuzzyCompare(u.z() * len, v.z()));
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test the unit vector conversion for 4D vectors.
@@ -729,7 +676,6 @@ void tst_QVectorND::normalized4_data()
 }
 void tst_QVectorND::normalized4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x);
     QFETCH(qreal, y);
     QFETCH(qreal, z);
@@ -746,9 +692,6 @@ void tst_QVectorND::normalized4()
     QVERIFY(fuzzyCompare(u.y() * len, v.y()));
     QVERIFY(fuzzyCompare(u.z() * len, v.z()));
     QVERIFY(fuzzyCompare(u.w() * len, v.w()));
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test the unit vector conversion for 2D vectors.
@@ -759,7 +702,6 @@ void tst_QVectorND::normalize2_data()
 }
 void tst_QVectorND::normalize2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x);
     QFETCH(qreal, y);
 
@@ -770,9 +712,6 @@ void tst_QVectorND::normalize2()
         QVERIFY(v.isNull());
     else
         QVERIFY(fuzzyCompare(v.length(), qreal(1.0f)));
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test the unit vector conversion for 3D vectors.
@@ -783,7 +722,6 @@ void tst_QVectorND::normalize3_data()
 }
 void tst_QVectorND::normalize3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x);
     QFETCH(qreal, y);
     QFETCH(qreal, z);
@@ -795,9 +733,6 @@ void tst_QVectorND::normalize3()
         QVERIFY(v.isNull());
     else
         QVERIFY(fuzzyCompare(v.length(), qreal(1.0f)));
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test the unit vector conversion for 4D vectors.
@@ -808,7 +743,6 @@ void tst_QVectorND::normalize4_data()
 }
 void tst_QVectorND::normalize4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x);
     QFETCH(qreal, y);
     QFETCH(qreal, z);
@@ -821,15 +755,11 @@ void tst_QVectorND::normalize4()
         QVERIFY(v.isNull());
     else
         QVERIFY(fuzzyCompare(v.length(), qreal(1.0f)));
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test the comparison operators for 2D vectors.
 void tst_QVectorND::compare2()
 {
-#ifndef QT_NO_VECTOR2D
     QVector2D v1(1, 2);
     QVector2D v2(1, 2);
     QVector2D v3(3, 2);
@@ -838,15 +768,11 @@ void tst_QVectorND::compare2()
     QVERIFY(v1 == v2);
     QVERIFY(v1 != v3);
     QVERIFY(v1 != v4);
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test the comparison operators for 3D vectors.
 void tst_QVectorND::compare3()
 {
-#ifndef QT_NO_VECTOR3D
     QVector3D v1(1, 2, 4);
     QVector3D v2(1, 2, 4);
     QVector3D v3(3, 2, 4);
@@ -857,15 +783,11 @@ void tst_QVectorND::compare3()
     QVERIFY(v1 != v3);
     QVERIFY(v1 != v4);
     QVERIFY(v1 != v5);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test the comparison operators for 4D vectors.
 void tst_QVectorND::compare4()
 {
-#ifndef QT_NO_VECTOR4D
     QVector4D v1(1, 2, 4, 8);
     QVector4D v2(1, 2, 4, 8);
     QVector4D v3(3, 2, 4, 8);
@@ -878,9 +800,6 @@ void tst_QVectorND::compare4()
     QVERIFY(v1 != v4);
     QVERIFY(v1 != v5);
     QVERIFY(v1 != v6);
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test vector addition for 2D vectors.
@@ -915,7 +834,6 @@ void tst_QVectorND::add2_data()
 }
 void tst_QVectorND::add2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, x2);
@@ -935,9 +853,6 @@ void tst_QVectorND::add2()
 
     QCOMPARE(v4.x(), v1.x() + v2.x());
     QCOMPARE(v4.y(), v1.y() + v2.y());
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test vector addition for 3D vectors.
@@ -980,7 +895,6 @@ void tst_QVectorND::add3_data()
 }
 void tst_QVectorND::add3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1004,9 +918,6 @@ void tst_QVectorND::add3()
     QCOMPARE(v4.x(), v1.x() + v2.x());
     QCOMPARE(v4.y(), v1.y() + v2.y());
     QCOMPARE(v4.z(), v1.z() + v2.z());
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test vector addition for 4D vectors.
@@ -1057,7 +968,6 @@ void tst_QVectorND::add4_data()
 }
 void tst_QVectorND::add4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1085,9 +995,6 @@ void tst_QVectorND::add4()
     QCOMPARE(v4.y(), v1.y() + v2.y());
     QCOMPARE(v4.z(), v1.z() + v2.z());
     QCOMPARE(v4.w(), v1.w() + v2.w());
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test vector subtraction for 2D vectors.
@@ -1098,7 +1005,6 @@ void tst_QVectorND::subtract2_data()
 }
 void tst_QVectorND::subtract2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, x2);
@@ -1126,9 +1032,6 @@ void tst_QVectorND::subtract2()
 
     QCOMPARE(v5.x(), v3.x() - v2.x());
     QCOMPARE(v5.y(), v3.y() - v2.y());
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test vector subtraction for 3D vectors.
@@ -1139,7 +1042,6 @@ void tst_QVectorND::subtract3_data()
 }
 void tst_QVectorND::subtract3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1172,9 +1074,6 @@ void tst_QVectorND::subtract3()
     QCOMPARE(v5.x(), v3.x() - v2.x());
     QCOMPARE(v5.y(), v3.y() - v2.y());
     QCOMPARE(v5.z(), v3.z() - v2.z());
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test vector subtraction for 4D vectors.
@@ -1185,7 +1084,6 @@ void tst_QVectorND::subtract4_data()
 }
 void tst_QVectorND::subtract4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1223,9 +1121,6 @@ void tst_QVectorND::subtract4()
     QCOMPARE(v5.y(), v3.y() - v2.y());
     QCOMPARE(v5.z(), v3.z() - v2.z());
     QCOMPARE(v5.w(), v3.w() - v2.w());
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test component-wise vector multiplication for 2D vectors.
@@ -1260,7 +1155,6 @@ void tst_QVectorND::multiply2_data()
 }
 void tst_QVectorND::multiply2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, x2);
@@ -1280,9 +1174,6 @@ void tst_QVectorND::multiply2()
 
     QCOMPARE(v4.x(), v1.x() * v2.x());
     QCOMPARE(v4.y(), v1.y() * v2.y());
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test component-wise vector multiplication for 3D vectors.
@@ -1325,7 +1216,6 @@ void tst_QVectorND::multiply3_data()
 }
 void tst_QVectorND::multiply3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1349,9 +1239,6 @@ void tst_QVectorND::multiply3()
     QCOMPARE(v4.x(), v1.x() * v2.x());
     QCOMPARE(v4.y(), v1.y() * v2.y());
     QCOMPARE(v4.z(), v1.z() * v2.z());
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test component-wise vector multiplication for 4D vectors.
@@ -1402,7 +1289,6 @@ void tst_QVectorND::multiply4_data()
 }
 void tst_QVectorND::multiply4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1430,9 +1316,6 @@ void tst_QVectorND::multiply4()
     QCOMPARE(v4.y(), v1.y() * v2.y());
     QCOMPARE(v4.z(), v1.z() * v2.z());
     QCOMPARE(v4.w(), v1.w() * v2.w());
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test vector multiplication by a factor for 2D vectors.
@@ -1471,7 +1354,6 @@ void tst_QVectorND::multiplyFactor2_data()
 }
 void tst_QVectorND::multiplyFactor2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, factor);
@@ -1490,9 +1372,6 @@ void tst_QVectorND::multiplyFactor2()
 
     QCOMPARE(v3.x(), v1.x() * factor);
     QCOMPARE(v3.y(), v1.y() * factor);
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test vector multiplication by a factor for 3D vectors.
@@ -1538,7 +1417,6 @@ void tst_QVectorND::multiplyFactor3_data()
 }
 void tst_QVectorND::multiplyFactor3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1560,9 +1438,6 @@ void tst_QVectorND::multiplyFactor3()
     QCOMPARE(v3.x(), v1.x() * factor);
     QCOMPARE(v3.y(), v1.y() * factor);
     QCOMPARE(v3.z(), v1.z() * factor);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test vector multiplication by a factor for 4D vectors.
@@ -1615,7 +1490,6 @@ void tst_QVectorND::multiplyFactor4_data()
 }
 void tst_QVectorND::multiplyFactor4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1640,9 +1514,6 @@ void tst_QVectorND::multiplyFactor4()
     QCOMPARE(v3.y(), v1.y() * factor);
     QCOMPARE(v3.z(), v1.z() * factor);
     QCOMPARE(v3.w(), v1.w() * factor);
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test vector division by a factor for 2D vectors.
@@ -1653,7 +1524,6 @@ void tst_QVectorND::divide2_data()
 }
 void tst_QVectorND::divide2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, factor);
@@ -1674,9 +1544,6 @@ void tst_QVectorND::divide2()
 
     QCOMPARE(v3.x(), v2.x() / factor);
     QCOMPARE(v3.y(), v2.y() / factor);
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test vector division by a factor for 3D vectors.
@@ -1687,7 +1554,6 @@ void tst_QVectorND::divide3_data()
 }
 void tst_QVectorND::divide3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1711,9 +1577,6 @@ void tst_QVectorND::divide3()
     QCOMPARE(v3.x(), v2.x() / factor);
     QCOMPARE(v3.y(), v2.y() / factor);
     QCOMPARE(v3.z(), v2.z() / factor);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test vector division by a factor for 4D vectors.
@@ -1724,7 +1587,6 @@ void tst_QVectorND::divide4_data()
 }
 void tst_QVectorND::divide4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1751,9 +1613,6 @@ void tst_QVectorND::divide4()
     QCOMPARE(v3.y(), v2.y() / factor);
     QCOMPARE(v3.z(), v2.z() / factor);
     QCOMPARE(v3.w(), v2.w() / factor);
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test vector negation for 2D vectors.
@@ -1764,7 +1623,6 @@ void tst_QVectorND::negate2_data()
 }
 void tst_QVectorND::negate2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
 
@@ -1772,9 +1630,6 @@ void tst_QVectorND::negate2()
     QVector2D v2(-x1, -y1);
 
     QVERIFY(-v1 == v2);
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test vector negation for 3D vectors.
@@ -1785,7 +1640,6 @@ void tst_QVectorND::negate3_data()
 }
 void tst_QVectorND::negate3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1794,9 +1648,6 @@ void tst_QVectorND::negate3()
     QVector3D v2(-x1, -y1, -z1);
 
     QVERIFY(-v1 == v2);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test vector negation for 4D vectors.
@@ -1807,7 +1658,6 @@ void tst_QVectorND::negate4_data()
 }
 void tst_QVectorND::negate4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1817,9 +1667,6 @@ void tst_QVectorND::negate4()
     QVector4D v2(-x1, -y1, -z1, -w1);
 
     QVERIFY(-v1 == v2);
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 // Test the computation of vector cross-products.
@@ -1856,7 +1703,6 @@ void tst_QVectorND::crossProduct_data()
 }
 void tst_QVectorND::crossProduct()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1882,9 +1728,6 @@ void tst_QVectorND::crossProduct()
     QCOMPARE(v4.x(), xres);
     QCOMPARE(v4.y(), yres);
     QCOMPARE(v4.z(), zres);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test the computation of normals.
@@ -1895,7 +1738,6 @@ void tst_QVectorND::normal_data()
 }
 void tst_QVectorND::normal()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1915,9 +1757,6 @@ void tst_QVectorND::normal()
 
     QVector3D point(1.0f, 2.0f, 3.0f);
     QVERIFY(QVector3D::normal(point, v1 + point, v2 + point) == v3.normalized());
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test distance to plane calculations.
@@ -1964,10 +1803,8 @@ void tst_QVectorND::distanceToPlane_data()
         << (qreal)0.0f << (qreal)2.0f << (qreal)0.0f
         << (qreal)-2.0f;
 }
-
 void tst_QVectorND::distanceToPlane()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -1993,9 +1830,6 @@ void tst_QVectorND::distanceToPlane()
 
     QCOMPARE(v3.distanceToPlane(v1, v2), distance);
     QCOMPARE(v3.distanceToPlane(v1, v4, v5), distance);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test distance to line calculations.
@@ -2044,7 +1878,6 @@ void tst_QVectorND::distanceToLine_data()
 }
 void tst_QVectorND::distanceToLine()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -2061,9 +1894,6 @@ void tst_QVectorND::distanceToLine()
     QVector3D v3(x3, y3, z3);
 
     QCOMPARE(v3.distanceToLine(v1, v2), distance);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test the computation of dot products for 2D vectors.
@@ -2092,7 +1922,6 @@ void tst_QVectorND::dotProduct2_data()
 }
 void tst_QVectorND::dotProduct2()
 {
-#ifndef QT_NO_VECTOR2D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, x2);
@@ -2108,9 +1937,6 @@ void tst_QVectorND::dotProduct2()
     qreal d = x1 * x2 + y1 * y2;
 
     QCOMPARE(QVector2D::dotProduct(v1, v2), d);
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 // Test the computation of dot products for 3D vectors.
@@ -2121,7 +1947,6 @@ void tst_QVectorND::dotProduct3_data()
 }
 void tst_QVectorND::dotProduct3()
 {
-#ifndef QT_NO_VECTOR3D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -2146,9 +1971,6 @@ void tst_QVectorND::dotProduct3()
     qreal d = x1 * x2 + y1 * y2 + z1 * z2;
 
     QCOMPARE(QVector3D::dotProduct(v1, v2), d);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 // Test the computation of dot products for 4D vectors.
@@ -2181,7 +2003,6 @@ void tst_QVectorND::dotProduct4_data()
 }
 void tst_QVectorND::dotProduct4()
 {
-#ifndef QT_NO_VECTOR4D
     QFETCH(qreal, x1);
     QFETCH(qreal, y1);
     QFETCH(qreal, z1);
@@ -2201,51 +2022,30 @@ void tst_QVectorND::dotProduct4()
     qreal d = x1 * x2 + y1 * y2 + z1 * z2 + w1 * w2;
 
     QCOMPARE(QVector4D::dotProduct(v1, v2), d);
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
 }
 
 class tst_QVectorNDProperties : public QObject
 {
     Q_OBJECT
-#ifndef QT_NO_VECTOR2D
     Q_PROPERTY(QVector2D vector2D READ vector2D WRITE setVector2D)
-#endif // QT_NO_VECTOR2D
-#ifndef QT_NO_VECTOR3D
     Q_PROPERTY(QVector3D vector3D READ vector3D WRITE setVector3D)
-#endif // QT_NO_VECTOR3D
-#ifndef QT_NO_VECTOR4D
     Q_PROPERTY(QVector4D vector4D READ vector4D WRITE setVector4D)
-#endif // QT_NO_VECTOR4D
 public:
     tst_QVectorNDProperties(QObject *parent = 0) : QObject(parent) {}
 
-#ifndef QT_NO_VECTOR2D
     QVector2D vector2D() const { return v2; }
     void setVector2D(const QVector2D& value) { v2 = value; }
-#endif // QT_NO_VECTOR2D
 
-#ifndef QT_NO_VECTOR3D
     QVector3D vector3D() const { return v3; }
     void setVector3D(const QVector3D& value) { v3 = value; }
-#endif // QT_NO_VECTOR3D
 
-#ifndef QT_NO_VECTOR4D
     QVector4D vector4D() const { return v4; }
     void setVector4D(const QVector4D& value) { v4 = value; }
-#endif // QT_NO_VECTOR4D
 
 private:
-#ifndef QT_NO_VECTOR2D
     QVector2D v2;
-#endif // QT_NO_VECTOR2D
-#ifndef QT_NO_VECTOR3D
     QVector3D v3;
-#endif // QT_NO_VECTOR3D
-#ifndef QT_NO_VECTOR4D
     QVector4D v4;
-#endif // QT_NO_VECTOR4D
 };
 
 // Test getting and setting vector properties via the metaobject system.
@@ -2253,56 +2053,46 @@ void tst_QVectorND::properties()
 {
     tst_QVectorNDProperties obj;
 
-#ifndef QT_NO_VECTOR2D
     obj.setVector2D(QVector2D(1.0f, 2.0f));
+    obj.setVector3D(QVector3D(3.0f, 4.0f, 5.0f));
+    obj.setVector4D(QVector4D(6.0f, 7.0f, 8.0f, 9.0f));
+
     QVector2D v2 = qvariant_cast<QVector2D>(obj.property("vector2D"));
     QCOMPARE(v2.x(), (qreal)1.0f);
     QCOMPARE(v2.y(), (qreal)2.0f);
-#endif // QT_NO_VECTOR2D
 
-#ifndef QT_NO_VECTOR3D
-    obj.setVector3D(QVector3D(3.0f, 4.0f, 5.0f));
     QVector3D v3 = qvariant_cast<QVector3D>(obj.property("vector3D"));
     QCOMPARE(v3.x(), (qreal)3.0f);
     QCOMPARE(v3.y(), (qreal)4.0f);
     QCOMPARE(v3.z(), (qreal)5.0f);
-#endif // QT_NO_VECTOR3D
 
-#ifndef QT_NO_VECTOR4D
-    obj.setVector4D(QVector4D(6.0f, 7.0f, 8.0f, 9.0f));
     QVector4D v4 = qvariant_cast<QVector4D>(obj.property("vector4D"));
     QCOMPARE(v4.x(), (qreal)6.0f);
     QCOMPARE(v4.y(), (qreal)7.0f);
     QCOMPARE(v4.z(), (qreal)8.0f);
     QCOMPARE(v4.w(), (qreal)9.0f);
-#endif // QT_NO_VECTOR4D
 
-#ifndef QT_NO_VECTOR2D
     obj.setProperty("vector2D",
                     qVariantFromValue(QVector2D(-1.0f, -2.0f)));
+    obj.setProperty("vector3D",
+                    qVariantFromValue(QVector3D(-3.0f, -4.0f, -5.0f)));
+    obj.setProperty("vector4D",
+                    qVariantFromValue(QVector4D(-6.0f, -7.0f, -8.0f, -9.0f)));
+
     v2 = qvariant_cast<QVector2D>(obj.property("vector2D"));
     QCOMPARE(v2.x(), (qreal)-1.0f);
     QCOMPARE(v2.y(), (qreal)-2.0f);
-#endif // QT_NO_VECTOR2D
 
-#ifndef QT_NO_VECTOR3D
-    obj.setProperty("vector3D",
-                    qVariantFromValue(QVector3D(-3.0f, -4.0f, -5.0f)));
     v3 = qvariant_cast<QVector3D>(obj.property("vector3D"));
     QCOMPARE(v3.x(), (qreal)-3.0f);
     QCOMPARE(v3.y(), (qreal)-4.0f);
     QCOMPARE(v3.z(), (qreal)-5.0f);
-#endif // QT_NO_VECTOR3D
 
-#ifndef QT_NO_VECTOR4D
-    obj.setProperty("vector4D",
-                    qVariantFromValue(QVector4D(-6.0f, -7.0f, -8.0f, -9.0f)));
     v4 = qvariant_cast<QVector4D>(obj.property("vector4D"));
     QCOMPARE(v4.x(), (qreal)-6.0f);
     QCOMPARE(v4.y(), (qreal)-7.0f);
     QCOMPARE(v4.z(), (qreal)-8.0f);
     QCOMPARE(v4.w(), (qreal)-9.0f);
-#endif // QT_NO_VECTOR4D
 }
 
 void tst_QVectorND::metaTypes()

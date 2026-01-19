@@ -40,6 +40,21 @@ private slots:
     void lookupSpeed();
 };
 
+class SignalReceiver : public QObject
+{
+    Q_OBJECT
+public:
+    SignalReceiver(int nrc) : receiveCount(0), neededReceiveCount(nrc) {};
+    int receiveCount;
+    int neededReceiveCount;
+public slots:
+    void resultsReady(const QHostInfo) {
+        receiveCount++;
+        if (receiveCount == neededReceiveCount)
+            QTestEventLoop::instance().exitLoop();
+    }
+};
+
 void tst_qhostinfo::init()
 {
     // delete the cache so inidividual testcase results are independant from each other
@@ -73,10 +88,15 @@ void tst_qhostinfo::lookupSpeed()
     // and some more
     hostnameList << hostnameList;
 
+    const int COUNT = hostnameList.size();
+
+    SignalReceiver receiver(COUNT);
+
     QBENCHMARK {
         for (int i = 0; i < hostnameList.size(); i++)
-            (void)QHostInfo::fromName(hostnameList.at(i));
-        QTestEventLoop::instance().enterLoop(1);
+            QHostInfo::lookupHost(hostnameList.at(i), &receiver, SLOT(resultsReady(const QHostInfo)));
+        QTestEventLoop::instance().enterLoop(20);
+        QVERIFY(receiver.receiveCount == COUNT);
     }
 }
 

@@ -38,6 +38,7 @@
 #include "qlineedit.h"
 #include "qwindowsstyle.h"
 #include "qcombobox.h"
+#include "qplastiquestyle.h"
 #include "qabstractscrollarea.h"
 #include "qtooltip.h"
 #include "qshareddata.h"
@@ -54,6 +55,7 @@
 #include "qmetaobject.h"
 #include "qmainwindow.h"
 #include "qdockwidget.h"
+#include "qmdisubwindow.h"
 #include "qdialog.h"
 #include "qabstractspinbox.h"
 #include "qlabel.h"
@@ -168,6 +170,9 @@ enum PseudoElement {
     PseudoElement_DockWidgetCloseButton,
     PseudoElement_DockWidgetFloatButton,
     PseudoElement_DockWidgetSeparator,
+    PseudoElement_MdiCloseButton,
+    PseudoElement_MdiMinButton,
+    PseudoElement_MdiNormalButton,
     PseudoElement_TitleBar,
     PseudoElement_TitleBarCloseButton,
     PseudoElement_TitleBarMinButton,
@@ -254,6 +259,9 @@ static const PseudoElementInfo knownPseudoElements[NumPseudoElements] = {
     { QStyle::SC_None, QLatin1String("close-button") },
     { QStyle::SC_None, QLatin1String("float-button") },
     { QStyle::SC_None, QLatin1String("separator") },
+    { QStyle::SC_MdiCloseButton, QLatin1String("close-button") },
+    { QStyle::SC_MdiMinButton, QLatin1String("minimize-button") },
+    { QStyle::SC_MdiNormalButton, QLatin1String("normal-button") },
     { QStyle::SC_TitleBarLabel, QLatin1String("title") },
     { QStyle::SC_TitleBarCloseButton, QLatin1String("close-button") },
     { QStyle::SC_TitleBarMinButton, QLatin1String("minimize-button") },
@@ -475,7 +483,7 @@ public:
     bool hasPalette() const { return pal != 0; }
     bool hasBackground() const { return bg != 0 && (!bg->pixmap.isNull() || bg->brush.style() != Qt::NoBrush); }
     bool hasGradientBackground() const { return bg && bg->brush.style() >= Qt::LinearGradientPattern
-                                                   && bg->brush.style() <= Qt::RadialGradientPattern; }
+                                                   && bg->brush.style() <= Qt::ConicalGradientPattern; }
 
     bool hasNativeBorder() const {
         return bd == 0
@@ -663,15 +671,18 @@ static QList<QVariant> subControlLayout(const QString& layout)
         int button = layout[i].toAscii();
         switch (button) {
         case 'm':
+            buttons.append(PseudoElement_MdiMinButton);
             buttons.append(PseudoElement_TitleBarMinButton);
             break;
         case 'M':
             buttons.append(PseudoElement_TitleBarMaxButton);
             break;
         case 'X':
+            buttons.append(PseudoElement_MdiCloseButton);
             buttons.append(PseudoElement_TitleBarCloseButton);
             break;
         case 'N':
+            buttons.append(PseudoElement_MdiNormalButton);
             buttons.append(PseudoElement_TitleBarNormalButton);
             break;
         case 'I':
@@ -809,6 +820,9 @@ QHash<QStyle::SubControl, QRect> QStyleSheetStyle::titleBarLayout(const QWidget 
 static QStyle::StandardPixmap subControlIcon(int pe)
 {
     switch (pe) {
+    case PseudoElement_MdiCloseButton: return QStyle::SP_TitleBarCloseButton;
+    case PseudoElement_MdiMinButton: return QStyle::SP_TitleBarMinButton;
+    case PseudoElement_MdiNormalButton: return QStyle::SP_TitleBarNormalButton;
     case PseudoElement_TitleBarCloseButton: return QStyle::SP_TitleBarCloseButton;
     case PseudoElement_TitleBarMinButton: return QStyle::SP_TitleBarMinButton;
     case PseudoElement_TitleBarMaxButton: return QStyle::SP_TitleBarMaxButton;
@@ -1328,8 +1342,8 @@ void QRenderRule::configurePalette(QPalette *p, QPalette::ColorRole fr, QPalette
 void QRenderRule::configurePalette(QPalette *p, QPalette::ColorGroup cg, const QWidget *w, bool embedded)
 {
     if (bg && bg->brush.style() != Qt::NoBrush) {
-        p->setBrush(cg, QPalette::Base, bg->brush); // for windows
-        p->setBrush(cg, QPalette::Button, bg->brush);
+        p->setBrush(cg, QPalette::Base, bg->brush); // for windows, windowxp
+        p->setBrush(cg, QPalette::Button, bg->brush); // for plastique
         p->setBrush(cg, w->backgroundRole(), bg->brush);
         p->setBrush(cg, QPalette::Window, bg->brush);
     }
@@ -1483,15 +1497,12 @@ QVector<QCss::StyleRule> QStyleSheetStyle::styleRules(const QWidget *w) const
 
     QStyleSheetStyleSelector styleSelector;
 
-    StyleSheet defaultSs;
     QStyle *bs = baseStyle();
+    static StyleSheet defaultSs = getDefaultStyleSheet();
     QHash<const void *, StyleSheet>::const_iterator defaultCacheIt = styleSheetCaches->styleSheetCache.constFind(bs);
     if (defaultCacheIt == styleSheetCaches->styleSheetCache.constEnd()) {
-        defaultSs = getDefaultStyleSheet();
         styleSheetCaches->styleSheetCache.insert(bs, defaultSs);
         QObject::connect(bs, SIGNAL(destroyed(QObject*)), styleSheetCaches, SLOT(styleDestroyed(QObject*)), Qt::UniqueConnection);
-    } else {
-        defaultSs = defaultCacheIt.value();
     }
     styleSelector.styleSheets += defaultSs;
 
@@ -2680,6 +2691,9 @@ void QStyleSheetStyle::polish(QWidget *w)
 #ifndef QT_NO_MAINWINDOW
               || qobject_cast<QMainWindow *>(w)
 #endif
+#ifndef QT_NO_MDIAREA
+              || qobject_cast<QMdiSubWindow *>(w)
+#endif
 #ifndef QT_NO_MENUBAR
               || qobject_cast<QMenuBar *>(w)
 #endif
@@ -3116,6 +3130,39 @@ void QStyleSheetStyle::drawComplexControl(ComplexControl cc, const QStyleOptionC
         }
         break;
 #endif // QT_NO_SLIDER
+
+    case CC_MdiControls:
+        if (hasStyleRule(w, PseudoElement_MdiCloseButton)
+            || hasStyleRule(w, PseudoElement_MdiNormalButton)
+            || hasStyleRule(w, PseudoElement_MdiMinButton)) {
+            QList<QVariant> layout = subControlLayout(QLatin1String("mNX"));
+
+            QStyleOptionComplex optCopy(*opt);
+            optCopy.subControls = 0;
+            for (int i = 0; i < layout.count(); i++) {
+                int layoutButton = layout[i].toInt();
+                if (layoutButton < PseudoElement_MdiCloseButton
+                    || layoutButton > PseudoElement_MdiNormalButton)
+                    continue;
+                QStyle::SubControl control = knownPseudoElements[layoutButton].subControl;
+                if (!(opt->subControls & control))
+                    continue;
+                QRenderRule subRule = renderRule(w, opt, layoutButton);
+                if (subRule.hasDrawable()) {
+                    QRect rect = subRule.boxRect(subControlRect(CC_MdiControls, opt, control, w), Margin);
+                    subRule.drawRule(p, rect);
+                    QIcon icon = standardIcon(subControlIcon(layoutButton), opt);
+                    icon.paint(p, subRule.contentsRect(rect), Qt::AlignCenter);
+                } else {
+                    optCopy.subControls |= control;
+                }
+            }
+
+            if (optCopy.subControls)
+                baseStyle()->drawComplexControl(CC_MdiControls, &optCopy, p, w);
+            return;
+        }
+        break;
 
     case CC_TitleBar:
         if (const QStyleOptionTitleBar *tb = qstyleoption_cast<const QStyleOptionTitleBar *>(opt)) {
@@ -3780,7 +3827,6 @@ void QStyleSheetStyle::drawControl(ControlElement ce, const QStyleOption *opt, Q
         }
         break;
 
-#ifndef QT_NO_SIZEGRIP
     case CE_SizeGrip:
         if (const QStyleOptionSizeGrip *sgOpt = qstyleoption_cast<const QStyleOptionSizeGrip *>(opt)) {
             if (rule.hasDrawable()) {
@@ -3803,7 +3849,6 @@ void QStyleSheetStyle::drawControl(ControlElement ce, const QStyleOption *opt, Q
             return;
         }
         break;
-#endif // QT_NO_SIZEGRIP
 
     case CE_ToolBoxTab:
         QWindowsStyle::drawControl(ce, opt, p, w);
@@ -4032,6 +4077,7 @@ void QStyleSheetStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *op
 
     int pseudoElement = PseudoElement_None;
     QRenderRule rule = renderRule(w, opt);
+    QRect rect = opt->rect;
 
     switch (pe) {
 
@@ -4365,7 +4411,7 @@ void QStyleSheetStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *op
     if (pseudoElement != PseudoElement_None) {
         QRenderRule subRule = renderRule(w, opt, pseudoElement);
         if (subRule.hasDrawable()) {
-            subRule.drawRule(p, opt->rect);
+            subRule.drawRule(p, rect);
         } else {
             baseStyle()->drawPrimitive(pe, opt, p, w);
         }
@@ -4404,6 +4450,14 @@ QStyle::SubControl QStyleSheetStyle::hitTestComplexControl(ComplexControl cc, co
                 return sc;
             }
         }
+        break;
+    }
+
+    case CC_MdiControls: {
+        if (hasStyleRule(w, PseudoElement_MdiCloseButton)
+            || hasStyleRule(w, PseudoElement_MdiNormalButton)
+            || hasStyleRule(w, PseudoElement_MdiMinButton))
+            return QWindowsStyle::hitTestComplexControl(cc, opt, pt, w);
         break;
     }
 
@@ -4720,6 +4774,21 @@ int QStyleSheetStyle::pixelMetric(PixelMetric m, const QStyleOption *opt, const 
         break;
     }
 
+    case PM_MdiSubWindowFrameWidth: {
+        if (rule.hasBox() || rule.hasBorder()) {
+            return (rule.border() ? rule.border()->borders[LeftEdge] : 0)
+                   + (rule.hasBox() ? rule.box()->paddings[LeftEdge]+rule.box()->margins[LeftEdge]: 0);
+        }
+        break;
+    }
+
+    case PM_MdiSubWindowMinimizedWidth: {
+        QRenderRule subRule = renderRule(w, PseudoElement_None, PseudoClass_Minimized);
+        int width = subRule.size().width();
+        if (width != -1)
+            return width;
+        break;
+    }
     default:
         break;
     }
@@ -4889,6 +4958,35 @@ QSize QStyleSheetStyle::sizeFromContents(ContentsType ct, const QStyleOption *op
         break;
     }
 #endif // QT_NO_TABBAR
+
+    case CT_MdiControls: {
+        if (const QStyleOptionComplex *ccOpt = qstyleoption_cast<const QStyleOptionComplex *>(opt)) {
+            if (!hasStyleRule(w, PseudoElement_MdiCloseButton)
+                && !hasStyleRule(w, PseudoElement_MdiNormalButton)
+                && !hasStyleRule(w, PseudoElement_MdiMinButton))
+                break;
+
+            QList<QVariant> layout = subControlLayout(QLatin1String("mNX"));
+
+            int width = 0, height = 0;
+            for (int i = 0; i < layout.count(); i++) {
+                int layoutButton = layout[i].toInt();
+                if (layoutButton < PseudoElement_MdiCloseButton
+                    || layoutButton > PseudoElement_MdiNormalButton)
+                    continue;
+                QStyle::SubControl sc = knownPseudoElements[layoutButton].subControl;
+                if (!(ccOpt->subControls & sc))
+                    continue;
+                QRenderRule subRule = renderRule(w, opt, layoutButton);
+                QSize sz = subRule.size();
+                width += sz.width();
+                height = qMax(height, sz.height());
+            }
+
+            return QSize(width, height);
+        }
+        break;
+    }
 
 #ifndef QT_NO_ITEMVIEWS
     case CT_ItemViewItem: {
@@ -5103,7 +5201,7 @@ int QStyleSheetStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWi
             if (subRule.hasDrawable())
                 return 1;
             break;
-        }
+                                   }
         case SH_ItemView_ArrowKeysNavigateIntoChildren: s = QLatin1String("arrow-keys-navigate-into-children"); break;
         case SH_ItemView_PaintAlternatingRowColorsForEmptyArea: s = QLatin1String("paint-alternating-row-colors-for-empty-area"); break;
         default: break;
@@ -5418,6 +5516,33 @@ QRect QStyleSheetStyle::subControlRect(ComplexControl cc, const QStyleOptionComp
         }
         break;
 #endif // QT_NO_SLIDER
+
+    case CC_MdiControls:
+        if (hasStyleRule(w, PseudoElement_MdiCloseButton)
+            || hasStyleRule(w, PseudoElement_MdiNormalButton)
+            || hasStyleRule(w, PseudoElement_MdiMinButton)) {
+            QList<QVariant> layout = subControlLayout(QLatin1String("mNX"));
+
+            int x = 0, width = 0;
+            QRenderRule subRule;
+            for (int i = 0; i < layout.count(); i++) {
+                int layoutButton = layout[i].toInt();
+                if (layoutButton < PseudoElement_MdiCloseButton
+                    || layoutButton > PseudoElement_MdiNormalButton)
+                    continue;
+                QStyle::SubControl control = knownPseudoElements[layoutButton].subControl;
+                if (!(opt->subControls & control))
+                    continue;
+                subRule = renderRule(w, opt, layoutButton);
+                width = subRule.size().width();
+                if (sc == control)
+                    break;
+                x += width;
+            }
+
+            return subRule.borderRect(QRect(x, opt->rect.top(), width, opt->rect.height()));
+        }
+        break;
 
     case CC_TitleBar:
         if (const QStyleOptionTitleBar *tb = qstyleoption_cast<const QStyleOptionTitleBar *>(opt)) {

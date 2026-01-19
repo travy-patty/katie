@@ -39,6 +39,11 @@
 #include "qwidget_p.h"
 #include <QtGui/qabstractscrollarea.h>
 
+#define SZ_SIZEBOTTOMRIGHT  0xf008
+#define SZ_SIZEBOTTOMLEFT   0xf007
+#define SZ_SIZETOPLEFT      0xf004
+#define SZ_SIZETOPRIGHT     0xf005
+
 QT_BEGIN_NAMESPACE
 
 static QWidget *qt_sizegrip_topLevelWidget(QWidget* w)
@@ -54,6 +59,7 @@ class QSizeGripPrivate : public QWidgetPrivate
 public:
     QPoint p;
     QRect r;
+    int d;
     int dxMax;
     int dyMax;
     Qt::Corner m_corner;
@@ -409,7 +415,8 @@ bool QSizeGrip::eventFilter(QObject *o, QEvent *e)
 {
     Q_D(QSizeGrip);
     if ((isHidden() && testAttribute(Qt::WA_WState_ExplicitShowHide))
-        || e->type() != QEvent::WindowStateChange || o != d->tlw) {
+        || e->type() != QEvent::WindowStateChange
+		|| o != d->tlw) {
         return QWidget::eventFilter(o, e);
     }
     const Qt::WindowStates sizeGripNotVisibleState = Qt::WindowFullScreen | Qt::WindowMaximized;
@@ -424,7 +431,6 @@ QT_END_NAMESPACE
 
 
 #include "moc_qsizegrip.h"
-
-#endif // QT_NO_SIZEGRIP
-
 #include "moc_qsizepolicy.h"
+
+#endif //QT_NO_SIZEGRIP

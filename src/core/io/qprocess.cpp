@@ -333,7 +333,11 @@ void QProcessPrivate::Channel::clear()
     write to the process's standard input by calling write(), and
     read the standard output by calling read(), readLine(), and
     getChar(). Because it inherits QIODevice, QProcess can also be
-    used as an input source for QXmlReader.
+    used as an input source for QXmlReader, or for generating data to
+    be uploaded using QFtp.
+
+    \note On Windows CE and Symbian, reading and writing to a process
+    is not supported.
 
     When the process exits, QProcess reenters the \l NotRunning state
     (the initial state), and emits finished().
@@ -1740,6 +1744,21 @@ void QProcess::start(const QString &program, OpenMode mode)
     The process may not exit as a result of calling this function (it is given
     the chance to prompt the user for any unsaved files, etc).
 
+    On Windows, terminate() posts a WM_CLOSE message to all toplevel windows
+    of the process and then to the main thread of the process itself. On Unix
+    and Mac OS X the SIGTERM signal is sent.
+
+    Console applications on Windows that do not run an event loop, or whose
+    event loop does not handle the WM_CLOSE message, can only be terminated by
+    calling kill().
+
+    On Symbian, this function requires platform security capability
+    \c PowerMgmt. If absent, the process will panic with KERN-EXEC 46.
+
+    \note Terminating running processes from other processes will typically
+    cause a panic in Symbian due to platform security.
+
+    \sa {Symbian Platform Security Requirements}
     \sa kill()
 */
 void QProcess::terminate()
@@ -1753,6 +1772,10 @@ void QProcess::terminate()
 
     On Unix the SIGKILL signal is sent to the process.
 
+    \note Killing running processes from other processes will typically
+    cause a panic in Symbian due to platform security.
+
+    \sa {Symbian Platform Security Requirements}
     \sa terminate()
 */
 void QProcess::kill()

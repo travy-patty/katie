@@ -36,6 +36,7 @@
 QT_BEGIN_NAMESPACE
 
 class QBrush;
+class QFontInfo;
 class QFontMetrics;
 class QPaintDevice;
 class QPainterPath;
@@ -45,6 +46,7 @@ class QPolygon;
 class QTextItem;
 class QMatrix;
 class QTransform;
+class QStaticText;
 
 class Q_GUI_EXPORT QPainter
 {
@@ -100,7 +102,18 @@ public:
         CompositionMode_HardLight,
         CompositionMode_SoftLight,
         CompositionMode_Difference,
-        CompositionMode_Exclusion
+        CompositionMode_Exclusion,
+
+        // ROPs
+        RasterOp_SourceOrDestination,
+        RasterOp_SourceAndDestination,
+        RasterOp_SourceXorDestination,
+        RasterOp_NotSourceAndNotDestination,
+        RasterOp_NotSourceOrNotDestination,
+        RasterOp_NotSourceXorDestination,
+        RasterOp_NotSource,
+        RasterOp_NotSourceAndDestination,
+        RasterOp_SourceAndNotDestination
     };
     void setCompositionMode(CompositionMode mode);
     CompositionMode compositionMode() const;
@@ -109,6 +122,7 @@ public:
     void setFont(const QFont &f);
 
     QFontMetrics fontMetrics() const;
+    QFontInfo fontInfo() const;
 
     void setPen(const QColor &color);
     void setPen(const QPen &pen);
@@ -318,9 +332,15 @@ public:
     void setLayoutDirection(Qt::LayoutDirection direction);
     Qt::LayoutDirection layoutDirection() const;
 
+    void drawStaticText(const QPointF &topLeftPosition, const QStaticText &staticText);
+    inline void drawStaticText(const QPoint &topLeftPosition, const QStaticText &staticText);
+    inline void drawStaticText(int left, int top, const QStaticText &staticText);
+
     void drawText(const QPointF &p, const QString &s);
     inline void drawText(const QPoint &p, const QString &s);
     inline void drawText(int x, int y, const QString &s);
+
+    void drawText(const QPointF &p, const QString &str, int tf, int justificationPadding);
 
     void drawText(const QRectF &r, int flags, const QString &text, QRectF *br = nullptr);
     void drawText(const QRect &r, int flags, const QString &text, QRect *br = nullptr);
@@ -752,6 +772,16 @@ inline void QPainter::drawImage(int x, int y, const QImage &image, int sx, int s
         drawImage(QPointF(x, y), image);
     else
         drawImage(QRectF(x, y, -1, -1), image, QRectF(sx, sy, sw, sh), flags);
+}
+
+inline void QPainter::drawStaticText(const QPoint &p, const QStaticText &staticText)
+{
+    drawStaticText(QPointF(p), staticText);
+}
+
+inline void QPainter::drawStaticText(int x, int y, const QStaticText &staticText)
+{
+    drawStaticText(QPointF(x, y), staticText);
 }
 
 inline void QPainter::drawTextItem(const QPoint &p, const QTextItem &ti)

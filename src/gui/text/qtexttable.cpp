@@ -24,7 +24,7 @@
 #include "qtextformat.h"
 #include "qdebug.h"
 #include "qtexttable_p.h"
-#include "qstdcontainers_p.h"
+#include "qvarlengtharray.h"
 
 #include <stdlib.h>
 
@@ -1184,7 +1184,7 @@ void QTextTable::splitCell(int row, int column, int numRows, int numCols)
 
     const int origCellPosition = cell.firstPosition() - 1;
 
-    QStdVector<int> rowPositions(rowSpan);
+    QVarLengthArray<int> rowPositions(rowSpan);
 
     rowPositions[0] = cell.lastPosition();
 

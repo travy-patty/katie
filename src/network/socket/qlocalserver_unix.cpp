@@ -32,6 +32,7 @@
 
 #include "qdebug.h"
 #include "qdir.h"
+#include "qdatetime.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -63,7 +64,7 @@ bool QLocalServerPrivate::listen(const QString &requestedServerName)
 
     // create the unix socket
     listenSocket = qt_safe_socket(PF_UNIX, SOCK_STREAM, 0);
-    if (listenSocket == -1) {
+    if (-1 == listenSocket) {
         setError(QLatin1String("QLocalServer::listen"));
         closeServer();
         return false;
@@ -78,11 +79,12 @@ bool QLocalServerPrivate::listen(const QString &requestedServerName)
         closeServer();
         return false;
     }
-    ::memcpy(addr.sun_path, latinFullServerName.constData(), latinFullServerName.size() + 1);
+    ::memcpy(addr.sun_path, latinFullServerName.constData(),
+             latinFullServerName.size() + 1);
 
 
     // bind
-    if (::bind(listenSocket, (sockaddr *)&addr, sizeof(sockaddr_un)) == -1) {
+    if(-1 == QT_SOCKET_BIND(listenSocket, (sockaddr *)&addr, sizeof(sockaddr_un))) {
         setError(QLatin1String("QLocalServer::listen"));
         // if address is in use already, just close the socket, but do not delete the file
         if(errno == EADDRINUSE)
@@ -95,18 +97,19 @@ bool QLocalServerPrivate::listen(const QString &requestedServerName)
     }
 
     // listen for connections
-    if (::listen(listenSocket, SOMAXCONN) == -1) {
+    if (-1 == ::listen(listenSocket, SOMAXCONN)) {
         setError(QLatin1String("QLocalServer::listen"));
         closeServer();
         listenSocket = -1;
-        if (error != QAbstractSocket::AddressInUseError) {
+        if (error != QAbstractSocket::AddressInUseError)
             QFile::remove(fullServerName);
-        }
         return false;
     }
     Q_ASSERT(!socketNotifier);
-    socketNotifier = new QSocketNotifier(listenSocket, QSocketNotifier::Read, q);
-    q->connect(socketNotifier, SIGNAL(activated(int)), q, SLOT(_q_onNewConnection()));
+    socketNotifier = new QSocketNotifier(listenSocket,
+                                         QSocketNotifier::Read, q);
+    q->connect(socketNotifier, SIGNAL(activated(int)),
+               q, SLOT(_q_onNewConnection()));
     socketNotifier->setEnabled(maxPendingConnections > 0);
     return true;
 }
@@ -124,14 +127,12 @@ void QLocalServerPrivate::closeServer()
         socketNotifier = 0;
     }
 
-    if (listenSocket != -1) {
+    if (-1 != listenSocket)
         qt_safe_close(listenSocket);
-    }
     listenSocket = -1;
 
-    if (!fullServerName.isEmpty()) {
+    if (!fullServerName.isEmpty())
         QFile::remove(fullServerName);
-    }
 }
 
 /*!
@@ -143,18 +144,18 @@ void QLocalServerPrivate::closeServer()
 void QLocalServerPrivate::_q_onNewConnection()
 {
     Q_Q(QLocalServer);
-    if (listenSocket == -1) {
+    if (-1 == listenSocket)
         return;
-    }
 
     ::sockaddr_un addr;
     QT_SOCKLEN_T length = sizeof(sockaddr_un);
     int connectedSocket = qt_safe_accept(listenSocket, (sockaddr *)&addr, &length);
-    if (connectedSocket == -1) {
+    if(-1 == connectedSocket) {
         setError(QLatin1String("QLocalSocket::activated"));
         closeServer();
     } else {
-        socketNotifier->setEnabled(pendingConnections.size() <= maxPendingConnections);
+        socketNotifier->setEnabled(pendingConnections.size()
+                                   <= maxPendingConnections);
         q->incomingConnection(connectedSocket);
     }
 }
@@ -165,27 +166,23 @@ void QLocalServerPrivate::waitForNewConnection(int msec, bool *timedOut)
     ::memset(&fds, 0, sizeof(struct pollfd));
     fds.fd = listenSocket;
     fds.events = POLLIN;
-    const int result = qt_safe_poll(&fds, msec);
+    int result = qt_safe_poll(&fds, 1, msec);
     if (result == -1) {
         setError(QLatin1String("QLocalServer::waitForNewConnection"));
         closeServer();
     }
-    if (result > 0) {
+    if (result > 0)
         _q_onNewConnection();
-    }
-    if (timedOut) {
+    if (timedOut)
         *timedOut = (result == 0);
-    }
 }
 
 void QLocalServerPrivate::setError(const QString &function)
 {
-    const int savederrno = errno;
-    if (EAGAIN == savederrno) {
+    if (EAGAIN == errno)
         return;
-    }
 
-    switch (savederrno) {
+    switch (errno) {
     case EACCES:
         errorString = QLocalServer::tr("%1: Permission denied").arg(function);
         error = QAbstractSocket::SocketAccessError;
@@ -204,7 +201,8 @@ void QLocalServerPrivate::setError(const QString &function)
         break;
 
     default:
-        errorString = QLocalServer::tr("%1: Unknown error %2").arg(function).arg(savederrno);
+        errorString = QLocalServer::tr("%1: Unknown error %2")
+                      .arg(function).arg(errno);
         error = QAbstractSocket::UnknownSocketError;
 #if defined QLOCALSERVER_DEBUG
         qWarning() << errorString << "fullServerName:" << fullServerName;
@@ -215,3 +213,5 @@ void QLocalServerPrivate::setError(const QString &function)
 QT_END_NAMESPACE
 
 #endif // QT_NO_LOCALSERVER
+
+

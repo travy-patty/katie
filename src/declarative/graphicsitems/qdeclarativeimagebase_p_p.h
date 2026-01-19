@@ -40,6 +40,7 @@
 
 QT_BEGIN_NAMESPACE
 
+class QNetworkReply;
 class QDeclarativeImageBasePrivate : public QDeclarativeImplicitSizeItemPrivate
 {
     Q_DECLARE_PUBLIC(QDeclarativeImageBase)

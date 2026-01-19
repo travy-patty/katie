@@ -82,7 +82,7 @@ tst_qregexp::tst_qregexp()
     :QObject()
     ,str1("We are all happy monkeys")
 {
-        QFile f(SRCDIR "/main.cpp");
+        QFile f(":/main.cpp");
         f.open(QFile::ReadOnly);
         str2=f.readAll();
 }
@@ -491,3 +491,4 @@ void tst_qregexp::horribleReplaceJSC()
 QTEST_MAIN(tst_qregexp)
 
 #include "moc_main.cpp"
+#include "qrc_qregexp.cpp"

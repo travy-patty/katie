@@ -47,7 +47,10 @@
     you cannot iterate directories in reverse order) and does not allow random
     access.
 
-    \sa QDir, QDir::entryList()
+    QDirIterator works with all supported file engines, and is implemented
+    using QAbstractFileEngineIterator.
+
+    \sa QDir, QDir::entryList(), QAbstractFileEngineIterator
 */
 
 /*! \enum QDirIterator::IteratorFlag
@@ -68,13 +71,17 @@
 
 #include "qdiriterator.h"
 #include "qdir_p.h"
+#include "qabstractfileengine.h"
 #include "qset.h"
 #include "qstack.h"
 #include "qvariant.h"
 #include "qfilesystemiterator_p.h"
 #include "qfilesystementry_p.h"
 #include "qfilesystemmetadata_p.h"
+#include "qfilesystemengine_p.h"
+#include "qfsfileengine.h"
 #include "qfileinfo_p.h"
+#include "qscopedpointer.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -92,7 +99,7 @@ class QDirIteratorPrivate
 {
 public:
     QDirIteratorPrivate(const QFileSystemEntry &entry, const QStringList &nameFilters,
-                        QDir::Filters filters, QDirIterator::IteratorFlags flags);
+                        QDir::Filters filters, QDirIterator::IteratorFlags flags, bool resolveEngine = true);
 
     void advance();
 
@@ -100,6 +107,8 @@ public:
     void pushDirectory(const QFileInfo &fileInfo);
     void checkAndPushDirectory(const QFileInfo &);
     bool matchesFilters(const QString &fileName, const QFileInfo &fi) const;
+
+    QScopedPointer<QAbstractFileEngine> engine;
 
     QFileSystemEntry dirEntry;
     const QStringList nameFilters;
@@ -110,6 +119,7 @@ public:
     QVector<QRegExp> nameRegExps;
 #endif
 
+    QDirIteratorPrivateIteratorStack<QAbstractFileEngineIterator> fileEngineIterators;
 #ifndef QT_NO_FILESYSTEMITERATOR
     QDirIteratorPrivateIteratorStack<QFileSystemIterator> nativeIterators;
 #endif
@@ -125,7 +135,7 @@ public:
     \internal
 */
 QDirIteratorPrivate::QDirIteratorPrivate(const QFileSystemEntry &entry, const QStringList &nameFilters,
-                                         QDir::Filters filters, QDirIterator::IteratorFlags flags)
+                                         QDir::Filters filters, QDirIterator::IteratorFlags flags, bool resolveEngine)
     : dirEntry(entry)
       , nameFilters(nameFilters.contains(QLatin1String("*")) ? QStringList() : nameFilters)
       , filters(QDir::NoFilter == filters ? QDir::AllEntries : filters)
@@ -141,6 +151,8 @@ QDirIteratorPrivate::QDirIteratorPrivate(const QFileSystemEntry &entry, const QS
     }
 #endif
     QFileSystemMetaData metaData;
+    if (resolveEngine)
+        engine.reset(QAbstractFileEngine::create(dirEntry.filePath()));
     QFileInfo fileInfo(new QFileInfoPrivate(dirEntry, metaData));
 
     // Populate fields for hasNext() and next()
@@ -153,12 +165,25 @@ QDirIteratorPrivate::QDirIteratorPrivate(const QFileSystemEntry &entry, const QS
 */
 void QDirIteratorPrivate::pushDirectory(const QFileInfo &fileInfo)
 {
+    QString path = fileInfo.filePath();
+
     if (iteratorFlags & QDirIterator::FollowSymlinks)
         visitedLinks << fileInfo.canonicalFilePath();
 
+    if (engine) {
+        engine->setFileName(path);
+        QAbstractFileEngineIterator *it = engine->beginEntryList(filters, nameFilters);
+        if (it) {
+            it->setPath(path);
+            fileEngineIterators << it;
+        } else {
+            // No iterator; no entry list.
+        }
+    } else {
 #ifndef QT_NO_FILESYSTEMITERATOR
-    nativeIterators << new QFileSystemIterator(fileInfo.d_ptr->fileEntry);
+        nativeIterators << new QFileSystemIterator(fileInfo.d_ptr->fileEntry);
 #endif
+    }
 }
 
 inline bool QDirIteratorPrivate::entryMatches(const QString & fileName, const QFileInfo &fileInfo)
@@ -181,24 +206,39 @@ inline bool QDirIteratorPrivate::entryMatches(const QString & fileName, const QF
 */
 void QDirIteratorPrivate::advance()
 {
-#ifndef QT_NO_FILESYSTEMITERATOR
-    QFileSystemEntry nextEntry;
-    QFileSystemMetaData nextMetaData;
+    if (engine) {
+        while (!fileEngineIterators.isEmpty()) {
+            // Find the next valid iterator that matches the filters.
+            QAbstractFileEngineIterator *it;
+            while (it = fileEngineIterators.top(), it->hasNext()) {
+                it->next();
+                if (entryMatches(it->currentFileName(), it->currentFileInfo()))
+                    return;
+            }
 
-    while (!nativeIterators.isEmpty()) {
-        // Find the next valid iterator that matches the filters.
-        QFileSystemIterator *it;
-        while (it = nativeIterators.top(), it->advance(nextEntry, nextMetaData)) {
-            QFileInfo info(new QFileInfoPrivate(nextEntry, nextMetaData));
-
-            if (entryMatches(nextEntry.fileName(), info))
-                return;
+            fileEngineIterators.pop();
+            delete it;
         }
+    } else {
+#ifndef QT_NO_FILESYSTEMITERATOR
+        QFileSystemEntry nextEntry;
+        QFileSystemMetaData nextMetaData;
 
-        nativeIterators.pop();
-        delete it;
-    }
+        while (!nativeIterators.isEmpty()) {
+            // Find the next valid iterator that matches the filters.
+            QFileSystemIterator *it;
+            while (it = nativeIterators.top(), it->advance(nextEntry, nextMetaData)) {
+                QFileInfo info(new QFileInfoPrivate(nextEntry, nextMetaData));
+
+                if (entryMatches(nextEntry.fileName(), info))
+                    return;
+            }
+
+            nativeIterators.pop();
+            delete it;
+        }
 #endif
+    }
 
     currentFileInfo = nextFileInfo;
     nextFileInfo = QFileInfo();
@@ -340,7 +380,7 @@ QDirIterator::QDirIterator(const QDir &dir, IteratorFlags flags)
     : d(nullptr)
 {
     const QDirPrivate *priv = dir.d_ptr.constData();
-    d = new QDirIteratorPrivate(priv->dirEntry, priv->nameFilters, priv->filters, flags);
+    d = new QDirIteratorPrivate(priv->dirEntry, priv->nameFilters, priv->filters, flags, priv->fileEngine);
 }
 
 /*!
@@ -429,10 +469,13 @@ QString QDirIterator::next()
 */
 bool QDirIterator::hasNext() const
 {
+    if (d->engine)
+        return !d->fileEngineIterators.isEmpty();
+    else
 #ifndef QT_NO_FILESYSTEMITERATOR
-    return !d->nativeIterators.isEmpty();
+        return !d->nativeIterators.isEmpty();
 #else
-    return false;
+        return false;
 #endif
 }
 

@@ -75,6 +75,9 @@ class QDeclarativeImportDatabase;
 class QDeclarativeObjectScriptClass;
 class QDeclarativeTypeNameScriptClass;
 class QDeclarativeValueTypeScriptClass;
+class QNetworkReply;
+class QNetworkAccessManager;
+class QDeclarativeNetworkAccessManagerFactory;
 class QDeclarativeAbstractBinding;
 class QScriptDeclarativeClass;
 class QDeclarativeTypeNameScriptClass;
@@ -101,6 +104,8 @@ public:
     QDeclarativeEnginePrivate *p;
 
     QUrl baseUrl;
+
+    virtual QNetworkAccessManager *networkAccessManager();
 };
 
 class Q_AUTOTEST_EXPORT QDeclarativeEnginePrivate : public QObjectPrivate
@@ -191,6 +196,11 @@ public:
 
     bool inBeginCreate;
 
+    QNetworkAccessManager *createNetworkAccessManager(QObject *parent) const;
+    QNetworkAccessManager *getNetworkAccessManager() const;
+    mutable QNetworkAccessManager *networkAccessManager;
+    QDeclarativeNetworkAccessManagerFactory *networkAccessManagerFactory;
+
     QHash<QString,QSharedPointer<QDeclarativeImageProvider> > imageProviders;
     QDeclarativeImageProvider::ImageType getImageProviderType(const QUrl &url) const;
     QImage getImageFromProvider(const QUrl &url, QSize *size, const QSize& req_size) const;
@@ -243,7 +253,7 @@ public:
     static QScriptValue isQtObject(QScriptContext*, QScriptEngine*);
     static QScriptValue vector3d(QScriptContext*, QScriptEngine*);
     static QScriptValue rgba(QScriptContext*, QScriptEngine*);
-    static QScriptValue hsva(QScriptContext*, QScriptEngine*);
+    static QScriptValue hsla(QScriptContext*, QScriptEngine*);
     static QScriptValue point(QScriptContext*, QScriptEngine*);
     static QScriptValue size(QScriptContext*, QScriptEngine*);
     static QScriptValue rect(QScriptContext*, QScriptEngine*);

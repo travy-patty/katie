@@ -28,6 +28,7 @@
 #include <QTextLayout>
 #include <QFontMetrics>
 #include <QDebug>
+#include <QStaticText>
 
 class Benchmark
 {
@@ -448,7 +449,9 @@ public:
         PainterQPointMode,
         LayoutMode,
         DocumentMode,
-        PixmapMode
+        PixmapMode,
+        StaticTextMode,
+        StaticTextWithMaximumSizeMode
     };
 
     DrawText(const QString &text, Mode mode)
@@ -457,6 +460,7 @@ public:
     }
 
     virtual void begin(QPainter *p, int iterations) {
+        m_staticTexts.clear();
         m_pixmaps.clear();
         m_currentPixmap = 0;
         QRect m_bounds = QRect(0,0,p->device()->width(), p->device()->height());
@@ -497,12 +501,32 @@ public:
             m_layout.endLayout();
             m_layout.setCacheEnabled(true);
             m_size = m_layout.boundingRect().toRect().size();
+            break; }
+
+        case StaticTextWithMaximumSizeMode: {
+            QStaticText staticText;
+            m_size = (p->boundingRect(m_bounds, 0, m_text)).size();
+            staticText.setTextWidth(m_size.width() + 10);
+            staticText.setText(m_text);
+            staticText.prepare(p->transform(), p->font());
+            m_staticTexts.append(staticText);
+            break;
+        }
+        case StaticTextMode: {
+            QStaticText staticText;
+            staticText.setText(m_text);
+            staticText.prepare(p->transform(), p->font());
+            m_staticTexts.append(staticText);
+
+            QFontMetrics fm(p->font());
+            m_size = QSize(fm.width(m_text, m_text.length()), fm.height());
+
             break;
         }
 
         case PainterQPointMode: {
             QFontMetrics fm(p->font());
-            m_size = QSize(fm.width(m_text), fm.height());
+            m_size = QSize(fm.width(m_text, m_text.length()), fm.height());
             break;
         }
 
@@ -530,6 +554,10 @@ public:
         case LayoutMode:
             m_layout.draw(p, rect.topLeft());
             break;
+        case StaticTextWithMaximumSizeMode:
+        case StaticTextMode:
+            p->drawStaticText(rect.topLeft(), m_staticTexts.at(0));
+            break;
         }
     }
 
@@ -545,6 +573,8 @@ public:
         case LayoutMode: type = QLatin1String("layout.draw()"); break;
         case DocumentMode: type = QLatin1String("doc.drawContents()"); break;
         case PixmapMode: type = QLatin1String("pixmap cached text"); break;
+        case StaticTextMode: type = QLatin1String("drawStaticText()"); break;
+        case StaticTextWithMaximumSizeMode: type = QLatin1String("drawStaticText() w/ maxsize"); break;
         }
 
         return QString::fromLatin1("%3, len=%1, lines=%2")
@@ -561,6 +591,8 @@ private:
 
     QList<QPixmap> m_pixmaps;
     int m_currentPixmap;
+
+    QList<QStaticText> m_staticTexts;
 };
 
 

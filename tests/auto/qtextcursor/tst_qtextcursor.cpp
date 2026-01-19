@@ -31,8 +31,6 @@
 #include <qtextobject.h>
 #include <qdebug.h>
 
-#include <limits.h>
-
 //TESTED_FILES=gui/text/qtextcursor.cpp gui/text/qtextcursor_p.h
 
 class tst_QTextCursor : public QObject
@@ -179,9 +177,9 @@ void tst_QTextCursor::navigation1()
 
     QTextCursor otherCursor(doc);
     otherCursor.movePosition(QTextCursor::Start);
-    otherCursor.movePosition(QTextCursor::NextCharacter);
+    otherCursor.movePosition(QTextCursor::Right);
     cursor = otherCursor;
-    cursor.movePosition(QTextCursor::NextCharacter);
+    cursor.movePosition(QTextCursor::Right);
     QVERIFY(cursor != otherCursor);
     otherCursor.insertText("Hey");
     QVERIFY(cursor.position() == 5);
@@ -197,10 +195,10 @@ void tst_QTextCursor::navigation1()
     QVERIFY(doc->toPlainText() == "Hello World");
 
     cursor.movePosition(QTextCursor::Start);
-    cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::MoveAnchor, 6);
+    cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, 6);
     QVERIFY(cursor.position() == 6);
     otherCursor = cursor;
-    otherCursor.movePosition(QTextCursor::NextCharacter, QTextCursor::MoveAnchor, 2);
+    otherCursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, 2);
     otherCursor.deletePreviousChar();
     otherCursor.deletePreviousChar();
     otherCursor.deletePreviousChar();
@@ -400,7 +398,7 @@ void tst_QTextCursor::navigation6()
 void tst_QTextCursor::navigation7()
 {
     QVERIFY(doc->isEmpty());
-    for (int i = QTextCursor::Start; i <= QTextCursor::NextWord; ++i)
+    for (int i = QTextCursor::Start; i <= QTextCursor::WordRight; ++i)
         QVERIFY(!cursor.movePosition(QTextCursor::MoveOperation(i)));
 
     doc->setPlainText("Hello World");
@@ -746,7 +744,7 @@ void tst_QTextCursor::checkFrame1()
     QVERIFY(cursor.selectionStart() == 1);
     QVERIFY(cursor.selectionEnd() == 1);
 
-//     cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
+//     cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
 //     QVERIFY(cursor.position() == 2);
 //     QVERIFY(cursor.selectionStart() == 0);
 //     QVERIFY(cursor.selectionEnd() == 2);
@@ -794,7 +792,7 @@ void tst_QTextCursor::checkFrame2()
     QVERIFY(cursor.selectionStart() == 1);
     QVERIFY(cursor.selectionEnd() == 2);
 
-    cursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
+    cursor.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor);
     QVERIFY(cursor.position() == 0);
     QVERIFY(cursor.selectionStart() == 0);
     QVERIFY(cursor.selectionEnd() == 3);
@@ -825,7 +823,7 @@ void tst_QTextCursor::tableMovement()
     QVERIFY(cursor.position() == 0);
     cursor.insertText("AA");
     QVERIFY(cursor.position() == 2);
-    cursor.movePosition(QTextCursor::PreviousCharacter);
+    cursor.movePosition(QTextCursor::Left);
 
     cursor.insertTable(3, 3);
     QCOMPARE(cursor.position(), 2);
@@ -833,16 +831,16 @@ void tst_QTextCursor::tableMovement()
     cursor.movePosition(QTextCursor::Down);
     QCOMPARE(cursor.position(), 5);
 
-    cursor.movePosition(QTextCursor::NextCharacter);
+    cursor.movePosition(QTextCursor::Right);
     QCOMPARE(cursor.position(), 6);
 
     cursor.movePosition(QTextCursor::Up);
     QCOMPARE(cursor.position(), 3);
 
-    cursor.movePosition(QTextCursor::NextCharacter);
+    cursor.movePosition(QTextCursor::Right);
     QCOMPARE(cursor.position(), 4);
 
-    cursor.movePosition(QTextCursor::NextCharacter);
+    cursor.movePosition(QTextCursor::Right);
     QCOMPARE(cursor.position(), 5);
 
     cursor.movePosition(QTextCursor::Up);
@@ -1135,8 +1133,8 @@ void tst_QTextCursor::blockCharFormatOnSelection()
     cursor.movePosition(QTextCursor::NextBlock);
     QVERIFY(cursor.blockCharFormat().foreground().color() == Qt::cyan);
 
-    cursor.movePosition(QTextCursor::NextCharacter);
-    cursor.movePosition(QTextCursor::NextCharacter);
+    cursor.movePosition(QTextCursor::Right);
+    cursor.movePosition(QTextCursor::Right);
     QVERIFY(cursor.charFormat().foreground().color() == Qt::green);
 
     cursor.movePosition(QTextCursor::NextBlock);

@@ -17,7 +17,9 @@ set(TEST_PUBLIC_HEADERS
     QTestEvent
     QTestEventLoop
     QTestFileLogger
+    QTestLightXmlStreamer
     QTestXmlStreamer
+    QTestXunitStreamer
 )
 
 include_directories(
@@ -30,6 +32,7 @@ include_directories(
 set(TEST_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/qbenchmark.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qsignalspy.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/qtestaccessible.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestassert.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestbasicstreamer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestcase.h
@@ -45,10 +48,12 @@ set(TEST_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/qtest_gui.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtest.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestkeyboard.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/qtestlightxmlstreamer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestmouse.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestspontaneevent.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestsystem.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestxmlstreamer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/qtestxunitstreamer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qbenchmarkmetric.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestlog_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qtesttable_p.h
@@ -82,7 +87,9 @@ set(TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestelement.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestelementattribute.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestbasicstreamer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/qtestxunitstreamer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestxmlstreamer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/qtestlightxmlstreamer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestlogger.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/qtestfilelogger.cpp
 )
@@ -102,7 +109,7 @@ set_target_properties(KtTest PROPERTIES
 
 install(
     TARGETS KtTest
-    EXPORT KatieTargets
+    EXPORT KatieTargets ${INSTALL_TARGETS_DEFAULT_ARGS}
     DESTINATION ${KATIE_LIBRARIES_PATH}
     COMPONENT Runtime
 )

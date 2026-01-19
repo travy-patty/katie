@@ -23,7 +23,9 @@
 #define QGUIPLATFORM_P_H
 
 #include <QtCore/qplugin.h>
+#include <QtCore/qfactoryinterface.h>
 #include <QtGui/qdialog.h>
+
 
 QT_BEGIN_NAMESPACE
 
@@ -33,46 +35,61 @@ class QFileDialog;
 class QColorDialog;
 class QFileInfo;
 
-class Q_GUI_EXPORT QGuiPlatformPlugin : public QObject
+struct Q_GUI_EXPORT QGuiPlatformPluginInterface  : public QFactoryInterface
+{
+};
+
+QT_END_NAMESPACE
+
+#define QGuiPlatformPluginInterface_iid "Katie.QGuiPlatformPluginInterface"
+Q_DECLARE_INTERFACE(QGuiPlatformPluginInterface, QGuiPlatformPluginInterface_iid)
+
+QT_BEGIN_NAMESPACE
+
+class Q_GUI_EXPORT QGuiPlatformPlugin : public QObject, public QGuiPlatformPluginInterface
 {
     Q_OBJECT
-public:
-    enum PlatformHint {
-        PH_ToolButtonStyle,
-        PH_ToolBarIconSize,
-        PH_ItemView_ActivateItemOnSingleClick
-    };
+    Q_INTERFACES(QGuiPlatformPluginInterface:QFactoryInterface)
+    public:
+        enum PlatformHint {
+            PH_ToolButtonStyle,
+            PH_ToolBarIconSize,
+            PH_ItemView_ActivateItemOnSingleClick
+        };
 
-    explicit QGuiPlatformPlugin(QObject *parent = nullptr);
-    ~QGuiPlatformPlugin();
+        explicit QGuiPlatformPlugin(QObject *parent = nullptr);
+        ~QGuiPlatformPlugin();
 
-    virtual QString styleName();
-    virtual QPalette palette();
-    virtual QString systemIconThemeName();
-    virtual QStringList iconThemeSearchPaths();
-    virtual QIcon systemIcon(const QString &name);
-    virtual QIcon fileSystemIcon(const QFileInfo &name);
-    virtual int platformHint(PlatformHint hint);
+        virtual QStringList keys() const;
 
-    virtual void fileDialogDelete(QFileDialog *);
-    virtual bool fileDialogSetVisible(QFileDialog *, bool);
-    virtual QDialog::DialogCode fileDialogResultCode(QFileDialog *);
-    virtual void fileDialogSetDirectory(QFileDialog *, const QString &);
-    virtual QString fileDialogDirectory(const QFileDialog *) const;
-    virtual void fileDialogSelectFile(QFileDialog *, const QString &);
-    virtual QStringList fileDialogSelectedFiles(const QFileDialog *) const;
-    virtual void fileDialogSetFilter(QFileDialog *);
-    virtual void fileDialogSetNameFilters(QFileDialog *, const QStringList &);
-    virtual void fileDialogSelectNameFilter(QFileDialog *, const QString &);
-    virtual QString fileDialogSelectedNameFilter(const QFileDialog *) const;
+        virtual QString styleName();
+        virtual QPalette palette();
+        virtual QString systemIconThemeName();
+        virtual QStringList iconThemeSearchPaths();
+        virtual QIcon systemIcon(const QString &name);
+        virtual QIcon fileSystemIcon(const QFileInfo &name);
 
-    virtual void colorDialogDelete(QColorDialog *);
-    virtual bool colorDialogSetVisible(QColorDialog *, bool);
-    virtual void colorDialogSetCurrentColor(QColorDialog *, const QColor &);
+        virtual int platformHint(PlatformHint hint);
+
+        virtual void fileDialogDelete(QFileDialog *);
+        virtual bool fileDialogSetVisible(QFileDialog *, bool);
+        virtual QDialog::DialogCode fileDialogResultCode(QFileDialog *);
+        virtual void fileDialogSetDirectory(QFileDialog *, const QString &);
+        virtual QString fileDialogDirectory(const QFileDialog *) const;
+        virtual void fileDialogSelectFile(QFileDialog *, const QString &);
+        virtual QStringList fileDialogSelectedFiles(const QFileDialog *) const;
+        virtual void fileDialogSetFilter(QFileDialog *);
+        virtual void fileDialogSetNameFilters(QFileDialog *, const QStringList &);
+        virtual void fileDialogSelectNameFilter(QFileDialog *, const QString &);
+        virtual QString fileDialogSelectedNameFilter(const QFileDialog *) const;
+
+        virtual void colorDialogDelete(QColorDialog *);
+        virtual bool colorDialogSetVisible(QColorDialog *, bool);
+        virtual void colorDialogSetCurrentColor(QColorDialog *, const QColor &);
 };
 
 // internal
-Q_GUI_EXPORT QGuiPlatformPlugin *qt_guiPlatformPlugin();
+QGuiPlatformPlugin *qt_guiPlatformPlugin();
 
 QT_END_NAMESPACE
 

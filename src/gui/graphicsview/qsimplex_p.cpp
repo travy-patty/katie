@@ -140,10 +140,11 @@ bool QSimplex::setConstraints(const QList<QSimplexConstraint *> &newConstraints)
     // Set Variables direct mapping.
     // "variables" is a list that provides a stable, indexed list of all variables
     // used in this problem.
-    QList<QSimplexVariable *> variablesList;
+    QSet<QSimplexVariable *> variablesSet;
     for (int i = 0; i < constraints.size(); ++i)
-        variablesList += constraints[i]->variables.keys();
-    variables = variablesList;
+        variablesSet += \
+            QSet<QSimplexVariable *>::fromList(constraints[i]->variables.keys());
+    variables = variablesSet.toList();
 
     // Set Variables reverse mapping
     // We also need to be able to find the index for a given variable, to do that

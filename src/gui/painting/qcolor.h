@@ -29,12 +29,14 @@
 
 QT_BEGIN_NAMESPACE
 
+
+class QColormap;
 class QVariant;
 
 class Q_GUI_EXPORT QColor
 {
 public:
-    enum Spec { Invalid, Rgb, Hsv };
+    enum Spec { Invalid, Rgb, Hsv, Cmyk, Hsl };
 
     QColor();
     QColor(Qt::GlobalColor color);
@@ -43,6 +45,7 @@ public:
     QColor(const QString& name);
     QColor(const char *name);
     QColor(const QColor &color);
+    QColor(Spec spec);
 
     bool isValid() const;
 
@@ -88,10 +91,14 @@ public:
 
     int hue() const; // 0 <= hue < 360
     int saturation() const;
+    int hsvHue() const; // 0 <= hue < 360
+    int hsvSaturation() const;
     int value() const;
 
     qreal hueF() const; // 0.0 <= hueF < 360.0
     qreal saturationF() const;
+    qreal hsvHueF() const; // 0.0 <= hueF < 360.0
+    qreal hsvSaturationF() const;
     qreal valueF() const;
 
     void getHsv(int *h, int *s, int *v, int *a = nullptr) const;
@@ -100,8 +107,42 @@ public:
     void getHsvF(qreal *h, qreal *s, qreal *v, qreal *a = nullptr) const;
     void setHsvF(qreal h, qreal s, qreal v, qreal a = 1.0);
 
+    int cyan() const;
+    int magenta() const;
+    int yellow() const;
+    int black() const;
+
+    qreal cyanF() const;
+    qreal magentaF() const;
+    qreal yellowF() const;
+    qreal blackF() const;
+
+    void getCmyk(int *c, int *m, int *y, int *k, int *a = nullptr);
+    void setCmyk(int c, int m, int y, int k, int a = 255);
+
+    void getCmykF(qreal *c, qreal *m, qreal *y, qreal *k, qreal *a = nullptr);
+    void setCmykF(qreal c, qreal m, qreal y, qreal k, qreal a = 1.0);
+
+    int hslHue() const; // 0 <= hue < 360
+    int hslSaturation() const;
+    int lightness() const;
+
+    qreal hslHueF() const; // 0.0 <= hueF < 360.0
+    qreal hslSaturationF() const;
+    qreal lightnessF() const;
+
+    void getHsl(int *h, int *s, int *l, int *a = nullptr) const;
+    void setHsl(int h, int s, int l, int a = 255);
+
+    void getHslF(qreal *h, qreal *s, qreal *l, qreal *a = nullptr) const;
+    void setHslF(qreal h, qreal s, qreal l, qreal a = 1.0);
+
     QColor toRgb() const;
     QColor toHsv() const;
+    QColor toCmyk() const;
+    QColor toHsl() const;
+
+    QColor convertTo(Spec colorSpec) const;
 
     static QColor fromRgb(QRgb rgb);
     static QColor fromRgba(QRgb rgba);
@@ -111,6 +152,12 @@ public:
 
     static QColor fromHsv(int h, int s, int v, int a = 255);
     static QColor fromHsvF(qreal h, qreal s, qreal v, qreal a = 1.0);
+
+    static QColor fromCmyk(int c, int m, int y, int k, int a = 255);
+    static QColor fromCmykF(qreal c, qreal m, qreal y, qreal k, qreal a = 1.0);
+
+    static QColor fromHsl(int h, int s, int l, int a = 255);
+    static QColor fromHslF(qreal h, qreal s, qreal l, qreal a = 1.0);
 
     QColor light(int f = 150) const;
     QColor lighter(int f = 150) const;
@@ -133,6 +180,9 @@ public:
     static bool isValidColor(const QString &name);
 
 private:
+    // do not allow a spec to be used as an alpha value
+    QColor(int, int, int, Spec);
+
     void invalidate();
 
     Spec cspec;
@@ -142,15 +192,33 @@ private:
             ushort red;
             ushort green;
             ushort blue;
+            ushort pad;
         } argb;
         struct {
             ushort alpha;
             ushort hue;
             ushort saturation;
             ushort value;
+            ushort pad;
         } ahsv;
+        struct {
+            ushort alpha;
+            ushort cyan;
+            ushort magenta;
+            ushort yellow;
+            ushort black;
+        } acmyk;
+        struct {
+            ushort alpha;
+            ushort hue;
+            ushort saturation;
+            ushort lightness;
+            ushort pad;
+        } ahsl;
+        ushort array[5];
     } ct;
 
+    friend class QColormap;
 #ifndef QT_NO_DATASTREAM
     friend Q_GUI_EXPORT QDataStream &operator<<(QDataStream &, const QColor &);
     friend Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QColor &);

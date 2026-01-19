@@ -25,13 +25,15 @@
 #include <QtCore/qpoint.h>
 #include <QtCore/qmetatype.h>
 
-#ifndef QT_NO_VECTOR2D
 
 QT_BEGIN_NAMESPACE
+
 
 class QVector3D;
 class QVector4D;
 class QVariant;
+
+#ifndef QT_NO_VECTOR2D
 
 class Q_GUI_EXPORT QVector2D
 {
@@ -229,8 +231,9 @@ Q_GUI_EXPORT QDataStream &operator<<(QDataStream &, const QVector2D &);
 Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QVector2D &);
 #endif
 
+#endif
+
 QT_END_NAMESPACE
 
-#endif // QT_NO_VECTOR2D
 
-#endif // QVECTOR2D_H
+#endif

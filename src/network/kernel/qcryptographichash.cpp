@@ -24,149 +24,62 @@
 #include "qiodevice.h"
 #include "qcorecommon_p.h"
 
-#include "md5.h"
-#include "sha1.h"
-#include "sha2.h"
-#include "xxhash.h"
+#include <openssl/md5.h>
+#include <openssl/md4.h>
+#include <openssl/sha.h>
 
 QT_BEGIN_NAMESPACE
-
-static const int xxh3len = sizeof(XXH128_hash_t);
-
-class QKatHash
-{
-public:
-    QKatHash();
-    ~QKatHash();
-
-    void reset();
-    void update(const char *data, const int length);
-    QByteArray result() const;
-
-private:
-    Q_DISABLE_COPY(QKatHash);
-
-    XXH3_state_t* m_xxh3;
-    XXH3_state_t* m_xxh32;
-};
-
-QKatHash::QKatHash()
-    : m_xxh3(XXH3_createState()),
-    m_xxh32(XXH3_createState())
-{
-}
-
-QKatHash::~QKatHash()
-{
-    XXH3_freeState(m_xxh3);
-    XXH3_freeState(m_xxh32);
-}
-
-void QKatHash::reset()
-{
-    XXH3_128bits_reset(m_xxh3);
-    XXH3_128bits_reset(m_xxh32);
-}
-
-void QKatHash::update(const char *data, const int length)
-{
-    if (Q_UNLIKELY(length == 1)) {
-        XXH3_128bits_update(m_xxh3, data, length);
-        XXH3_128bits_update(m_xxh32, "K", 1);
-    } else if (Q_LIKELY(length > 1)) {
-        const size_t halflength = (length / 2);
-        XXH3_128bits_update(m_xxh3, data, halflength);
-        XXH3_128bits_update(m_xxh32, data + halflength, halflength + (length % 2));
-    }
-}
-
-QByteArray QKatHash::result() const
-{
-    QByteArray result(xxh3len * 2, char(0));
-    char* resultdata = result.data();
-    XXH128_canonicalFromHash(
-        reinterpret_cast<XXH128_canonical_t*>(resultdata),
-        XXH3_128bits_digest(m_xxh3)
-    );
-    XXH128_canonicalFromHash(
-        reinterpret_cast<XXH128_canonical_t*>(resultdata + xxh3len),
-        XXH3_128bits_digest(m_xxh32)
-    );
-    return result;
-}
 
 class QCryptographicHashPrivate
 {
 public:
-    QCryptographicHashPrivate(const QCryptographicHash::Algorithm amethod);
-    ~QCryptographicHashPrivate();
-
+    MD4_CTX md4Context;
     MD5_CTX md5Context;
-    SHA1_CTX sha1Context;
+    SHA_CTX sha1Context;
     SHA256_CTX sha256Context;
     SHA512_CTX sha512Context;
-    QKatHash katContext;
-    bool rehash;
-    const QCryptographicHash::Algorithm method;
+    QCryptographicHash::Algorithm method;
+    QByteArray result;
 };
 
-QCryptographicHashPrivate::QCryptographicHashPrivate(const QCryptographicHash::Algorithm amethod)
-    : rehash(false),
-    method(amethod)
-{
-}
-
-QCryptographicHashPrivate::~QCryptographicHashPrivate()
-{
-}
-
 /*!
-    \class QCryptographicHash
-    \inmodule QtCore
+  \class QCryptographicHash
+  \inmodule QtCore
 
-    \brief The QCryptographicHash class provides a way to generate
-    cryptographic hashes.
+  \brief The QCryptographicHash class provides a way to generate cryptographic hashes.
 
-    \since 4.3
+  \since 4.3
 
-    \ingroup tools
-    \reentrant
+  \ingroup tools
+  \reentrant
 
-    QCryptographicHash can be used to generate cryptographic hashes of binary
-    or text data.
+  QCryptographicHash can be used to generate cryptographic hashes of binary or text data.
 
-    Currently MD5, SHA-1, SHA-256, SHA-512 and custom one are supported.
-
-    \warning The custom algorithm will not produce same result from the static
-    and the incremental methods. Use either to compute hash sums with this
-    algorithm. Do not feed QCryptographicHash with chunks of data that have
-    different sizes either - the chunks size must be fixed, i.e. QT_BUFFSIZE.
-    In other words, if you cannot tell what the optimal buffer size or when to
-    use it then use one of the generic algorithms.
+  Currently MD4, MD5, SHA-1, SHA-256 and SHA-512 are supported.
 */
 
 /*!
-    \enum QCryptographicHash::Algorithm
+  \enum QCryptographicHash::Algorithm
 
-    \value Md5 Generate an MD5 hash sum
-    \value Sha1 Generate an SHA-1 hash sum
-    \value Sha256 Generate an SHA-256 hash sum (SHA-2). Introduced in Katie 4.9
-    \value Sha512 Generate an SHA-512 hash sum (SHA-2). Introduced in Katie 4.9
-    \value KAT Generate an custom 256-bit hash sum. Introduced in Katie 4.12
+  \value Md4 Generate an MD4 hash sum
+  \value Md5 Generate an MD5 hash sum
+  \value Sha1 Generate an SHA-1 hash sum
+  \value Sha256 Generate an SHA-256 hash sum (SHA-2). Introduced in Katie 4.9
+  \value Sha512 Generate an SHA-512 hash sum (SHA-2). Introduced in Katie 4.9
 */
 
 /*!
-    Constructs an object that can be used to create a cryptographic hash from
-    data using \a method.
+  Constructs an object that can be used to create a cryptographic hash from data using \a method.
 */
 QCryptographicHash::QCryptographicHash(QCryptographicHash::Algorithm method)
-    : d(new QCryptographicHashPrivate(method))
+    : d(new QCryptographicHashPrivate)
 {
+    d->method = method;
     reset();
 }
 
 /*!
-    Destroys the object.
+  Destroys the object.
 */
 QCryptographicHash::~QCryptographicHash()
 {
@@ -174,18 +87,21 @@ QCryptographicHash::~QCryptographicHash()
 }
 
 /*!
-    Resets the object.
+  Resets the object.
 */
 void QCryptographicHash::reset()
 {
-    d->rehash = false;
     switch (d->method) {
+        case QCryptographicHash::Md4: {
+            MD4_Init(&d->md4Context);
+            break;
+        }
         case QCryptographicHash::Md5: {
-            MD5Init(&d->md5Context);
+            MD5_Init(&d->md5Context);
             break;
         }
         case QCryptographicHash::Sha1: {
-            SHA1Init(&d->sha1Context);
+            SHA1_Init(&d->sha1Context);
             break;
         }
         case QCryptographicHash::Sha256: {
@@ -196,54 +112,53 @@ void QCryptographicHash::reset()
             SHA512_Init(&d->sha512Context);
             break;
         }
-        case QCryptographicHash::KAT: {
-            d->katContext.reset();
-            break;
-        }
     }
+    d->result.clear();
 }
 
 /*!
-    Adds the first \a length chars of \a data to the cryptographic hash.
+    Adds the first \a length chars of \a data to the cryptographic
+    hash.
 */
 void QCryptographicHash::addData(const char *data, int length)
 {
-    d->rehash = true;
     switch (d->method) {
+        case QCryptographicHash::Md4: {
+            MD4_Update(&d->md4Context, data, length);
+            break;
+        }
         case QCryptographicHash::Md5: {
-            MD5Update(&d->md5Context, reinterpret_cast<const uchar*>(data), length);
+            MD5_Update(&d->md5Context, data, length);
             break;
         }
         case QCryptographicHash::Sha1: {
-            SHA1Update(&d->sha1Context, reinterpret_cast<const uchar*>(data), length);
+            SHA1_Update(&d->sha1Context, data, length);
             break;
         }
         case QCryptographicHash::Sha256: {
-            SHA256_Update(&d->sha256Context, reinterpret_cast<const uchar*>(data), length);
+            SHA256_Update(&d->sha256Context, data, length);
             break;
         }
         case QCryptographicHash::Sha512: {
-            SHA512_Update(&d->sha512Context, reinterpret_cast<const uchar*>(data), length);
-            break;
-        }
-        case QCryptographicHash::KAT: {
-            d->katContext.update(data, length);
+            SHA512_Update(&d->sha512Context, data, length);
             break;
         }
     }
+    d->result.clear();
 }
 
 /*!
-    Reads the data from the open QIODevice \a device until it ends and hashes
-    it. Returns \c true if reading was successful.
-
-    \since 4.9
+  Reads the data from the open QIODevice \a device until it ends
+  and hashes it. Returns \c true if reading was successful.
+  \since 4.9
  */
 bool QCryptographicHash::addData(QIODevice* device)
 {
-    if (!device || !device->isReadable() || !device->isOpen()) {
+    if (!device->isReadable())
         return false;
-    }
+
+    if (!device->isOpen())
+        return false;
 
     QSTACKARRAY(char, buffer, QT_BUFFSIZE);
     int length;
@@ -256,78 +171,85 @@ bool QCryptographicHash::addData(QIODevice* device)
 
 
 /*!
-    Returns the final hash value.
+  Returns the final hash value.
 
-    \sa QByteArray::toHex()
+  \sa QByteArray::toHex()
 */
 QByteArray QCryptographicHash::result() const
 {
-    if (Q_UNLIKELY(!d->rehash)) {
-        qWarning("QCryptographicHash::result called without any data");
-        return QByteArray();
-    }
+    if (!d->result.isEmpty())
+        return d->result;
 
     switch (d->method) {
+        case QCryptographicHash::Md4: {
+            MD4_CTX copy = d->md4Context;
+            d->result.resize(MD4_DIGEST_LENGTH);
+            MD4_Final(reinterpret_cast<unsigned char *>(d->result.data()), &copy);
+            break;
+        }
         case QCryptographicHash::Md5: {
-            QSTACKARRAY(unsigned char, result, MD5_DIGEST_LENGTH);
             MD5_CTX copy = d->md5Context;
-            MD5Final(result, &copy);
-            return QByteArray(reinterpret_cast<char *>(result), MD5_DIGEST_LENGTH);
+            d->result.resize(MD5_DIGEST_LENGTH);
+            MD5_Final(reinterpret_cast<unsigned char *>(d->result.data()), &copy);
+            break;
         }
         case QCryptographicHash::Sha1: {
-            QSTACKARRAY(unsigned char, result, SHA_DIGEST_LENGTH);
-            SHA1_CTX copy = d->sha1Context;
-            SHA1Final(result, &copy);
-            return QByteArray(reinterpret_cast<char *>(result), SHA_DIGEST_LENGTH);
+            SHA_CTX copy = d->sha1Context;
+            d->result.resize(SHA_DIGEST_LENGTH);
+            SHA1_Final(reinterpret_cast<unsigned char *>(d->result.data()), &copy);
+            break;
         }
         case QCryptographicHash::Sha256:{
-            QSTACKARRAY(unsigned char, result, SHA256_DIGEST_LENGTH);
             SHA256_CTX copy = d->sha256Context;
-            SHA256_Final(result, &copy);
-            return QByteArray(reinterpret_cast<char *>(result), SHA256_DIGEST_LENGTH);
+            d->result.resize(SHA256_DIGEST_LENGTH);
+            SHA256_Final(reinterpret_cast<unsigned char *>(d->result.data()), &copy);
+            break;
         }
         case QCryptographicHash::Sha512:{
-            QSTACKARRAY(unsigned char, result, SHA512_DIGEST_LENGTH);
             SHA512_CTX copy = d->sha512Context;
-            SHA512_Final(result, &copy);
-            return QByteArray(reinterpret_cast<char *>(result), SHA512_DIGEST_LENGTH);
-        }
-        case QCryptographicHash::KAT: {
-            return d->katContext.result();
+            d->result.resize(SHA512_DIGEST_LENGTH);
+            SHA512_Final(reinterpret_cast<unsigned char *>(d->result.data()), &copy);
+            break;
         }
     }
-
-    Q_UNREACHABLE();
-    return QByteArray();
+    return d->result;
 }
 
 /*!
-    Returns the hash of \a data using \a method.
+  Returns the hash of \a data using \a method.
 */
 QByteArray QCryptographicHash::hash(const QByteArray &data, QCryptographicHash::Algorithm method)
 {
     switch (method) {
+        case QCryptographicHash::Md4: {
+            QSTACKARRAY(unsigned char, result, MD4_DIGEST_LENGTH);
+            MD4_CTX md4Context;
+            MD4_Init(&md4Context);
+            MD4_Update(&md4Context, data.constData(), data.length());
+            MD4_Final(result, &md4Context);
+            return QByteArray(reinterpret_cast<char *>(result), MD4_DIGEST_LENGTH);
+        }
         case QCryptographicHash::Md5: {
             QSTACKARRAY(unsigned char, result, MD5_DIGEST_LENGTH);
             MD5_CTX md5Context;
-            MD5Init(&md5Context);
-            MD5Update(&md5Context, reinterpret_cast<const uchar*>(data.constData()), data.length());
-            MD5Final(result, &md5Context);
+            MD5_Init(&md5Context);
+            MD5_Update(&md5Context, data.constData(), data.length());
+            MD5_Final(result, &md5Context);
             return QByteArray(reinterpret_cast<char *>(result), MD5_DIGEST_LENGTH);
         }
         case QCryptographicHash::Sha1: {
             QSTACKARRAY(unsigned char, result, SHA_DIGEST_LENGTH);
-            SHA1_CTX sha1Context;
-            SHA1Init(&sha1Context);
-            SHA1Update(&sha1Context, reinterpret_cast<const uchar*>(data.constData()), data.length());
-            SHA1Final(result, &sha1Context);
+            SHA_CTX sha1Context;
+            SHA1_Init(&sha1Context);
+            SHA1_Update(&sha1Context, data.constData(), data.length());
+            SHA1_Final(result, &sha1Context);
             return QByteArray(reinterpret_cast<char *>(result), SHA_DIGEST_LENGTH);
         }
         case QCryptographicHash::Sha256: {
             QSTACKARRAY(unsigned char, result, SHA256_DIGEST_LENGTH);
             SHA256_CTX sha256Context;
             SHA256_Init(&sha256Context);
-            SHA256_Update(&sha256Context, reinterpret_cast<const uchar*>(data.constData()), data.length());
+            SHA256_Update(&sha256Context, data.constData(), data.length());
             SHA256_Final(result, &sha256Context);
             return QByteArray(reinterpret_cast<char *>(result), SHA256_DIGEST_LENGTH);
         }
@@ -335,15 +257,9 @@ QByteArray QCryptographicHash::hash(const QByteArray &data, QCryptographicHash::
             QSTACKARRAY(unsigned char, result, SHA512_DIGEST_LENGTH);
             SHA512_CTX sha512Context;
             SHA512_Init(&sha512Context);
-            SHA512_Update(&sha512Context, reinterpret_cast<const uchar*>(data.constData()), data.length());
+            SHA512_Update(&sha512Context, data.constData(), data.length());
             SHA512_Final(result, &sha512Context);
             return QByteArray(reinterpret_cast<char *>(result), SHA512_DIGEST_LENGTH);
-        }
-        case QCryptographicHash::KAT: {
-            QKatHash kathash;
-            kathash.reset();
-            kathash.update(data.constData(), data.length());
-            return kathash.result();
         }
     }
 

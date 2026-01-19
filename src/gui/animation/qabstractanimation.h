@@ -31,6 +31,7 @@ QT_BEGIN_NAMESPACE
 
 class QAnimationGroup;
 class QSequentialAnimationGroup;
+class QAnimationDriver;
 
 class QAbstractAnimationPrivate;
 class Q_GUI_EXPORT QAbstractAnimation : public QObject
@@ -98,6 +99,7 @@ public Q_SLOTS:
 
 protected:
     QAbstractAnimation(QAbstractAnimationPrivate &dd, QObject *parent = nullptr);
+    bool event(QEvent *event);
 
     virtual void updateCurrentTime(int currentTime) = 0;
     virtual void updateState(QAbstractAnimation::State newState, QAbstractAnimation::State oldState);
@@ -107,6 +109,34 @@ private:
     Q_DISABLE_COPY(QAbstractAnimation)
     Q_DECLARE_PRIVATE(QAbstractAnimation)
 };
+
+class QAnimationDriverPrivate;
+class Q_GUI_EXPORT QAnimationDriver : public QObject
+{
+    Q_OBJECT
+    Q_DECLARE_PRIVATE(QAnimationDriver)
+
+public:
+    QAnimationDriver(QObject *parent = nullptr);
+
+    void advance();
+    void install();
+
+    bool isRunning() const;
+
+protected:
+    virtual void started() {};
+    virtual void stopped() {};
+
+    QAnimationDriver(QAnimationDriverPrivate &dd, QObject *parent = nullptr);
+
+private:
+    friend class QUnifiedTimer;
+
+    void start();
+    void stop();
+};
+
 #endif //QT_NO_ANIMATION
 
 QT_END_NAMESPACE

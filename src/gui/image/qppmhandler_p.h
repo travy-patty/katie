@@ -43,18 +43,18 @@ class QByteArray;
 class QPpmHandler : public QImageIOHandler
 {
 public:
-    QPpmHandler(const QByteArray &subtype = QByteArray());
+    QPpmHandler();
+    bool canRead() const;
+    bool read(QImage *image);
+    bool write(const QImage &image);
 
-    bool canRead() const final;
-    bool read(QImage *image) final;
-    bool write(const QImage &image) final;
+    QByteArray name() const;
 
-    QVariant option(QImageIOHandler::ImageOption option) const final;
-    bool supportsOption(QImageIOHandler::ImageOption option) const final;
+    static bool canRead(QIODevice *device, QByteArray *subType = 0);
 
-    QByteArray name() const final;
-
-    static bool canRead(QIODevice *device, QByteArray *subType);
+    QVariant option(ImageOption option) const;
+    void setOption(ImageOption option, const QVariant &value);
+    bool supportsOption(ImageOption option) const;
 
 private:
     bool readHeader();

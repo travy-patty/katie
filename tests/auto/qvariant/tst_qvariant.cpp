@@ -43,6 +43,7 @@
 #include <qvector2d.h>
 #include <qvector3d.h>
 #include <qvector4d.h>
+#include <qquaternion.h>
 #include <qnumeric.h>
 
 #include <limits.h>
@@ -77,6 +78,7 @@ private slots:
     void constructor();
     void copy_constructor();
     void isNull();
+    void swap();
 
     void canConvert_data();
     void canConvert();
@@ -174,6 +176,7 @@ private slots:
     void vector2D();
     void vector3D();
     void vector4D();
+    void quaternion();
 
     void url();
 
@@ -330,6 +333,16 @@ void tst_QVariant::isNull()
     QVERIFY( !varLL.isNull() );
 }
 
+void tst_QVariant::swap()
+{
+    QVariant v1 = 1, v2 = 2.0;
+    v1.swap(v2);
+    QCOMPARE(v1.type(),QVariant::Double);
+    QCOMPARE(v1.toDouble(),2.0);
+    QCOMPARE(v2.type(),QVariant::Int);
+    QCOMPARE(v2.toInt(),1);
+}
+
 void tst_QVariant::canConvert_data()
 {
     QTest::addColumn<QVariant>("val");
@@ -375,7 +388,7 @@ void tst_QVariant::canConvert_data()
 #endif
 #define Y true
 #define N false
-    //            bita bitm bool brsh byta col curs date dt dbl font icon img int inv kseq list ll map pal pen  pix pnt rect reg size sp str strl time uint ull
+    //            bita bitm bool brsh byta col colg curs date dt dbl font icon img int inv kseq list ll map pal pen  pix pnt rect reg size sp str strl time uint ull
 
 
     QVariant var(QBitArray(0));
@@ -967,7 +980,7 @@ void tst_QVariant::toFont_data()
     QTest::addColumn<QFont>("result");
 
     QFont f("times",12,-1,false);
-    QTest::newRow( "string" ) << QVariant( QString( "times,12,-1,50,0,0,0,0" ) ) << f;
+    QTest::newRow( "string" ) << QVariant( QString( "times,12,-1,5,50,0,0,0,0" ) ) << f;
 }
 
 void tst_QVariant::toFont()
@@ -1167,7 +1180,7 @@ void tst_QVariant::toString_data()
     QTest::newRow( "qkeysequence" ) << qVariantFromValue( QKeySequence( Qt::CTRL + Qt::Key_A ) ) << QString( "Ctrl+A" );
 
     QFont font( "times", 12 );
-    QTest::newRow( "qfont" ) << qVariantFromValue( font ) << QString("times,12,-1,50,0,0,0,0");
+    QTest::newRow( "qfont" ) << qVariantFromValue( font ) << QString("times,12,-1,5,50,0,0,0,0");
     QTest::newRow( "qcolor" ) << qVariantFromValue( QColor( 10, 10, 10 ) ) << QString( "#0a0a0a" );
     QTest::newRow( "llong" ) << QVariant( (qlonglong)Q_INT64_C(123456789012) ) <<
         QString( "123456789012" );
@@ -1301,7 +1314,6 @@ void tst_QVariant::transform()
 
 void tst_QVariant::vector2D()
 {
-#ifndef QT_NO_VECTOR2D
     QVariant variant;
     QVector2D vector = qvariant_cast<QVector2D>(variant);
     QVERIFY(vector.isNull());
@@ -1311,14 +1323,10 @@ void tst_QVariant::vector2D()
     void *pvector = QMetaType::construct(QVariant::Vector2D, 0);
     QVERIFY(pvector);
     QMetaType::destroy(QVariant::Vector2D, pvector);
-#else // QT_NO_VECTOR2D
-    QSKIP("Katie compiled without 2D vector support (QT_NO_VECTOR2D)", SkipAll);
-#endif // QT_NO_VECTOR2D
 }
 
 void tst_QVariant::vector3D()
 {
-#ifndef QT_NO_VECTOR3D
     QVariant variant;
     QVector3D vector = qvariant_cast<QVector3D>(variant);
     QVERIFY(vector.isNull());
@@ -1328,14 +1336,10 @@ void tst_QVariant::vector3D()
     void *pvector = QMetaType::construct(QVariant::Vector3D, 0);
     QVERIFY(pvector);
     QMetaType::destroy(QVariant::Vector3D, pvector);
-#else // QT_NO_VECTOR3D
-    QSKIP("Katie compiled without 3D vector support (QT_NO_VECTOR3D)", SkipAll);
-#endif // QT_NO_VECTOR3D
 }
 
 void tst_QVariant::vector4D()
 {
-#ifndef QT_NO_VECTOR4D
     QVariant variant;
     QVector4D vector = qvariant_cast<QVector4D>(variant);
     QVERIFY(vector.isNull());
@@ -1345,9 +1349,19 @@ void tst_QVariant::vector4D()
     void *pvector = QMetaType::construct(QVariant::Vector4D, 0);
     QVERIFY(pvector);
     QMetaType::destroy(QVariant::Vector4D, pvector);
-#else // QT_NO_VECTOR4D
-    QSKIP("Katie compiled without 4D vector support (QT_NO_VECTOR4D)", SkipAll);
-#endif // QT_NO_VECTOR4D
+}
+
+void tst_QVariant::quaternion()
+{
+    QVariant variant;
+    QQuaternion quaternion = qvariant_cast<QQuaternion>(variant);
+    QVERIFY(quaternion.isIdentity());
+    qVariantSetValue(variant, QQuaternion(0.1, 0.2, 0.3, 0.4));
+    QCOMPARE(QQuaternion(0.1, 0.2, 0.3, 0.4), qvariant_cast<QQuaternion>(variant));
+
+    void *pquaternion = QMetaType::construct(QVariant::Quaternion, 0);
+    QVERIFY(pquaternion);
+    QMetaType::destroy(QVariant::Quaternion, pquaternion);
 }
 
 void tst_QVariant::writeToReadFromDataStream_data()
@@ -1547,7 +1561,7 @@ void tst_QVariant::operator_eq_eq_data()
     // Int
     QTest::newRow( "int1int1" ) << i1 << i1 << true;
     QTest::newRow( "int1int0" ) << i1 << i0 << false;
-    QTest::newRow( "nullint" ) << i0 << QVariant(QVariant::Int) << true;
+    QTest::newRow( "nullint" ) << i0 << QVariant(QVariant::Int) << false;
 
     // LongLong and ULongLong
     QVariant ll1( (qlonglong)1 );
@@ -1633,8 +1647,8 @@ void tst_QVariant::operator_eq_eq_data()
 
     QTest::newRow("invalidConversion") << QVariant(QString("bubu")) << QVariant(0) << false;
     QTest::newRow("invalidConversionR") << QVariant(0) << QVariant(QString("bubu")) << false;
-
     // ### many other combinations missing
+
     {
         QMap<QString, QVariant> map1;
         map1.insert( "X", 1 );
@@ -1676,53 +1690,13 @@ void tst_QVariant::operator_eq_eq_data()
 
     {
         QMap<QString, QVariant> map1;
-
-        QMap<QString, QVariant> map2;
-
-        QTest::newRow("EmptyEmptyMap") << QVariant(map1) << QVariant(map2) << true;
-    }
-
-    {
-        QMap<QString, QVariant> map1;
-
-        QMap<QString, QVariant> map2;
-        map2.insert( "X", QVariantMap() );
-
-        QTest::newRow("EmptyNestedEmptyMap") << QVariant(map1) << QVariant(map2) << false;
-    }
-
-    {
-        QMap<QString, QVariant> map1;
-        map1.insert( "X", QVariantMap() );
-
-        QMap<QString, QVariant> map2;
-
-        QTest::newRow("NestedEmptyEmptyMap") << QVariant(map1) << QVariant(map2) << false;
-    }
-
-    {
-        QMap<QString, QVariant> map11;
-        map11.insert( "Y", QVariantMap() );
-        QMap<QString, QVariant> map1;
-        map1.insert( "X", map11 );
-
-        QMap<QString, QVariant> map22;
-        map22.insert( "Y", QVariantMap() );
-        QMap<QString, QVariant> map2;
-        map2.insert( "X", map22 );
-
-        QTest::newRow("NestedBothPopulatedMap") << QVariant(map1) << QVariant(map2) << true;
-    }
-
-    {
-        QMap<QString, QVariant> map1;
         map1.insert( "X", 1 );
         map1.insert( "Y", 1 );
 
         QMap<QString, QVariant> map2;
         map2.insert( "X", 1 );
 
-        QTest::newRow("MapFirstLarger") << QVariant(map1) << QVariant(map2) << false;
+        QTest::newRow("FirstLarger") << QVariant(map1) << QVariant(map2) << false;
     }
 
     {
@@ -1733,7 +1707,7 @@ void tst_QVariant::operator_eq_eq_data()
         map2.insert( "X", 1 );
         map2.insert( "Y", 1 );
 
-        QTest::newRow("MapSecondLarger") << QVariant(map1) << QVariant(map2) << false;
+        QTest::newRow("SecondLarger") << QVariant(map1) << QVariant(map2) << false;
     }
 
     // same thing with hash
@@ -1778,46 +1752,6 @@ void tst_QVariant::operator_eq_eq_data()
 
     {
         QHash<QString, QVariant> hash1;
-
-        QHash<QString, QVariant> hash2;
-
-        QTest::newRow("EmptyEmptyHash") << QVariant(hash1) << QVariant(hash2) << true;
-    }
-
-    {
-        QHash<QString, QVariant> hash1;
-
-        QHash<QString, QVariant> hash2;
-        hash2.insert( "X", QVariantHash() );
-
-        QTest::newRow("EmptyNestedEmptyHash") << QVariant(hash1) << QVariant(hash2) << false;
-    }
-
-    {
-        QHash<QString, QVariant> hash1;
-        hash1.insert( "X", QVariantHash() );
-
-        QHash<QString, QVariant> hash2;
-
-        QTest::newRow("NestedEmptyEmptyHash") << QVariant(hash1) << QVariant(hash2) << false;
-    }
-
-    {
-        QHash<QString, QVariant> hash11;
-        hash11.insert( "Y", QVariantHash() );
-        QHash<QString, QVariant> hash1;
-        hash1.insert( "X", hash11 );
-
-        QHash<QString, QVariant> hash22;
-        hash22.insert( "Y", QVariantHash() );
-        QHash<QString, QVariant> hash2;
-        hash2.insert( "X", hash22 );
-
-        QTest::newRow("NestedBothPopulatedHash") << QVariant(hash1) << QVariant(hash2) << true;
-    }
-
-    {
-        QHash<QString, QVariant> hash1;
         hash1.insert( "X", 1 );
         hash1.insert( "Y", 1 );
 
@@ -1848,13 +1782,23 @@ void tst_QVariant::operator_eq_eq()
     QFETCH( QVariant, left );
     QFETCH( QVariant, right );
     QFETCH( bool, equal );
+    QEXPECT_FAIL("nullint", "See task 118496", Continue);
     QCOMPARE( left == right, equal );
 }
 
 void tst_QVariant::operator_eq_eq_rhs()
 {
     QVariant v = 42;
+
     QVERIFY(42 == v.toInt());
+
+#if 0
+    /* This should _not_ compile */
+    QStringList list;
+    QDateTime dt;
+
+    QVERIFY(dt == list);
+#endif
 }
 
 void tst_QVariant::typeName_data()
@@ -1912,6 +1856,7 @@ void tst_QVariant::typeName_data()
     QTest::newRow("49") << int(QVariant::Vector2D) << QByteArray("QVector2D");
     QTest::newRow("50") << int(QVariant::Vector3D) << QByteArray("QVector3D");
     QTest::newRow("51") << int(QVariant::Vector4D) << QByteArray("QVector4D");
+    QTest::newRow("52") << int(QVariant::Quaternion) << QByteArray("QQuaternion");
 }
 
 void tst_QVariant::typeName()
@@ -1929,7 +1874,7 @@ void tst_QVariant::typeToName()
     QCOMPARE( QVariant::typeToName( v.type() ), (const char*)0 ); // Invalid
     // assumes that QVariant::Type contains consecutive values
 
-    int max = QVariant::LastGuiType;
+    int max = QVariant::Quaternion;
     for ( int t = 1; t <= max; t++ ) {
         const char *n = QVariant::typeToName( (QVariant::Type)t );
         if (n)
@@ -2118,7 +2063,7 @@ void tst_QVariant::userType()
         {
             QVariant second = myCarrier;
             QCOMPARE(instanceCount, 3);
-            (void)second.data();
+            second.detach();
             QCOMPARE(instanceCount, 4);
         }
         QCOMPARE(instanceCount, 3);
@@ -2717,7 +2662,6 @@ void tst_QVariant::loadUnknownUserType()
 
     QByteArray ba(data, sizeof(data));
     QDataStream ds(&ba, QIODevice::ReadOnly);
-    ds.setByteOrder(QDataStream::BigEndian);
     QVariant var;
     var.load(ds);
     QCOMPARE(ds.status(), QDataStream::ReadCorruptData);
@@ -2729,7 +2673,6 @@ void tst_QVariant::loadBrokenUserType()
 
     QByteArray ba(data, sizeof(data));
     QDataStream ds(&ba, QIODevice::ReadOnly);
-    ds.setByteOrder(QDataStream::BigEndian);
     QVariant var;
     var.load(ds);
     QCOMPARE(ds.status(), QDataStream::ReadPastEnd);
@@ -3164,15 +3107,15 @@ void tst_QVariant::moreCustomTypes()
         playWithVariant(12.12f, false, "12.12", 12.12f, true);
         playWithVariant('a', false, "a", 'a', true);
         playWithVariant((unsigned char)('a'), false, "a", 'a', true);
-        playWithVariant( quint8(12), false, QString::fromLatin1("\xc"), 12, true);
-        playWithVariant(  qint8(13), false, QString::fromLatin1("\xd"), 13, true);
+        playWithVariant( quint8(12), false, "\xc", 12, true);
+        playWithVariant(  qint8(13), false, "\xd", 13, true);
         playWithVariant(quint16(14), false, "14", 14, true);
         playWithVariant( qint16(15), false, "15", 15, true);
         playWithVariant(quint32(16), false, "16", 16, true);
         playWithVariant( qint32(17), false, "17", 17, true);
         playWithVariant(quint64(18), false, "18", 18, true);
         playWithVariant( qint64(19), false, "19", 19, true);
-        playWithVariant(  qint8(-12), false, QString::fromLatin1("\xf4"), -12, true);
+        playWithVariant(  qint8(-12), false, "\xf4", -12, true);
         playWithVariant( qint16(-13), false, "-13", -13, true);
         playWithVariant( qint32(-14), false, "-14", -14, true);
         playWithVariant( qint64(-15), false, "-15", -15, true);

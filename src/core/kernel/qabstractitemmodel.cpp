@@ -2069,19 +2069,19 @@ QModelIndexList QAbstractItemModel::match(const QModelIndex &start, int role,
                     if (QRegExp(text, cs).exactMatch(t))
                         result.append(idx);
                     break;
-                 case Qt::MatchWildcard:
+                case Qt::MatchWildcard:
                     if (QRegExp(text, cs, QRegExp::Wildcard).exactMatch(t))
                         result.append(idx);
                     break;
-                 case Qt::MatchStartsWith:
+                case Qt::MatchStartsWith:
                     if (t.startsWith(text, cs))
                         result.append(idx);
                     break;
-                 case Qt::MatchEndsWith:
+                case Qt::MatchEndsWith:
                     if (t.endsWith(text, cs))
                         result.append(idx);
                     break;
-                 case Qt::MatchFixedString:
+                case Qt::MatchFixedString:
                     if (t.compare(text, cs) == 0)
                         result.append(idx);
                     break;
@@ -2089,7 +2089,6 @@ QModelIndexList QAbstractItemModel::match(const QModelIndex &start, int role,
                 default:
                     if (t.contains(text, cs))
                         result.append(idx);
-                    break;
                 }
             }
             if (recurse && hasChildren(idx)) { // search the hierarchy

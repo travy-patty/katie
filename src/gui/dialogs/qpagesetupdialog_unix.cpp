@@ -36,6 +36,7 @@
 
 #if !defined(QT_NO_CUPS)
 #  include "qcups_p.h"
+#  include <cups/cups.h>
 #  include "qpdf_p.h"
 #endif
 
@@ -207,7 +208,7 @@ void QPageSetupDialogPrivate::init()
     widget = new QPageSetupWidget(q);
     widget->setPrinter(printer);
 #if !defined(QT_NO_CUPS)
-    if (QCUPSSupport::isAvailable()) {
+    if (printer->outputFormat() == QPrinter::NativeFormat && QCUPSSupport::isAvailable()) {
         cups = new QCUPSSupport;
         widget->selectPrinter(cups);
     } else {
@@ -578,6 +579,8 @@ int QPageSetupDialog::exec()
 
 
 QT_END_NAMESPACE
+
+
 
 #endif // QT_NO_PRINTDIALOG
 

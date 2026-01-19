@@ -186,7 +186,7 @@ void QProcessManager::run()
         ::memset(&fds, 0, sizeof(struct pollfd));
         fds.fd = qt_qprocess_deadChild_pipe[0];
         fds.events = POLLIN;
-        int nselect = qt_safe_poll(&fds, -1);
+        int nselect = qt_safe_poll(&fds, 1, -1);
         if (nselect < 0) {
             break;
         }
@@ -398,10 +398,12 @@ QProcessEnvironment QProcessEnvironment::systemEnvironment()
     const char *entry;
     for (int count = 0; (entry = environ[count]); ++count) {
         const char *equal = strchr(entry, '=');
-        if (!equal) {
+        if (!equal)
             continue;
-        }
-        env.hash.insert(QString::fromLatin1(entry, equal - entry), QString::fromLocal8Bit(equal + 1));
+
+        QByteArray name(entry, equal - entry);
+        QByteArray value(equal + 1);
+        env.hash.insert(QString::fromLatin1(name.constData()), QString::fromLocal8Bit(value));
     }
     return env;
 }
@@ -472,18 +474,7 @@ void QProcessPrivate::startProcess()
     argv[arguments.count() + 1] = 0;
 
     // Encode the program name.
-    QByteArray encodedProgramName;
-    // If the program does not specify a path, try to find it.
-    if (!program.contains(QLatin1Char('/'))) {
-        const QString programPath = QStandardPaths::findExecutable(program);
-        if (!programPath.isEmpty()) {
-            encodedProgramName = QFile::encodeName(programPath);
-        }
-    }
-    if (encodedProgramName.isEmpty()) {
-        encodedProgramName = QFile::encodeName(program);
-    }
-
+    const QByteArray encodedProgramName = QFile::encodeName(program);
     // Add the program name to the argument list.
     argv[0] = (char*)encodedProgramName.data();
 
@@ -508,9 +499,32 @@ void QProcessPrivate::startProcess()
         workingDirPtr = encodedWorkingDirectory.constData();
     }
 
+    // If the program does not specify a path, generate a list of possible
+    // locations for the binary using the PATH environment variable.
+    char **path = 0;
+    int pathc = 0;
+    if (!program.contains(QLatin1Char('/'))) {
+        const QString pathEnv = QString::fromLocal8Bit(::getenv("PATH"));
+        if (!pathEnv.isEmpty()) {
+            QStringList pathEntries = pathEnv.split(QLatin1Char(':'), QString::SkipEmptyParts);
+            if (!pathEntries.isEmpty()) {
+                pathc = pathEntries.size();
+                path = new char *[pathc + 1];
+                path[pathc] = 0;
+
+                for (int k = 0; k < pathEntries.size(); ++k) {
+                    QByteArray tmp = QFile::encodeName(pathEntries.at(k));
+                    if (!tmp.endsWith('/')) tmp += '/';
+                    tmp += encodedProgramName;
+                    path[k] = ::strdup(tmp.constData());
+                }
+            }
+        }
+    }
+
     // Start the process manager, and fork off the child process.
     processManager()->lock();
-    const pid_t childPid = ::fork();
+    const pid_t childPid = fork();
     const int lastForkErrno = errno;
     if (childPid != 0) {
         // Clean up duplicated memory.
@@ -518,8 +532,11 @@ void QProcessPrivate::startProcess()
             free(argv[i]);
         for (int i = 0; i < envc; ++i)
             free(envp[i]);
+        for (int i = 0; i < pathc; ++i)
+            free(path[i]);
         delete [] argv;
         delete [] envp;
+        delete [] path;
     }
 
     if (childPid < 0) {
@@ -538,7 +555,7 @@ void QProcessPrivate::startProcess()
 
     // Start the child.
     if (childPid == 0) {
-        execChild(workingDirPtr, argv, envp);
+        execChild(workingDirPtr, path, argv, envp);
         ::_exit(-1);
     }
 
@@ -576,7 +593,7 @@ void QProcessPrivate::startProcess()
         ::fcntl(stderrChannel.pipe[0], F_SETFL, ::fcntl(stderrChannel.pipe[0], F_GETFL) | O_NONBLOCK);
 }
 
-void QProcessPrivate::execChild(const char *workingDir, char **argv, char **envp)
+void QProcessPrivate::execChild(const char *workingDir, char **path, char **argv, char **envp)
 {
     ::signal(SIGPIPE, SIG_DFL);         // reset the signal that we ignored
 
@@ -601,7 +618,7 @@ void QProcessPrivate::execChild(const char *workingDir, char **argv, char **envp
     qt_safe_close(childStartedPipe[0]);
 
     // enter the working directory
-    if (workingDir && ::chdir(workingDir) == -1) {
+    if (workingDir && QT_CHDIR(workingDir) == -1) {
         qWarning("QProcessPrivate::execChild() failed to chdir to %s", workingDir);
     }
 
@@ -612,10 +629,22 @@ void QProcessPrivate::execChild(const char *workingDir, char **argv, char **envp
     if (!envp) {
         qt_safe_execvp(argv[0], argv);
     } else {
+        if (path) {
+            char **arg = path;
+            while (*arg) {
+                argv[0] = *arg;
 #if defined (QPROCESS_DEBUG)
-        fprintf(stderr, "QProcessPrivate::execChild() starting %s\n", argv[0]);
+                fprintf(stderr, "QProcessPrivate::execChild() searching / starting %s\n", argv[0]);
 #endif
-        qt_safe_execve(argv[0], argv, envp);
+                qt_safe_execve(argv[0], argv, envp);
+                ++arg;
+            }
+        } else {
+#if defined (QPROCESS_DEBUG)
+            fprintf(stderr, "QProcessPrivate::execChild() starting %s\n", argv[0]);
+#endif
+            qt_safe_execve(argv[0], argv, envp);
+        }
     }
 
     // notify failure
@@ -754,7 +783,7 @@ bool QProcessPrivate::waitForStarted(int msecs)
     ::memset(&fds, 0, sizeof(struct pollfd));
     fds.fd = childStartedPipe[0];
     fds.events = POLLIN;
-    if (qt_safe_poll(&fds, msecs) == 0) {
+    if (qt_safe_poll(&fds, 1, msecs) == 0) {
         processError = QProcess::Timedout;
         q->setErrorString(QProcess::tr("Process operation timed out"));
 #if defined (QPROCESS_DEBUG)
@@ -1009,7 +1038,7 @@ bool QProcessPrivate::startDetached(const QString &program, const QStringList &a
         return false;
     }
 
-    pid_t childPid = ::fork();
+    pid_t childPid = fork();
     if (childPid == 0) {
         struct sigaction noaction;
         memset(&noaction, 0, sizeof(noaction));
@@ -1021,13 +1050,13 @@ bool QProcessPrivate::startDetached(const QString &program, const QStringList &a
         qt_safe_close(startedPipe[0]);
         qt_safe_close(pidPipe[0]);
 
-        pid_t doubleForkPid = ::fork();
+        pid_t doubleForkPid = fork();
         if (doubleForkPid == 0) {
             qt_safe_close(pidPipe[1]);
 
             QByteArray encodedWorkingDirectory = QFile::encodeName(workingDirectory);
             if (!encodedWorkingDirectory.isEmpty()
-                && ::chdir(encodedWorkingDirectory.constData()) == -1) {
+                && QT_CHDIR(encodedWorkingDirectory.constData()) == -1) {
                 qWarning("QProcessPrivate::startDetached: failed to chdir to %s",
                     encodedWorkingDirectory.constData());
             }
@@ -1038,18 +1067,18 @@ bool QProcessPrivate::startDetached(const QString &program, const QStringList &a
             }
             argv[arguments.size() + 1] = 0;
 
-            QByteArray encodedProgram;
             if (!program.contains(QLatin1Char('/'))) {
                 const QString path = QStandardPaths::findExecutable(program);
                 if (!path.isEmpty()) {
-                    encodedProgram = QFile::encodeName(path);
+                    QByteArray tmp = QFile::encodeName(path);
+                    argv[0] = tmp.data();
+                    qt_safe_execv(argv[0], argv);
                 }
+            } else {
+                QByteArray tmp = QFile::encodeName(program);
+                argv[0] = tmp.data();
+                qt_safe_execv(argv[0], argv);
             }
-            if (encodedProgram.isEmpty()) {
-                encodedProgram = QFile::encodeName(program);
-            }
-            argv[0] = encodedProgram.data();
-            qt_safe_execv(argv[0], argv);
 
             struct sigaction noaction;
             memset(&noaction, 0, sizeof(noaction));
@@ -1074,7 +1103,7 @@ bool QProcessPrivate::startDetached(const QString &program, const QStringList &a
 
         qt_safe_close(startedPipe[1]);
         qt_safe_write(pidPipe[1], (const char *)&doubleForkPid, sizeof(pid_t));
-        if (Q_UNLIKELY(::chdir("/") == -1)) {
+        if (Q_UNLIKELY(QT_CHDIR("/") == -1)) {
             qWarning("QProcessPrivate::startDetached: failed to chdir to /");
         }
         ::_exit(1);

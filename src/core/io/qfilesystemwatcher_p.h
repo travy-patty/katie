@@ -38,9 +38,9 @@
 #ifndef QT_NO_FILESYSTEMWATCHER
 
 #include "qobject_p.h"
-#include "qtimer.h"
-#include "qcore_unix_p.h"
-#include "qstringlist.h"
+#include "qfilesystemwatcher_unix_p.h"
+
+#include <QtCore/qstringlist.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -50,15 +50,14 @@ class QFileSystemWatcherPrivate : public QObjectPrivate
 
 public:
     QFileSystemWatcherPrivate();
+    void init();
 
-    QStringList addPaths(const QStringList &paths);
-    QStringList removePaths(const QStringList &paths);
+    QFileSystemWatcherEngineUnix *watcher;
+    QStringList files, directories;
 
-    int interval;
-    QTimer timer;
-    QHash<QString, QStatInfo> files, directories;
-
-    void _q_timeout();
+    // private slots
+    void _q_fileChanged(const QString &path, bool removed);
+    void _q_directoryChanged(const QString &path, bool removed);
 };
 
 QT_END_NAMESPACE

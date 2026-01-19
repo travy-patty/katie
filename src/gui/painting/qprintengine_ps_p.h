@@ -34,8 +34,6 @@
 // We mean it.
 //
 
-#include "qglobal.h"
-
 #ifndef QT_NO_PRINTER
 
 #include "qpdf_p.h"
@@ -55,7 +53,7 @@ class QPSPrintEngine : public QPdfBaseEngine
     Q_DECLARE_PRIVATE(QPSPrintEngine)
 public:
     // QPrinter uses these
-    QPSPrintEngine();
+    explicit QPSPrintEngine(QPrinter::PrinterMode m);
     ~QPSPrintEngine();
 
 
@@ -85,7 +83,7 @@ private:
 
 class QPSPrintEnginePrivate : public QPdfBaseEnginePrivate {
 public:
-    QPSPrintEnginePrivate();
+    QPSPrintEnginePrivate(QPrinter::PrinterMode m);
     ~QPSPrintEnginePrivate();
 
     void emitHeader(bool finished);
@@ -96,6 +94,8 @@ public:
                          bool gray, qreal scaleX, qreal scaleY);
 
     int         pageCount;
+    bool        epsf;
+    QByteArray     fontsUsed;
 
     // stores the descriptions of the n first pages.
     QPdf::ByteStream buffer;

@@ -24,11 +24,8 @@
 #include "qtextcodec.h"
 #include "qkeymapper_p.h"
 #include "qapplication_p.h"
-#include "qtextcodec_p.h"
 #include "qcorecommon_p.h"
 #include "qt_x11_p.h"
-
-#include <locale.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -37,7 +34,7 @@ extern bool qt_sendSpontaneousEvent(QObject*, QEvent*);
 
 QKeyMapper::QKeyMapper()
     : keyboardInputDirection(Qt::LeftToRight),
-    keyMapperCodec(nullptr)
+    keyMapperCodec(QTextCodec::codecForCStrings())
 {
     clearMappings();
 }
@@ -48,14 +45,28 @@ QKeyMapper::~QKeyMapper()
 
 void QKeyMapper::clearMappings()
 {
-    // NOTE: if nothing called setlocale() it has to be done here for XLocaleOfIM()
-    // to return the locale set via environment variable
-    setlocale(LC_CTYPE, "");
+    XIM im = XOpenIM(qt_x11Data->display, NULL, NULL, NULL);
+    if (!im) {
+        return;
+    }
+    const QString imlocale = QString::fromLatin1(XLocaleOfIM(im));
+    keyboardInputLocale = QLocale(imlocale);
+    XCloseIM(im);
 
-    // X11 is known to use whatever is set by setlocale() as input method locale
-    keyMapperCodec = QTextCodec::codecForName(qt_locale_codec());
-    keyboardInputLocale = QLocale::system();
     keyboardInputDirection = keyboardInputLocale.textDirection();
+
+    // X11 is known to use whatever is set by setlocale() as input method
+    // locale, setlocale() and XLocaleOfIM() return string in the form:
+    // language[_territory][.codeset][@modifier]
+    const int dotindex = imlocale.indexOf(QLatin1Char('.'));
+    if (dotindex >= 0) {
+        QByteArray codeset = imlocale.mid(dotindex + 1).toLatin1();
+        const int atindex = codeset.indexOf('@');
+        if (atindex >= 0) {
+            codeset = codeset.left(atindex);
+        }
+        keyMapperCodec = QTextCodec::codecForName(codeset.constData());
+    }
 }
 
 extern bool qt_sm_blockUserInput;
@@ -220,14 +231,14 @@ bool QKeyMapper::translateKeyEvent(QWidget *keyWidget, const XEvent *event)
 
     bool autorepeat = false;
     static const int qt_x11_autorepeat = getX11AutoRepeat();
-    static qt_auto_repeat_data curr_autorep = { 0, 0, 0, 0 };
     // modifier keys should not auto-repeat
-    if (event->type == XKeyPress && qt_x11_autorepeat && code != Qt::Key_Shift && code != Qt::Key_Control
+    if (qt_x11_autorepeat && code != Qt::Key_Shift && code != Qt::Key_Control
         && code != Qt::Key_Meta && code != Qt::Key_Alt) {
-        if ((curr_autorep.serial == event->xkey.serial ||
+        static qt_auto_repeat_data curr_autorep = { 0, 0, 0, 0 };
+        if (curr_autorep.serial == event->xkey.serial ||
             (event->xkey.window == curr_autorep.window &&
-            event->xkey.keycode == curr_autorep.keycode)) &&
-            event->xkey.time - curr_autorep.time < qulonglong(qt_x11_autorepeat)) {
+            event->xkey.keycode == curr_autorep.keycode &&
+            event->xkey.time - curr_autorep.time < qulonglong(qt_x11_autorepeat))) {
             autorepeat = true;
         }
         curr_autorep = {
@@ -239,7 +250,7 @@ bool QKeyMapper::translateKeyEvent(QWidget *keyWidget, const XEvent *event)
     }
 
 #if 0
-    qDebug() << "translateKeyEvent" << modifiers << code << count << text << autorepeat << qt_x11_autorepeat;
+    qDebug() << "translateKeyEvent" << modifiers << count << text << autorepeat << qt_x11_autorepeat;
 #endif
 
     // try the menu key first
@@ -253,8 +264,8 @@ bool QKeyMapper::translateKeyEvent(QWidget *keyWidget, const XEvent *event)
     }
 
     QKeyEvent e(type, code, modifiers,
-                event->xkey.keycode, keysym, event->xkey.state,
-                text, autorepeat, qMax(qMax(count, 1), text.length()));
+                  event->xkey.keycode, keysym, event->xkey.state,
+                  text, autorepeat, qMax(qMax(count, 1), text.length()));
     return qt_sendSpontaneousEvent(keyWidget, &e);
 }
 

@@ -1157,6 +1157,14 @@ QAbstractItemView *QCompleter::popup() const
 /*!
   \reimp
 */
+bool QCompleter::event(QEvent *ev)
+{
+    return QObject::event(ev);
+}
+
+/*!
+  \reimp
+*/
 bool QCompleter::eventFilter(QObject *o, QEvent *e)
 {
     Q_D(QCompleter);
@@ -1498,7 +1506,7 @@ int QCompleter::maxVisibleItems() const
 void QCompleter::setMaxVisibleItems(int maxItems)
 {
     Q_D(QCompleter);
-    if (Q_UNLIKELY(maxItems < 0)) {
+    if (maxItems < 0) {
         qWarning("QCompleter::setMaxVisibleItems: "
                  "Invalid max visible items (%d) must be >= 0", maxItems);
         return;

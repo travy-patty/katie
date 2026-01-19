@@ -238,11 +238,11 @@ QUrl QDeclarativeFolderListModel::parentFolder() const
     The \a nameFilters property contains a list of file name filters.
     The filters may include the ? and * wildcards.
 
-    The example below filters on PNG and XPM files:
+    The example below filters on PNG and JPEG files:
 
     \qml
     FolderListModel {
-        nameFilters: [ "*.png", "*.xpm" ]
+        nameFilters: [ "*.png", "*.jpg" ]
     }
     \endqml
 

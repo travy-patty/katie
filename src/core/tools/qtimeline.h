@@ -38,6 +38,7 @@ class Q_CORE_EXPORT QTimeLine : public QObject
     Q_PROPERTY(int currentTime READ currentTime WRITE setCurrentTime)
     Q_PROPERTY(Direction direction READ direction WRITE setDirection)
     Q_PROPERTY(int loopCount READ loopCount WRITE setLoopCount)
+    Q_PROPERTY(CurveShape curveShape READ curveShape WRITE setCurveShape)
     Q_PROPERTY(QEasingCurve easingCurve READ easingCurve WRITE setEasingCurve)
 public:
     enum State {
@@ -48,6 +49,14 @@ public:
     enum Direction {
         Forward,
         Backward
+    };
+    enum CurveShape {
+        EaseInCurve,
+        EaseOutCurve,
+        EaseInOutCurve,
+        LinearCurve,
+        SineCurve,
+        CosineCurve
     };
 
     explicit QTimeLine(int duration = 1000, QObject *parent = nullptr);
@@ -72,6 +81,9 @@ public:
 
     int updateInterval() const;
     void setUpdateInterval(int interval);
+
+    CurveShape curveShape() const;
+    void setCurveShape(CurveShape shape);
 
     QEasingCurve easingCurve() const;
     void setEasingCurve(const QEasingCurve &curve);

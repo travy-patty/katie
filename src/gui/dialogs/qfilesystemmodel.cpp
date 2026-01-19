@@ -29,9 +29,9 @@
 #include "qapplication.h"
 #include "qcore_unix_p.h"
 
-#ifndef QT_NO_FILESYSTEMMODEL
-
 QT_BEGIN_NAMESPACE
+
+#ifndef QT_NO_FILESYSTEMMODEL
 
 /*!
     \enum QFileSystemModel::Roles
@@ -297,6 +297,7 @@ QFileSystemModelPrivate::QFileSystemNode *QFileSystemModelPrivate::node(const QS
     else
         absolutePath = QDir(path).absolutePath();
 
+    // ### TODO can we use bool QAbstractFileEngine::caseSensitive() const?
     QStringList pathElements = absolutePath.split(QLatin1Char('/'), QString::SkipEmptyParts);
     if (pathElements.isEmpty() && path != QLatin1String("/"))
         return const_cast<QFileSystemModelPrivate::QFileSystemNode*>(&root);
@@ -314,8 +315,11 @@ QFileSystemModelPrivate::QFileSystemNode *QFileSystemModelPrivate::node(const QS
         // we couldn't find the path element, we create a new node since we
         // _know_ that the path is valid
         if (alreadyExisted) {
-            if (parent->children.count() == 0
-                || parent->children.value(element)->fileName != element)
+            if ((parent->children.count() == 0)
+                || (parent->caseSensitive()
+                    && parent->children.value(element)->fileName != element)
+                || (!parent->caseSensitive()
+                    && parent->children.value(element)->fileName.toLower() != element.toLower()))
                 alreadyExisted = false;
         }
 
@@ -328,7 +332,9 @@ QFileSystemModelPrivate::QFileSystemNode *QFileSystemModelPrivate::node(const QS
                 return const_cast<QFileSystemModelPrivate::QFileSystemNode*>(&root);
             QFileSystemModelPrivate *p = const_cast<QFileSystemModelPrivate*>(this);
             node = p->addNode(parent, element,info);
+#ifndef QT_NO_FILESYSTEMWATCHER
             node->populate(fileInfoGatherer.getInfo(info));
+#endif
         } else {
             node = parent->children.value(element);
         }
@@ -368,6 +374,7 @@ void QFileSystemModel::timerEvent(QTimerEvent *event)
     Q_D(QFileSystemModel);
     if (event->timerId() == d->fetchingTimer.timerId()) {
         d->fetchingTimer.stop();
+#ifndef QT_NO_FILESYSTEMWATCHER
         for (int i = 0; i < d->toFetch.count(); ++i) {
             const QFileSystemModelPrivate::QFileSystemNode *node = d->toFetch.at(i).node;
             if (!node->hasInformation()) {
@@ -377,6 +384,7 @@ void QFileSystemModel::timerEvent(QTimerEvent *event)
                 // qDebug() << "yah!, you saved a little gerbil soul";
             }
         }
+#endif
         d->toFetch.clear();
     }
 }
@@ -409,7 +417,7 @@ qint64 QFileSystemModel::size(const QModelIndex &index) const
 }
 
 /*!
-    Returns the type of file \a index such as "Directory" or "PNG file".
+    Returns the type of file \a index such as "Directory" or "JPEG file".
   */
 QString QFileSystemModel::type(const QModelIndex &index) const
 {
@@ -850,7 +858,7 @@ static inline QChar getNextChar(const QString &s, int location)
 
     Examples:
     1, 2, 10, 55, 100
-    01.png, 2.png, 10.png
+    01.jpg, 2.jpg, 10.jpg
 
     Note on the algorithm:
     Only as many characters as necessary are looked at and at most they all
@@ -1466,7 +1474,7 @@ void QFileSystemModelPrivate::_q_directoryChanged(const QString &directory, cons
     QHash<QString, QFileSystemNode*>::const_iterator i = parentNode->children.constBegin();
     while (i != parentNode->children.constEnd()) {
         QStringList::const_iterator iter = qBinaryFind(newFiles.constBegin(), newFiles.constEnd(), i.value()->fileName);
-        if (iter == newFiles.constEnd()) {
+        if (iter == newFiles.end()) {
             toRemove.append(i.value()->fileName);
         }
         ++i;
@@ -1486,7 +1494,9 @@ QFileSystemModelPrivate::QFileSystemNode* QFileSystemModelPrivate::addNode(QFile
 {
     // In the common case, itemLocation == count() so check there first
     QFileSystemModelPrivate::QFileSystemNode *node = new QFileSystemModelPrivate::QFileSystemNode(fileName, parentNode);
+#ifndef QT_NO_FILESYSTEMWATCHER
     node->populate(info);
+#endif
     parentNode->children.insert(fileName, node);
     return node;
 }
@@ -1611,10 +1621,19 @@ void QFileSystemModelPrivate::_q_fileSystemChanged(const QString &path, const QL
             addNode(parentNode, fileName, info.fileInfo());
         }
         QFileSystemModelPrivate::QFileSystemNode * node = parentNode->children.value(fileName);
-        if (node->fileName != fileName) {
-            continue;
+        bool isCaseSensitive = parentNode->caseSensitive();
+        if (isCaseSensitive) {
+            if (node->fileName != fileName)
+                continue;
+        } else {
+            if (QString::compare(node->fileName,fileName,Qt::CaseInsensitive) != 0)
+                continue;
         }
-        Q_ASSERT(node->fileName == fileName);
+        if (isCaseSensitive) {
+            Q_ASSERT(node->fileName == fileName);
+        } else {
+            node->fileName = fileName;
+        }
 
         if (info.size() == -1 && !info.isSymLink()) {
             removeNode(parentNode, fileName);
@@ -1782,6 +1801,9 @@ bool QFileSystemModelPrivate::passNameFilters(const QFileSystemNode *node) const
 
 QT_END_NAMESPACE
 
+
 #include "moc_qfilesystemmodel.h"
 
 #endif // QT_NO_FILESYSTEMMODEL
+
+

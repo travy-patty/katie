@@ -80,12 +80,12 @@
 #endif // QT_NO_XRENDER
 
 #ifndef QT_NO_XSYNC
-#  include "X11/extensions/sync.h"
+# include "X11/extensions/sync.h"
 #endif
 
 #ifndef QT_NO_XCURSOR
-#  include <X11/Xcursor/Xcursor.h>
-#  include <X11/cursorfont.h>
+#include <X11/Xcursor/Xcursor.h>
+#include <X11/cursorfont.h>
 #endif // QT_NO_XCURSOR
 
 #ifndef QT_NO_XFIXES
@@ -93,8 +93,8 @@
 #endif // QT_NO_XFIXES
 
 #ifndef QT_NO_SESSIONMANAGER
-#  include <X11/SM/SMlib.h>
-#endif // QT_NO_SESSIONMANAGER
+#include <X11/SM/SMlib.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -111,6 +111,7 @@ struct QX11InfoData {
     Visual *visual;
     bool defaultColormap;
     bool defaultVisual;
+    int subpixel;
 };
 
 class QDrag;
@@ -125,21 +126,17 @@ struct QXdndDropTransaction
 };
 
 class QMimeData;
-class QX11Data
+struct QX11Data
 {
-public:
     Window findClientWindow(Window, Atom);
 
     // from qclipboard_x11.cpp
-#ifndef QT_NO_CLIPBOARD
     bool clipboardWaitForEvent(Window win, int type, XEvent *event, int timeout, bool checkManager = false);
     bool clipboardReadProperty(Window win, Atom property, bool deleteProperty,
                             QByteArray *buffer, int *size, Atom *type, int *format);
     QByteArray clipboardReadIncrementalProperty(Window win, Atom property, int nbytes);
-#endif // QT_NO_CLIPBOARD
 
     // from qdnd_x11.cpp
-#ifndef QT_NO_DRAGANDDROP
     bool dndEnable(QWidget* w, bool on);
     static void xdndSetup();
     void xdndHandleEnter(const XEvent *);
@@ -161,7 +158,6 @@ public:
     Atom xdndMimeAtomForFormat(const QString &format, QVariant::Type requestedType, const QList<Atom> &atoms, QByteArray *requestedEncoding);
 
     QList<QXdndDropTransaction> dndDropTransactions;
-#endif // QT_NO_DRAGANDDROP
 
     Display *display;
     char *displayName;
@@ -231,18 +227,40 @@ public:
     bool ignore_badwindow;
     bool seen_badwindow;
 
+    // options
+    int visual_class;
+    int visual_id;
+    int color_count;
+    bool custom_cmap;
+
     // outside visual/colormap
     Visual *visual;
     Colormap colormap;
 
-    static void copyQImageToXImage(const QImage &image, XImage *ximage, bool *freedata);
-    static void copyXImageToQImage(XImage *ximage, QImage &image, bool *freedata);
-    static void destroyXImage(XImage *ximage, const bool freedata);
-
-    static uint XColorPixel(const int screen, const QColor &color);
+#ifndef QT_NO_XRENDER
+    enum { solid_fill_count = 20 };
+    struct SolidFills {
+        XRenderColor color;
+        int screen;
+        Picture picture;
+    } solid_fills[solid_fill_count];
+    enum { pattern_fill_count = 20 };
+    struct PatternFills {
+        XRenderColor color;
+        XRenderColor bg_color;
+        int screen;
+        int style;
+        Picture picture;
+    } pattern_fills[pattern_fill_count];
+    Picture getSolidFill(int screen, const QColor &c);
+    XRenderColor preMultiply(const QColor &c);
+#endif
 
     bool has_fontconfig;
+    bool fc_antialias;
     int fc_hint_style;
+
+    char *startupId;
 
     /* Warning: if you modify this list, modify the names of atoms in qapplication_x11.cpp as well! */
     enum X11Atom {
@@ -327,7 +345,12 @@ public:
         _NET_WM_WINDOW_TYPE_DND,
         _NET_WM_WINDOW_TYPE_NORMAL,
 
+        _NET_STARTUP_INFO,
+        _NET_STARTUP_INFO_BEGIN,
+
         _NET_SUPPORTING_WM_CHECK,
+
+        _NET_WM_CM_S0,
 
         _NET_SYSTEM_TRAY_VISUAL,
         _NET_SYSTEM_TRAY_OPCODE,
@@ -366,7 +389,6 @@ public:
         NPredefinedAtoms
     };
     Atom atoms[NPredefinedAtoms];
-    Atom compositorAtom;
 
     bool isSupportedByWM(Atom atom);
 

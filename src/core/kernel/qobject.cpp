@@ -207,6 +207,62 @@ public:
     }
 };
 
+// Used by QAccessibleWidget
+bool QObjectPrivate::isSender(const QObject *receiver, const char *signal) const
+{
+    Q_Q(const QObject);
+    int signal_index = signalIndex(signal);
+    if (signal_index < 0)
+        return false;
+    QMutexLocker locker(signalSlotLock(q));
+    if (connectionLists) {
+        if (signal_index < connectionLists->count()) {
+            const QObjectPrivate::Connection *c =
+                connectionLists->at(signal_index).first;
+
+            while (c) {
+                if (c->receiver == receiver)
+                    return true;
+                c = c->nextConnectionList;
+            }
+        }
+    }
+    return false;
+}
+
+// Used by QAccessibleWidget
+QObjectList QObjectPrivate::receiverList(const char *signal) const
+{
+    Q_Q(const QObject);
+    QObjectList returnValue;
+    int signal_index = signalIndex(signal);
+    if (signal_index < 0)
+        return returnValue;
+    QMutexLocker locker(signalSlotLock(q));
+    if (connectionLists) {
+        if (signal_index < connectionLists->count()) {
+            const QObjectPrivate::Connection *c = connectionLists->at(signal_index).first;
+
+            while (c) {
+                if (c->receiver)
+                    returnValue << c->receiver;
+                c = c->nextConnectionList;
+            }
+        }
+    }
+    return returnValue;
+}
+
+// Used by QAccessibleWidget
+QObjectList QObjectPrivate::senderList() const
+{
+    QObjectList returnValue;
+    QMutexLocker locker(signalSlotLock(q_func()));
+    for (Connection *c = senders; c; c = c->next)
+        returnValue << c->sender;
+    return returnValue;
+}
+
 void QObjectPrivate::addConnection(int signal, Connection *c)
 {
     if (!connectionLists)
@@ -500,9 +556,14 @@ QObject::QObject(QObject *parent)
     d->q_ptr = this;
     d->threadData->ref();
     if (parent) {
-        if (!check_parent_thread(parent, parent->d_func()->threadData, d->threadData))
-            parent = nullptr;
-        setParent(parent);
+        QT_TRY {
+            if (!check_parent_thread(parent, parent->d_func()->threadData, d->threadData))
+                parent = nullptr;
+            setParent(parent);
+        } QT_CATCH(...) {
+            d->threadData->deref();
+            QT_RETHROW;
+        }
     }
     objectCount.ref();
 }
@@ -517,16 +578,21 @@ QObject::QObject(QObjectPrivate &dd, QObject *parent)
     d->q_ptr = this;
     d->threadData->ref();
     if (parent) {
-        if (!check_parent_thread(parent, parent->d_func()->threadData, d->threadData))
-            parent = nullptr;
-        if (d->isWidget) {
-            if (parent) {
-                d->parent = parent;
-                d->parent->d_func()->children.append(this);
+        QT_TRY {
+            if (!check_parent_thread(parent, parent->d_func()->threadData, d->threadData))
+                parent = nullptr;
+            if (d->isWidget) {
+                if (parent) {
+                    d->parent = parent;
+                    d->parent->d_func()->children.append(this);
+                }
+                // no events sent here, this is done at the end of the QWidget constructor
+            } else {
+                setParent(parent);
             }
-            // no events sent here, this is done at the end of the QWidget constructor
-        } else {
-            setParent(parent);
+        } QT_CATCH(...) {
+            d->threadData->deref();
+            QT_RETHROW;
         }
     }
     objectCount.ref();
@@ -855,7 +921,12 @@ bool QObject::event(QEvent *e)
             currentSender.ref = 1;
             QObjectPrivate::Sender * const previousSender =
                 QObjectPrivate::setCurrentSender(this, &currentSender);
-            mce->placeMetaCall(this);
+            QT_TRY {
+                mce->placeMetaCall(this);
+            } QT_CATCH(...) {
+                QObjectPrivate::resetCurrentSender(this, &currentSender, previousSender);
+                QT_RETHROW;
+            }
             QObjectPrivate::resetCurrentSender(this, &currentSender, previousSender);
             break;
         }
@@ -1584,7 +1655,7 @@ void QObject::deleteLater()
     translators while performing translations is not supported. Doing
     so will probably result in crashes or other undesirable behavior.
 
-    \sa trUtf8(), QApplication::translate(), {Internationalization with Katie}
+    \sa trUtf8(), QApplication::translate(), QTextCodec::setCodecForTr(), {Internationalization with Qt}
 */
 
 /*!
@@ -1605,7 +1676,7 @@ void QObject::deleteLater()
 
     \snippet doc/src/snippets/code/src_corelib_kernel_qobject.cpp 20
 
-    \sa tr(), QApplication::translate(), {Internationalization with Katie}
+    \sa tr(), QApplication::translate(), {Internationalization with Qt}
 */
 #ifndef QT_NO_TRANSLATION
 QString QObject::tr(const char *sourceText)
@@ -2067,7 +2138,7 @@ bool QObject::connect(const QObject *sender, const QMetaMethod &signal,
         return false;
     }
 
-    QStdVector<char> signalSignature;
+    QVarLengthArray<char> signalSignature;
     QObjectPrivate::signalSignature(signal, &signalSignature);
 
     int signal_index;
@@ -2319,7 +2390,7 @@ bool QObject::disconnect(const QObject *sender, const QMetaMethod &signal,
         }
     }
 
-    QStdVector<char> signalSignature;
+    QVarLengthArray<char> signalSignature;
     if (signal.mobj)
         QObjectPrivate::signalSignature(signal, &signalSignature);
 
@@ -2506,7 +2577,12 @@ bool QMetaObjectPrivate::connect(const QObject *sender, int signal_index,
     c->nextConnectionList = nullptr;
     c->callFunction = callFunction;
 
-    QObjectPrivate::get(s)->addConnection(signal_index, c);
+    QT_TRY {
+        QObjectPrivate::get(s)->addConnection(signal_index, c);
+    } QT_CATCH(...) {
+        delete c;
+        QT_RETHROW;
+    }
 
     c->prev = &(QObjectPrivate::get(r)->senders);
     c->next = *c->prev;
@@ -2851,7 +2927,19 @@ void QMetaObject::activate(QObject *sender, const QMetaObject *m, int local_sign
                 if (qt_signal_spy_callback_set.slot_begin_callback)
                     qt_signal_spy_callback_set.slot_begin_callback(receiver, c->method(), argv ? argv : empty_argv);
 
-                callFunction(receiver, QMetaObject::InvokeMetaMethod, method_relative, argv ? argv : empty_argv);
+                QT_TRY {
+                    callFunction(receiver, QMetaObject::InvokeMetaMethod, method_relative, argv ? argv : empty_argv);
+                } QT_CATCH(...) {
+                    locker.relock();
+                    if (receiverInSameThread)
+                        QObjectPrivate::resetCurrentSender(receiver, &currentSender, previousSender);
+
+                    --connectionLists->inUse;
+                    Q_ASSERT(connectionLists->inUse >= 0);
+                    if (connectionLists->orphaned && !connectionLists->inUse)
+                        delete connectionLists;
+                    QT_RETHROW;
+                }
                 locker.relock();
             } else {
                 const int method = method_relative + c->method_offset;
@@ -2863,7 +2951,19 @@ void QMetaObject::activate(QObject *sender, const QMetaObject *m, int local_sign
                                                                 argv ? argv : empty_argv);
                 }
 
-                metacall(receiver, QMetaObject::InvokeMetaMethod, method, argv ? argv : empty_argv);
+                QT_TRY {
+                    metacall(receiver, QMetaObject::InvokeMetaMethod, method, argv ? argv : empty_argv);
+                } QT_CATCH(...) {
+                    locker.relock();
+                    if (receiverInSameThread)
+                        QObjectPrivate::resetCurrentSender(receiver, &currentSender, previousSender);
+
+                    --connectionLists->inUse;
+                    Q_ASSERT(connectionLists->inUse >= 0);
+                    if (connectionLists->orphaned && !connectionLists->inUse)
+                        delete connectionLists;
+                    QT_RETHROW;
+                }
                 locker.relock();
             }
 
@@ -3278,7 +3378,7 @@ QDebug operator<<(QDebug dbg, const QObject *o) {
     See the \l{tools/plugandpaintplugins/basictools}{Plug & Paint
     Basic Tools} example for details.
 
-    \sa Q_DECLARE_INTERFACE(), Q_EXPORT_PLUGIN()
+    \sa Q_DECLARE_INTERFACE(), Q_EXPORT_PLUGIN2(), {How to Create Qt Plugins}
 */
 
 /*!

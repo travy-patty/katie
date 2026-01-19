@@ -106,7 +106,7 @@ Create a new QDeclarativeDataBlob for \a url and of the provided \a type.
 */
 QDeclarativeDataBlob::QDeclarativeDataBlob(const QUrl &url, Type type)
 : m_type(type), m_status(Null), m_progress(0), m_url(url), m_finalUrl(url), m_manager(0),
-  m_inCallback(false), m_isDone(false)
+  m_redirectCount(0), m_inCallback(false), m_isDone(false)
 {
 }
 
@@ -293,11 +293,50 @@ Invoked if there is a network error while fetching this blob.
 
 The default implementation sets an appropriate QDeclarativeError.
 */
-void QDeclarativeDataBlob::networkError()
+void QDeclarativeDataBlob::networkError(QNetworkReply::NetworkError networkError)
 {
+    Q_UNUSED(networkError);
+
     QDeclarativeError error;
     error.setUrl(m_finalUrl);
-    error.setDescription(QLatin1String("File not found"));
+
+    const char *errorString = 0;
+    switch (networkError) {
+        default:
+            errorString = "Network error";
+            break;
+        case QNetworkReply::ConnectionRefusedError:
+            errorString = "Connection refused";
+            break;
+        case QNetworkReply::RemoteHostClosedError:
+            errorString = "Remote host closed the connection";
+            break;
+        case QNetworkReply::HostNotFoundError:
+            errorString = "Host not found";
+            break;
+        case QNetworkReply::TimeoutError:
+            errorString = "Timeout";
+            break;
+        case QNetworkReply::ProxyConnectionRefusedError:
+        case QNetworkReply::ProxyConnectionClosedError:
+        case QNetworkReply::ProxyNotFoundError:
+        case QNetworkReply::ProxyTimeoutError:
+        case QNetworkReply::ProxyAuthenticationRequiredError:
+        case QNetworkReply::UnknownProxyError:
+            errorString = "Proxy error";
+            break;
+        case QNetworkReply::ContentAccessDenied:
+            errorString = "Access denied";
+            break;
+        case QNetworkReply::ContentNotFoundError:
+            errorString = "File not found";
+            break;
+        case QNetworkReply::AuthenticationRequiredError:
+            errorString = "Authentication required";
+            break;
+    };
+
+    error.setDescription(QLatin1String(errorString));
 
     setError(error);
 }
@@ -442,6 +481,8 @@ QDeclarativeDataLoader::QDeclarativeDataLoader(QDeclarativeEngine *engine)
 /*! \internal */
 QDeclarativeDataLoader::~QDeclarativeDataLoader()
 {
+    for (NetworkReplies::Iterator iter = m_networkReplies.begin(); iter != m_networkReplies.end(); ++iter) 
+        (*iter)->release();
 }
 
 /*!
@@ -461,17 +502,100 @@ void QDeclarativeDataLoader::load(QDeclarativeDataBlob *blob)
         return;
     }
 
-    QFile file(QDeclarativeEnginePrivate::urlToLocalFile(blob->m_url));
-    if (file.open(QFile::ReadOnly)) {
-        QByteArray data = file.readAll();
+    QString lf = QDeclarativeEnginePrivate::urlToLocalFile(blob->m_url);
 
-        blob->m_progress = 1.;
-        blob->downloadProgressChanged(1.);
+    if (!lf.isEmpty()) {
+        QFile file(lf);
+        if (file.open(QFile::ReadOnly)) {
+            QByteArray data = file.readAll();
 
-        setData(blob, data);
+            blob->m_progress = 1.;
+            blob->downloadProgressChanged(1.);
+
+            setData(blob, data);
+        } else {
+            blob->networkError(QNetworkReply::ContentNotFoundError);
+        }
+
     } else {
-        blob->networkError();
+
+        blob->m_manager = this;
+        QNetworkReply *reply = m_engine->networkAccessManager()->get(QNetworkRequest(blob->m_url));
+
+        m_networkReplies.insert(reply, blob);
+        blob->addref();
+
+        if (reply->isFinished()) {
+            // Short-circuit synchronous replies.
+            qint64 size = reply->size();
+            networkReplyProgress(reply, size, size);
+            networkReplyFinished(reply);
+        } else {
+            QObject::connect(reply, SIGNAL(downloadProgress(qint64,qint64)),
+                             this, SLOT(networkReplyProgress(qint64,qint64)));
+            QObject::connect(reply, SIGNAL(finished()),
+                             this, SLOT(networkReplyFinished()));
+        }
     }
+}
+
+#define DATALOADER_MAXIMUM_REDIRECT_RECURSION 16
+
+void QDeclarativeDataLoader::networkReplyFinished(QNetworkReply *reply)
+{
+    reply->deleteLater();
+
+    QDeclarativeDataBlob *blob = m_networkReplies.take(reply);
+
+    Q_ASSERT(blob);
+
+    blob->m_redirectCount++;
+
+    if (blob->m_redirectCount < DATALOADER_MAXIMUM_REDIRECT_RECURSION) {
+        QVariant redirect = reply->attribute(QNetworkRequest::RedirectionTargetAttribute);
+        if (redirect.isValid()) {
+            QUrl url = reply->url().resolved(redirect.toUrl());
+            blob->m_finalUrl = url;
+
+            QNetworkReply *reply = m_engine->networkAccessManager()->get(QNetworkRequest(url));
+            QObject::connect(reply, SIGNAL(finished()), this, SLOT(networkReplyFinished()));
+            m_networkReplies.insert(reply, blob);
+            return;
+        }
+    }
+
+    if (reply->error()) {
+        blob->networkError(reply->error());
+    } else {
+        QByteArray data = reply->readAll();
+        setData(blob, data);
+    }
+
+    blob->release();
+}
+
+void QDeclarativeDataLoader::networkReplyFinished()
+{
+    QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    networkReplyFinished(reply);
+}
+
+void QDeclarativeDataLoader::networkReplyProgress(QNetworkReply *reply, qint64 bytesReceived, qint64 bytesTotal)
+{
+    QDeclarativeDataBlob *blob = m_networkReplies.value(reply);
+
+    Q_ASSERT(blob);
+
+    if (bytesTotal != 0) {
+        blob->m_progress = bytesReceived / bytesTotal;
+        blob->downloadProgressChanged(blob->m_progress);
+    }
+}
+
+void QDeclarativeDataLoader::networkReplyProgress(qint64 bytesReceived, qint64 bytesTotal)
+{
+    QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    networkReplyProgress(reply, bytesReceived, bytesTotal);
 }
 
 /*!
@@ -631,8 +755,8 @@ QString QDeclarativeTypeLoader::absoluteFilePath(const QString &path)
     QString dirPath = path.left(lastSlash);
 
     StringSet *fileSet = 0;
-    QHash<QString,StringSet*>::const_iterator it = m_importDirCache.constFind(dirPath);
-    if (it == m_importDirCache.constEnd()) {
+    QHash<QString,StringSet*>::const_iterator it = m_importDirCache.find(dirPath);
+    if (it == m_importDirCache.end()) {
         StringSet *files = qmlFilesInDirectory(path.left(lastSlash));
         m_importDirCache.insert(dirPath, files);
         fileSet = files;
@@ -655,8 +779,8 @@ Return a QDeclarativeDirParser for absoluteFilePath.  The QDeclarativeDirParser 
 const QDeclarativeDirParser *QDeclarativeTypeLoader::qmlDirParser(const QString &absoluteFilePath)
 {
     QDeclarativeDirParser *qmldirParser;
-    QHash<QString,QDeclarativeDirParser*>::const_iterator it = m_importQmlDirCache.constFind(absoluteFilePath);
-    if (it == m_importQmlDirCache.constEnd()) {
+    QHash<QString,QDeclarativeDirParser*>::const_iterator it = m_importQmlDirCache.find(absoluteFilePath);
+    if (it == m_importQmlDirCache.end()) {
         qmldirParser = new QDeclarativeDirParser;
         qmldirParser->setFileSource(absoluteFilePath);
         qmldirParser->setUrl(QUrl::fromLocalFile(absoluteFilePath));

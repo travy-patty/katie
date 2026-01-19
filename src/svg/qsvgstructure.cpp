@@ -20,9 +20,13 @@
 ****************************************************************************/
 
 #include "qsvgstructure_p.h"
+
+#ifndef QT_NO_SVG
+
 #include "qsvgnode_p.h"
 #include "qsvgstyle_p.h"
 #include "qsvgtinydocument_p.h"
+
 #include "qpainter.h"
 #include "qlocale.h"
 #include "qdebug.h"
@@ -223,3 +227,9 @@ QSvgNode * QSvgStructureNode::previousSiblingNode(QSvgNode *n) const
 }
 
 QT_END_NAMESPACE
+
+#endif // QT_NO_SVG
+
+
+
+

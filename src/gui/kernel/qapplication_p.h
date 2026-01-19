@@ -52,6 +52,7 @@
 
 QT_BEGIN_NAMESPACE
 
+class QTimer;
 class QClipboard;
 class QGraphicsScene;
 class QObject;
@@ -62,9 +63,12 @@ extern QClipboard *qt_clipboard;
 #endif
 
 typedef QHash<QByteArray, QFont> FontHash;
-typedef QHash<QByteArray, QPalette> PaletteHash;
+FontHash *qt_app_fonts_hash();
 
-class QApplicationPrivate : public QCoreApplicationPrivate
+typedef QHash<QByteArray, QPalette> PaletteHash;
+PaletteHash *qt_app_palettes_hash();
+
+class Q_GUI_EXPORT QApplicationPrivate : public QCoreApplicationPrivate
 {
     Q_DECLARE_PUBLIC(QApplication)
 public:
@@ -144,6 +148,7 @@ public:
     static QWidget *hidden_focus_widget;
     static QWidget *active_window;
     static QIcon *app_icon;
+    static bool obey_desktop_settings;
     static int  cursor_flash_time;
     static int  mouse_double_click_time;
     static int  keyboard_input_time;
@@ -152,8 +157,12 @@ public:
 #endif
 
     static bool animate_ui;
+    static bool animate_menu;
+    static bool animate_tooltip;
+    static bool animate_combo;
     static bool fade_menu;
     static bool fade_tooltip;
+    static bool animate_toolbox;
 
     static void setSystemPalette(const QPalette &pal);
     static void setPalette_helper(const QPalette &palette, const char* className, bool clearWidgetPaletteHash);
@@ -167,6 +176,11 @@ public:
 
     static QString styleOverride;
 
+
+#if defined(Q_WS_X11)
+    void _q_alertTimeOut();
+    QHash<QWidget *, QTimer *> alertTimerHash;
+#endif
 #ifndef QT_NO_STYLE_STYLESHEET
     static QString styleSheet;
 #endif

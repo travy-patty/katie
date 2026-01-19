@@ -43,6 +43,7 @@
 #include <QtCore/qmutex.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qpointer.h>
+#include <QtCore/qreadwritelock.h>
 #include <QtCore/qstringlist.h>
 #include <QtCore/qvector.h>
 
@@ -253,7 +254,7 @@ public:
     PendingTimeoutList timeoutsPendingAdd;
 
     // the master lock protects our own internal state
-    QMutex lock;
+    QReadWriteLock lock;
     QDBusError lastError;
 
     QStringList serviceNames;

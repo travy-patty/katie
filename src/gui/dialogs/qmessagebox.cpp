@@ -33,17 +33,19 @@
 #include <QtGui/qgridlayout.h>
 #include <QtGui/qdesktopwidget.h>
 #include <QtGui/qpushbutton.h>
+#ifndef QT_NO_ACCESSIBILITY
+# include <QtGui/qaccessible.h>
+#endif
 #include <QtGui/qicon.h>
 #include <QtGui/qtextdocument.h>
 #include <QtGui/qapplication.h>
 #include <QtGui/qtextedit.h>
 #include <QtGui/qtextbrowser.h>
 #include <QtGui/qmenu.h>
+#include "qdialog_p.h"
 #include <QtGui/qfont.h>
 #include <QtGui/qfontmetrics.h>
 #include <QtGui/qclipboard.h>
-#include "qdialog_p.h"
-#include "qguiimages_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -594,6 +596,11 @@ void QMessageBoxPrivate::_q_buttonClicked(QAbstractButton *button)
     Constructs a message box with no text and no buttons. \a parent is
     passed to the QDialog constructor.
 
+    On Mac OS X, if you want your message box to appear
+    as a Qt::Sheet of its \a parent, set the message box's
+    \l{setWindowModality()} {window modality} to Qt::WindowModal or use open().
+    Otherwise, the message box will be a standard dialog.
+
 */
 QMessageBox::QMessageBox(QWidget *parent)
     : QDialog(*new QMessageBoxPrivate, parent, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint)
@@ -610,6 +617,11 @@ QMessageBox::QMessageBox(QWidget *parent)
 
     The message box is an \l{Qt::ApplicationModal} {application modal}
     dialog box.
+
+    On Mac OS X, if \a parent is not 0 and you want your message box
+    to appear as a Qt::Sheet of that parent, set the message box's
+    \l{setWindowModality()} {window modality} to Qt::WindowModal
+    (default). Otherwise, the message box will be a standard dialog.
 
     \sa setWindowTitle(), setText(), setIcon(), setStandardButtons()
 */
@@ -1226,6 +1238,9 @@ void QMessageBox::showEvent(QShowEvent *e)
     d->detectEscapeButton();
     d->updateSize();
 
+#ifndef QT_NO_ACCESSIBILITY
+    QAccessible::updateAccessibility(this, 0, QAccessible::Alert);
+#endif
     QDialog::showEvent(e);
 }
 
@@ -1444,7 +1459,7 @@ void QMessageBox::aboutQt(QWidget *parent, const QString &title)
         "<p>Katie is licensed under the GNU LGPL version 2.1</p>"
         "<p>Copyright (C) 2015 The Qt Company Ltd and other contributors.</p>"
         "<p>Copyright (C) 2016 Ivailo Monev</p>"
-        "<p>See <a href=\"https://bitbucket.org/smil3y/workspace/projects/KATANA\">https://bitbucket.org/smil3y/workspace/projects/KATANA</a> for more information.</p>"
+        "<p>See <a href=\"https://github.com/fluxer/katie\">github.com/fluxer/katie</a> for more information.</p>"
         );
     QMessageBox *msgBox = new QMessageBox(parent);
     msgBox->setAttribute(Qt::WA_DeleteOnClose);
@@ -1452,9 +1467,9 @@ void QMessageBox::aboutQt(QWidget *parent, const QString &title)
     msgBox->setText(translatedTextAboutQtCaption);
     msgBox->setInformativeText(translatedTextAboutQtText);
 
-    QPixmap pm;
-    pm.loadFromData(katie_png, katie_png_len, qt_images_format);
-    msgBox->setIconPixmap(pm);
+    QPixmap pm(QLatin1String(":/trolltech/qmessagebox/images/katie.png"));
+    if (!pm.isNull())
+        msgBox->setIconPixmap(pm);
 
     msgBox->exec();
 }
@@ -1574,12 +1589,19 @@ void QMessageBox::setInformativeText(const QString &text)
     This function shadows QWidget::setWindowModality().
 
     Sets the modality of the message box to \a windowModality.
+
+    On Mac OS X, if the modality is set to Qt::WindowModal and the message box
+    has a parent, then the message box will be a Qt::Sheet, otherwise the
+    message box will be a standard dialog.
 */
 void QMessageBox::setWindowModality(Qt::WindowModality windowModality)
 {
     QDialog::setWindowModality(windowModality);
 
-    setParent(parentWidget(), Qt::Dialog);
+    if (parentWidget() && windowModality == Qt::WindowModal)
+        setParent(parentWidget(), Qt::Sheet);
+    else
+        setParent(parentWidget(), Qt::Dialog);
     setDefaultButton(d_func()->defaultButton);
 }
 
@@ -1657,5 +1679,6 @@ QPixmap QMessageBox::standardIcon(Icon icon)
 QT_END_NAMESPACE
 
 #include "moc_qmessagebox.h"
+#include "qrc_qmessagebox.cpp"
 
 #endif // QT_NO_MESSAGEBOX

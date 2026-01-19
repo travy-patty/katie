@@ -1,6 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2021 Ivailo Monev
+** Copyright (C) 2015 The Qt Company Ltd.
+** Copyright (C) 2016 Ivailo Monev
 **
 ** This file is part of the QtGui module of the Katie Toolkit.
 **
@@ -42,16 +43,17 @@ class QXpmHandler : public QImageIOHandler
 {
 public:
     QXpmHandler();
-
-    bool canRead() const final;
-    bool read(QImage *image) final;
-
-    bool supportsOption(QImageIOHandler::ImageOption option) const final;
-    QVariant option(QImageIOHandler::ImageOption option) const final;
-
-    QByteArray name() const final;
+    bool canRead() const;
+    bool read(QImage *image);
+    bool write(const QImage &image);
 
     static bool canRead(QIODevice *device);
+
+    QByteArray name() const;
+
+    QVariant option(ImageOption option) const;
+    void setOption(ImageOption option, const QVariant &value);
+    bool supportsOption(ImageOption option) const;
 
 private:
     bool readHeader();
@@ -66,6 +68,8 @@ private:
     int ncols;
     int cpp;
     QByteArray buffer;
+    int index;
+    QString fileName;
 };
 
 QT_END_NAMESPACE

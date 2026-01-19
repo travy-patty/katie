@@ -46,19 +46,14 @@ class QIconLoader;
 
 struct QIconDirInfo
 {
-    enum Type {
-        Fixed,
-        Scalable,
-        Threshold
-    };
-
-    QIconDirInfo(const QString &_path = QString())
-        : path(_path),
-        size(0),
-        maxSize(0),
-        minSize(0),
-        threshold(0),
-        type(Threshold) { }
+    enum Type { Fixed, Scalable, Threshold };
+    QIconDirInfo(const QString &_path = QString()) :
+            path(_path),
+            size(0),
+            maxSize(0),
+            minSize(0),
+            threshold(0),
+            type(Threshold) {}
     QString path;
     short size;
     short maxSize;
@@ -68,15 +63,26 @@ struct QIconDirInfo
 };
 
 class QIconLoaderEngineEntry
-{
+ {
 public:
-    QPixmap pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state);
-
+    virtual ~QIconLoaderEngineEntry() {}
+    virtual QPixmap pixmap(const QSize &size,
+                           QIcon::Mode mode,
+                           QIcon::State state) = 0;
     QString filename;
     QIconDirInfo dir;
+};
 
-private:
-    QPixmap m_basePixmap;
+struct ScalableEntry : public QIconLoaderEngineEntry
+{
+    QPixmap pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state);
+    QIcon svgIcon;
+};
+
+struct PixmapEntry : public QIconLoaderEngineEntry
+{
+    QPixmap pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state);
+    QPixmap basePixmap;
 };
 
 typedef QList<QIconLoaderEngineEntry*> QThemeIconEntries;
@@ -87,31 +93,32 @@ public:
     QIconLoaderEngine(const QString& iconName = QString());
     ~QIconLoaderEngine();
 
-    void paint(QPainter *painter, const QRect &rect, QIcon::Mode mode, QIcon::State state) final;
-    QPixmap pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state) final;
-    QSize actualSize(const QSize &size, QIcon::Mode mode, QIcon::State state) final;
-    QList<QSize> availableSizes(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const final;
-    QString iconName() const final;
-    QIconEngine *clone() const final;
-    bool read(QDataStream &in) final;
-    bool write(QDataStream &out) const final;
-    QString key() const final;
+    void paint(QPainter *painter, const QRect &rect, QIcon::Mode mode, QIcon::State state);
+    QPixmap pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state);
+    QSize actualSize(const QSize &size, QIcon::Mode mode, QIcon::State state);
+    QList<QSize> availableSizes(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
+    QString iconName() const;
+    QIconEngine *clone() const;
+    bool read(QDataStream &in);
+    bool write(QDataStream &out) const;
+    QString key() const;
 
 private:
     void ensureLoaded();
     QIconLoaderEngineEntry *entryForSize(const QSize &size);
     QIconLoaderEngine(const QIconLoaderEngine &other);
-
     QThemeIconEntries m_entries;
     QString m_iconName;
     uint m_key;
+
+    friend class QIconLoader;
 };
 
 class QIconTheme
 {
 public:
-    QIconTheme();
-    QIconTheme(const QString &name, const bool supportsSvg);
+    QIconTheme(const QString &name);
+    QIconTheme() : m_valid(false) {}
     QStringList parents() { return m_parents; }
     QList <QIconDirInfo> keyList() { return m_keyList; }
     QString contentDir() { return m_contentDir; }
@@ -122,21 +129,21 @@ private:
     QList <QIconDirInfo> m_keyList;
     QStringList m_parents;
     bool m_valid;
-    bool m_supportsSvg;
 };
 
-class QIconLoader
+class QIconLoader : public QObject
 {
 public:
     QIconLoader();
-    QThemeIconEntries loadIcon(const QString &iconName);
+    QThemeIconEntries loadIcon(const QString &iconName) const;
     uint themeKey() const { return m_themeKey; }
 
     QString themeName() const { return m_userTheme.isEmpty() ? m_systemTheme : m_userTheme; }
     void setThemeName(const QString &themeName);
-    QIconTheme theme() const { return m_themeList.value(themeName()); }
+    QIconTheme theme() const { return themeList.value(themeName()); }
     void setThemeSearchPath(const QStringList &searchPaths);
     QStringList themeSearchPaths() const;
+    QIconDirInfo dirInfo(int dirindex);
     static QIconLoader *instance();
     void updateSystemTheme();
     void invalidateKey() { m_themeKey++; }
@@ -144,14 +151,14 @@ public:
 private:
     QThemeIconEntries findIconHelper(const QString &themeName,
                                      const QString &iconName,
-                                     QStringList &visited);
+                                     QStringList &visited) const;
     uint m_themeKey;
     bool m_supportsSvg;
 
     QString m_userTheme;
     QString m_systemTheme;
     mutable QStringList m_iconDirs;
-    QHash <QString, QIconTheme> m_themeList;
+    mutable QHash <QString, QIconTheme> themeList;
 };
 
 QT_END_NAMESPACE

@@ -27,6 +27,7 @@
 
 QT_BEGIN_NAMESPACE
 
+
 #ifndef QT_NO_PRINTDIALOG
 
 class QPageSetupDialogPrivate;

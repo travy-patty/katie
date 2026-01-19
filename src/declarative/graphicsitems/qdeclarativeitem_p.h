@@ -52,6 +52,7 @@
 
 QT_BEGIN_NAMESPACE
 
+class QNetworkReply;
 class QDeclarativeItemKeyFilter;
 class QDeclarativeLayoutMirroringAttached;
 
@@ -521,9 +522,13 @@ Q_SIGNALS:
     void enterPressed(QDeclarativeKeyEvent *event);
     void deletePressed(QDeclarativeKeyEvent *event);
     void spacePressed(QDeclarativeKeyEvent *event);
+    void backPressed(QDeclarativeKeyEvent *event);
     void cancelPressed(QDeclarativeKeyEvent *event);
     void selectPressed(QDeclarativeKeyEvent *event);
+    void callPressed(QDeclarativeKeyEvent *event);
     void menuPressed(QDeclarativeKeyEvent *event);
+    void volumeUpPressed(QDeclarativeKeyEvent *event);
+    void volumeDownPressed(QDeclarativeKeyEvent *event);
 
 private:
     virtual void keyPressed(QKeyEvent *event, bool post);

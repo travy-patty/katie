@@ -1,30 +1,26 @@
+# $Id:
 # Maintainer: Ivailo Monev <xakepa10@gmail.com>
 
 # https://wiki.archlinux.org/index.php/Arch_package_guidelines
 
 pkgname=katie-git
-pkgver=4.14.0.r8005.14dedd943
+pkgver=4.11.1.r4681.8f22ea5f
 pkgrel=1
 pkgdesc='C++ toolkit derived from the Qt 4.8 framework'
 arch=('i486' 'i686' 'pentium4' 'x86_64' 'arm')
-url='https://bitbucket.org/smil3y/workspace/projects/KATANA'
+url='https://github.com/fluxer/katie'
 license=('LGPL' 'BSD')
-depends=('libsm' 'libxcursor' 'libxinerama' 'libxrandr' 'fontconfig'
-         'icu' 'jansson' 'libcups' 'xdg-utils' 'libdeflate')
+depends=('libsm' 'libxcursor' 'libxinerama' 'icu' 'libcups' 'libxrandr' 'fontconfig'
+         'xdg-utils' 'jansson')
 makedepends=('cmake' 'git' 'unifdef')
-optdepends=('gnu-free-fonts: last resort font')
-source=(
-    # "git+https://scm.osdn.net/gitroot/kde/Katie.git"
-    "git+https://bitbucket.org/smil3y/Katie.git"
-    # "git+https://github.com/fluxer/katie.git"
-)
+source=("git+https://github.com/fluxer/katie")
 sha1sums=('SKIP')
 conflicts=('katie')
 # options=('debug')
 
 pkgver() {
-    cd Katie
-    printf "4.14.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+    cd katie
+    printf "4.11.1.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 prepare() {
@@ -33,10 +29,12 @@ prepare() {
 
 build() {
     cd build
-    cmake ../Katie \
+    cmake ../katie \
         -Wno-dev \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
+        -DKATIE_LDCONF_PATH=/etc/ld.so.conf.d \
+        -DKATIE_PROFILE_PATH=/etc/profile.d \
         -DKATIE_TOOLS_SUFFIX="-katie"
     make
 }
@@ -45,6 +43,6 @@ package() {
     cd build
     make DESTDIR="${pkgdir}" install
 
-    install -vDm644 ../Katie/LICENSE.BSD \
+    install -vDm644 ../katie/LICENSE.BSD \
         "${pkgdir}/usr/share/licenses/katie-git/BSD.txt"
-} 
+}

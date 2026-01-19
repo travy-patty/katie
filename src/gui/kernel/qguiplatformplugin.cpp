@@ -30,57 +30,38 @@
 #include "qplatformdefs.h"
 #include "qicon.h"
 #include "qstandardpaths.h"
-#include "qcorecommon_p.h"
 
 QT_BEGIN_NAMESPACE
 
-#ifndef QT_NO_LIBRARY
-Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, platformLoader, (QString::fromLatin1("/gui_platform")))
-#endif
 
-/*!
-    \internal
-    Return (and constructs if necesseray) the Gui Platform plugin.
+/*! \internal
+    Return (an construct if necesseray) the Gui Platform plugin.
 
     If no plugin can be loaded, the default one is returned.
  */
 QGuiPlatformPlugin *qt_guiPlatformPlugin()
 {
-    static QGuiPlatformPlugin *appplugin = nullptr;
-    if (appplugin) {
-        return appplugin;
-    }
-
-    QGuiPlatformPlugin *plugin = nullptr;
+    static QGuiPlatformPlugin *plugin;
+    if (!plugin)
+    {
 #ifndef QT_NO_LIBRARY
-    static const char* platformEnvTbl[] = {
-        "QT_PLATFORM_PLUGIN",
-        "XDG_CURRENT_DESKTOP",
-        "DESKTOP_SESSION",
-        nullptr
-    };
-    int counter = 0;
-    while (platformEnvTbl[counter]) {
-        QString key = qGetEnv(platformEnvTbl[counter]);
-        if (!key.isEmpty()) {
-            plugin = qobject_cast<QGuiPlatformPlugin*>(platformLoader()->instance(key));
-            if (plugin) {
-                break;
-            }
+
+        static QString key = QString::fromLocal8Bit(qgetenv("QT_PLATFORM_PLUGIN"));
+        if (key.isEmpty()) {
+            key = QString::fromLocal8Bit(qgetenv("DESKTOP_SESSION"));
         }
-        counter++;
-    }
+
+        if (!key.isEmpty() && QApplication::desktopSettingsAware()) {
+            QFactoryLoader loader(QGuiPlatformPluginInterface_iid, QLatin1String("/gui_platform"));
+            plugin = qobject_cast<QGuiPlatformPlugin *>(loader.instance(key));
+        }
 #endif // QT_NO_LIBRARY
 
-    if (!plugin) {
-        static QGuiPlatformPlugin def;
-        plugin = &def;
+        if(!plugin) {
+            static QGuiPlatformPlugin def;
+            plugin = &def;
+        }
     }
-
-    if (qApp) {
-        appplugin = plugin;
-    }
-
     return plugin;
 }
 
@@ -112,11 +93,20 @@ QGuiPlatformPlugin::~QGuiPlatformPlugin()
 }
 
 /*!
+    Retuns the plugin keys, reimplementations should return keys other than
+    the default
+*/
+QStringList QGuiPlatformPlugin::keys() const
+{
+    return QStringList() << QLatin1String("default");
+};
+
+/*!
     Returns the style string key to be used by application
 */
 QString QGuiPlatformPlugin::styleName()
 {
-    return QString::fromLatin1("cleanlooks");
+    return QLatin1String("cleanlooks");
 }
 
 /*
@@ -132,29 +122,7 @@ QPalette QGuiPlatformPlugin::palette()
 */
 QString QGuiPlatformPlugin::systemIconThemeName()
 {
-    static QString themename;
-
-    if (themename.isEmpty()) {
-        foreach (const QString &path, iconThemeSearchPaths()) {
-            const QDir pathdir(path);
-            const QStringList pathsubdirs = pathdir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-            foreach (const QString &subpath, pathsubdirs) {
-                if (subpath == QLatin1String("hicolor")) {
-                    continue;
-                }
-                QSettings indextheme(path + QLatin1Char('/') + subpath + QLatin1String("/index.theme"));
-                const QStringList themedirectories = indextheme.stringList(QString::fromLatin1("Icon Theme/Directories"));
-                if (!themedirectories.isEmpty()) {
-                    themename = subpath;
-                    return themename;
-                }
-            }
-        }
-
-        themename = QLatin1String("hicolor");
-    }
-
-    return themename;
+    return QString::fromLatin1("hicolor");
 }
 
 /*!
@@ -167,15 +135,13 @@ QStringList QGuiPlatformPlugin::iconThemeSearchPaths()
 
     // Add home directory first in search path
     QDir homeDir(QDir::homePath() + QLatin1String("/.icons"));
-    if (homeDir.exists()) {
+    if (homeDir.exists())
         paths.append(homeDir.path());
-    }
 
     foreach (const QString &it, QStandardPaths::standardLocations(QStandardPaths::DataLocation)) {
         QDir dir(it);
-        if (dir.exists()) {
+        if (dir.exists())
             paths.append(dir.path() + QLatin1String("/icons"));
-        }
     }
 
     return paths;
@@ -205,18 +171,16 @@ QIcon QGuiPlatformPlugin::fileSystemIcon(const QFileInfo &)
 int QGuiPlatformPlugin::platformHint(PlatformHint hint)
 {
     int ret = 0;
-    switch(hint) {
-        case PH_ToolButtonStyle: {
+    switch(hint)
+    {
+        case PH_ToolButtonStyle:
             ret = Qt::ToolButtonIconOnly;
             break;
-        }
-        case PH_ToolBarIconSize: {
-            // by default keep ret = 0 so QCommonStyle will use the style default
+        case PH_ToolBarIconSize:
+            //by default keep ret = 0 so QCommonStyle will use the style default
             break;
-        }
-        default: {
+        default:
             break;
-        }
     }
     return ret;
 }

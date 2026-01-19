@@ -6,21 +6,23 @@ There are several things you should be aware before considering Katie:
 
  - some components and tools have been removed:
   - QMake, Linguist, Assistant, checksdk, macdeployqt, pixeltool, qconfig,
-    qdoc, qev, qvfb, runonphone, designer and other non-essential
+    qdoc, qev, qvfb, runonphone and other non-essential
   - Qt3Support, QtWebKit, QtHelp, QtXmlPatterns, QtOpenGL, ActiveQt, Phonon,
-    QtMultimedia, QtSql, QtDesigner, QtDesignerComponents and QtScriptTtools
+    QtMultimedia and QtSql
 
  - some things have changed:
   - QMake build system replaced with CMake
-  - Jansson, Freetype, ICU, X11 and libpng are required for building
-  - D-Bus and CUPS must be linked to during build
+  - zlib, zstd, Jansson, OpenSSL, PCRE, Freetype, ICU, X11 and libpng are
+    required for building
+  - OpenSSL, D-Bus and CUPS must be linked to during build
   - QtUiTools is build as shared library by default
-  - moc, uic, etc. are linked to components
+  - moc, uic, rcc, etc. are linked to components
   - updated bundled Harfbuzz from upstream (not Harfbuzz-NG)
   - versioned and extended classes have been merged into the base class,
     e.g. QIconEngineV2 into QIconEngine and QKeyEventEx into QKeyEvent
   - QGuiPlatformPlugin class is public
-  - updated localizations data from Common Locale Data Repository v42
+  - updated localizations data from Common Locale Data Repository v40
+  - default text codec for C-strings is UTF-8
   - QTranslator uses gettext for translations
   - OpenVG is no longer supported graphics output
   - Blitter is no longer supported painting engine
@@ -37,22 +39,18 @@ There are several things you should be aware before considering Katie:
   - dropped Motif Drag-And-Drop (DND) support
   - dropped LPR support
   - dropped static plugins support
-  - dropped XBM, PGM, MNG, BMP, ICO, TGA, JPEG, TIFF and GIF image format support
-  - dropped obscure (24-bit) and indexed (8-bit) image formats support
+  - dropped MNG image format support
+  - dropped obscure (24-bit) image formats support
   - dropped Valgrind support
   - dropped recursive mutex and lock support
   - dropped wide character and string support
   - dropped network interfaces management support
   - dropped no-op touch devices support
-  - dropped bitmap fonts support
-  - dropped accessibility support
 
- - some additions have been made:
-  - custom image format
-  - custom translations format
-  - custom hash algorithm
+ - some additions have been made: 
   - JSON document handler
   - standard directories handler
+  - building with OpenSSL v1.1+ is possible
   - building with LTO is possible and supported, if the toolchain can handle it
   - alternative libc implementations support
   - additional text codecs via ICU converter
@@ -60,16 +58,18 @@ There are several things you should be aware before considering Katie:
   - support for AArch64 architecture
   - support for locale aliases
   - support for generating SHA-256 and SHA-512 hash sums (SHA-2)
-  - qCompress() and qUncompress() use libdeflate which is much faster
+  - verification section for plugins build with Clang
+  - qCompress() and qUncompress() use ZSTD which is much faster
   - stack backtrace on assert, crash or warning via execinfo
   - brief manual pages for all command-line tools
   - desktop files, Shell profile and dynamic linker/loader config
   - more reliable qrand(), seeded per thread
   - improved signal/slot template arguments handling
+  - improved OpenSSL default certificate and certificates directory detection
   - improved namespaces support and introduced QT_NAMESPACE_COMPAT
   - improved cross-compilation support
   - improved POSIX, XSI, SUSv2, etc. requirements build checks
-  - script component uses QRegExp instead of internal PCRE copy
+  - script component relies on PCRE instead of internal copy
   - tests and benchmarks can be run without prior installation
 
 Bugs fixed in Katie, some of which in Qt5 too:
@@ -83,7 +83,7 @@ QTBUG-12564, QTBUG-20028, QTBUG-71967, QTBUG-70956, QTBUG-71446, QTBUG-61307,
 QTBUG-27287, QTBUG-25143, QTBUG-22833, QTBUG-57399, QTBUG-59159, QTBUG-15773,
 QTBUG-70506, QTBUG-46054, QTBUG-11223, QTBUG-63108, QTBUG-6932, QTBUG-42365,
 QTBUG-83817, QTBUG-4341, QTBUG-36933, QTBUG-49113, QTBUG-69920, QTBUG-40015,
-QTBUG-54942, QTBUG-91261, QTBUG-73445, QTBUG-21098, QTBUG-59966, QTBUG-85520
+QTBUG-54942, QTBUG-91261, QTBUG-73445, QTBUG-21098, QTBUG-59966
 
 Unless you use QMake and QDoc porting to Katie or even supporting it along with
 Qt4 in the same codebase is trivial and requires only minor changes because
@@ -91,3 +91,8 @@ Katie is mostly source compatible with Qt 4.8.x, compatibility with releases
 earlier than that is not a goal. Do note that using libraries that
 are linked to Qt4 from applications linked to Katie will trigger undefined
 behavior.
+
+Should you encounter a problem please report it at
+https://github.com/fluxer/katie/issues. For more information about changes,
+how to handle them and general info please visit
+https://github.com/fluxer/katie/wiki.

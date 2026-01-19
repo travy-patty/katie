@@ -31,6 +31,16 @@ QT_BEGIN_NAMESPACE
 static bool cupsLoaded = false;
 static int qt_cups_num_printers = 0;
 
+static inline void resolveCups()
+{
+    cups_dest_t *printers;
+    int num_printers = cupsGetDests(&printers);
+    if (num_printers)
+        cupsFreeDests(num_printers, printers);
+    qt_cups_num_printers = num_printers;
+    cupsLoaded = true;
+}
+
 // ================ CUPS Support class ========================
 
 QCUPSSupport::QCUPSSupport()
@@ -41,6 +51,9 @@ QCUPSSupport::QCUPSSupport()
     currPrinterIndex(0),
     currPPD(0)
 {
+    if (!cupsLoaded)
+        resolveCups();
+
     // getting all available printers
     if (!isAvailable())
         return;
@@ -48,7 +61,7 @@ QCUPSSupport::QCUPSSupport()
     // Update the available printer count
     qt_cups_num_printers = prnCount = cupsGetDests(&printers);
 
-    for (int i = 0; i < prnCount; ++i) {
+    for (int i = 0; i <  prnCount; ++i) {
         if (printers[i].is_default) {
             currPrinterIndex = i;
             setCurrentPrinter(i);
@@ -87,11 +100,11 @@ const ppd_file_t* QCUPSSupport::currentPPD() const
     return currPPD;
 }
 
-void QCUPSSupport::setCurrentPrinter(int index)
+const ppd_file_t* QCUPSSupport::setCurrentPrinter(int index)
 {
     Q_ASSERT(index >= 0 && index <= prnCount);
     if (index == prnCount)
-        return;
+        return 0;
 
     currPrinterIndex = index;
 
@@ -103,10 +116,10 @@ void QCUPSSupport::setCurrentPrinter(int index)
     const char *ppdFile = cupsGetPPD(printers[index].name);
 
     if (!ppdFile)
-      return;
+      return 0;
 
     currPPD = ppdOpenFile(ppdFile);
-    ::unlink(ppdFile);
+    unlink(ppdFile);
 
     // marking default options
     ppdMarkDefaults(currPPD);
@@ -116,6 +129,8 @@ void QCUPSSupport::setCurrentPrinter(int index)
 
     // getting pointer to page sizes
     page_sizes = ppdOption("PageSize");
+
+    return currPPD;
 }
 
 int QCUPSSupport::currentPrinterIndex() const
@@ -125,14 +140,8 @@ int QCUPSSupport::currentPrinterIndex() const
 
 bool QCUPSSupport::isAvailable()
 {
-    if (!cupsLoaded) {
-        cups_dest_t *printers = nullptr;
-        int num_printers = cupsGetDests(&printers);
-        if (num_printers)
-            cupsFreeDests(num_printers, printers);
-        qt_cups_num_printers = num_printers;
-        cupsLoaded = true;
-    }
+    if(!cupsLoaded)
+        resolveCups();
 
     return (qt_cups_num_printers > 0);
 }
@@ -257,7 +266,7 @@ QString QCUPSSupport::unicodeString(const char *s)
 #ifndef QT_NO_TEXTCODEC
     return codec->toUnicode(s);
 #else
-    return QString::fromLatin1(s);
+    return QLatin1String(s);
 #endif
 }
 

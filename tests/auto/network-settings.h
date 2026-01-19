@@ -22,7 +22,6 @@
 #include <QString>
 #include <QHostInfo>
 #include <QLocalServer>
-#include <QTcpServer>
 
 class QtNetworkSettings
 {
@@ -53,9 +52,9 @@ public:
     static QString serverIPs()
     {
         if (supportsIPv6()) {
-            return QLatin1String("104.18.23.19 2606:4700::6812:1713");
+            return QLatin1String("128.30.52.100 2603:400A:FFFF:804:801E:34:0:64");
         }
-        return QLatin1String("104.18.23.19");
+        return QLatin1String("128.30.52.100");
     }
 
     static bool compareReplyIMAP(QByteArray const& actual)
@@ -94,18 +93,14 @@ public:
     }
 
     static bool supportsIPv6() {
-        // QLocalServer can poke the address regardless if it is protected as it does not bind to
-        // the address
-#ifndef QT_NO_LOCALSERVER
         QLocalServer server;
         return server.listen("::1");
-#else
-        QTcpServer server;
-        return server.listen(QHostAddress(QHostAddress::LocalHostIPv6));
-#endif
     }
 
 };
+
+// ### remove, only Symbian needed that
+#define Q_SET_DEFAULT_IAP
 
 class QtNetworkSettingsInitializerCode {
 public:

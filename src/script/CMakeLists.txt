@@ -8,6 +8,7 @@ add_definitions(
 )
 set(EXTRA_SCRIPT_LIBS
     KtCore
+    ${PCRE_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
@@ -46,6 +47,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/3rdparty/javascriptcore/API
     ${CMAKE_SOURCE_DIR}/src/3rdparty/javascriptcore/bytecode
     ${CMAKE_SOURCE_DIR}/src/3rdparty/javascriptcore/generated
+    ${PCRE_INCLUDES}
 )
 
 set(SCRIPT_HEADERS
@@ -242,18 +244,9 @@ set_target_properties(KtScript PROPERTIES
     EXPORT_NAME Script
 )
 
-# workaround for Plasma desktop crashes, possible miss-optimization since
-# Plasma does not crash when Katie is build for debugging
-if(CMAKE_SYSTEM_NAME MATCHES "BSD")
-    target_compile_options(
-        KtScript PRIVATE
-        -O0
-    )
-endif()
-
 install(
     TARGETS KtScript
-    EXPORT KatieTargets
+    EXPORT KatieTargets ${INSTALL_TARGETS_DEFAULT_ARGS}
     DESTINATION ${KATIE_LIBRARIES_PATH}
     COMPONENT Runtime
 )

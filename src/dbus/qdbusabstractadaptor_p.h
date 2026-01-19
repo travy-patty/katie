@@ -39,6 +39,7 @@
 #include <QtCore/qobject.h>
 #include <QtCore/qmap.h>
 #include <QtCore/qhash.h>
+#include <QtCore/qreadwritelock.h>
 #include <QtCore/qvariant.h>
 #include <QtCore/qvector.h>
 #include "qobject_p.h"

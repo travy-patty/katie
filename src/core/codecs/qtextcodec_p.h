@@ -1,6 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2019 Ivailo Monev
+** Copyright (C) 2015 The Qt Company Ltd.
+** Copyright (C) 2016 Ivailo Monev
 **
 ** This file is part of the QtCore module of the Katie Toolkit.
 **
@@ -21,8 +22,6 @@
 #ifndef QTEXTCODEC_P_H
 #define QTEXTCODEC_P_H
 
-#include "QtCore/qtextcodec.h"
-
 //
 //  W A R N I N G
 //  -------------
@@ -36,52 +35,40 @@
 
 #include "qtextcodec.h"
 
-#include <unicode/ucnv.h>
-
 QT_BEGIN_NAMESPACE
 
-// exported for QKeyMapper
-Q_CORE_EXPORT QByteArray qt_locale_codec();
+#ifdef QT_NO_TEXTCODEC
 
-// always built for one-shot conversions in QString (for performance reasons
-// and because bootstrap requires it)
-class QTextCodecPrivate
+class QTextCodec
 {
 public:
-    QTextCodecPrivate(const QByteArray &name);
-    QTextCodecPrivate(const int mib);
+    enum ConversionFlag {
+        DefaultConversion,
+        ConvertInvalidToNull = 0x80000000,
+        IgnoreHeader = 0x1
+    };
+    Q_DECLARE_FLAGS(ConversionFlags, ConversionFlag)
 
-    static QList<QByteArray> allCodecs();
-    static QList<int> allMibs();
+    struct ConverterState {
+        ConverterState(ConversionFlags f = DefaultConversion)
+            : flags(f), invalidChars(0), d(nullptr) { }
+        ~ConverterState() { }
+        ConversionFlags flags;
+        int invalidChars;
+    private:
+        void *d;
 
-    static QString convertTo(const char *data, int len, const char* const codec);
-    static QByteArray convertFrom(const QChar *unicode, int len, const char* const codec);
+        friend class QIcuCodec;
+        friend class QTextStreamPrivate;
+        friend class QTextStream;
 
-    QByteArray name;
-private:
-    Q_DISABLE_COPY(QTextCodecPrivate);
+        ConverterState(const ConverterState &other);
+        ConverterState& operator=(const ConverterState &other);
+    };
 };
 
-#ifndef QT_NO_TEXTCODEC
-class QTextConverterPrivate
-{
-public:
-    QTextConverterPrivate(const QByteArray &name);
-    QTextConverterPrivate(const int mib);
-    ~QTextConverterPrivate();
-
-    UConverter* getConverter();
-    void invalidChars(int length) const;
-
-    QByteArray name;
-    QTextConverter::ConversionFlags flags;
-    UConverter* conv;
-    mutable int invalidchars;
-private:
-    Q_DISABLE_COPY(QTextConverterPrivate);
-};
-#endif // QT_NO_TEXTCODEC
+#endif //QT_NO_TEXTCODEC
 
 QT_END_NAMESPACE
 
-#endif // QTEXTCODEC_P_H
+#endif

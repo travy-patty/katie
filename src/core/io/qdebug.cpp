@@ -1,6 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2022 Ivailo Monev
+** Copyright (C) 2015 The Qt Company Ltd.
+** Copyright (C) 2016 Ivailo Monev
 **
 ** This file is part of the QtCore module of the Katie Toolkit.
 **
@@ -19,40 +20,8 @@
 ****************************************************************************/
 
 #include "qdebug.h"
-#include "qiodevice.h"
-#include "qbuffer.h"
 
-QT_BEGIN_NAMESPACE
-
-class QDebugPrivate
-{
-public:
-    QDebugPrivate(QIODevice *device);
-    QDebugPrivate(QtMsgType t);
-
-    QAtomicInt ref;
-    QIODevice *dev;
-    QByteArray buffer;
-    QtMsgType type;
-    bool space;
-};
-
-QDebugPrivate::QDebugPrivate(QIODevice *device)
-    : ref(1),
-    dev(device),
-    type(QtDebugMsg),
-    space(true)
-{
-}
-
-QDebugPrivate::QDebugPrivate(QtMsgType t)
-    : ref(1),
-    dev(nullptr),
-    type(t),
-    space(true)
-{
-}
-
+// This file is needed to force compilation of QDebug into the kernel library.
 
 /*!
     \class QDebug
@@ -75,75 +44,62 @@ QDebugPrivate::QDebugPrivate(QtMsgType t)
 
     The class also provides several constructors for other situations, including
     a constructor that accepts a QFile or any other QIODevice subclass that is
-    used to write debugging information to files and other devices.
+    used to write debugging information to files and other devices. The constructor
+    that accepts a QString is used to write to a string for display or serialization.
 
     \section1 Writing Custom Types to a Stream
 
-    Many standard types can be written to QDebug objects, and Katie provides support for
-    most Katie value types. To add support for custom types, you need to implement a
+    Many standard types can be written to QDebug objects, and Qt provides support for
+    most Qt value types. To add support for custom types, you need to implement a
     streaming operator, as in the following example:
 
     \snippet doc/src/snippets/qdebug/qdebugsnippet.cpp 0
 
     This is described in the \l{Debugging Techniques} and
-    \l{Creating Custom Katie Types#Making the Type Printable}{Creating Custom Katie Types}
+    \l{Creating Custom Qt Types#Making the Type Printable}{Creating Custom Qt Types}
     documents.
 */
 
 /*!
+    \fn QDebug::QDebug(QIODevice *device)
+
     Constructs a debug stream that writes to the given \a device.
 */
-QDebug::QDebug(QIODevice *device)
-    : d_ptr(new QDebugPrivate(device))
-{
-}
 
 /*!
+    \fn QDebug::QDebug(QString *string)
+
+    Constructs a debug stream that writes to the given \a string.
+*/
+
+/*!
+    \fn QDebug::QDebug(QtMsgType type)
+
     Constructs a debug stream that writes to the handler for the message type specified by \a type.
 */
-QDebug::QDebug(QtMsgType type)
-    : d_ptr(new QDebugPrivate(type))
-{
-}
 
 /*!
+    \fn QDebug::QDebug(const QDebug &other)
+
     Constructs a copy of the \a other debug stream.
 */
-QDebug::QDebug(const QDebug &other)
-    : d_ptr(other.d_ptr)
-{
-    d_ptr->ref.ref();
-}
 
 /*!
+    \fn QDebug &QDebug::operator=(const QDebug &other)
+
     Assigns the \a other debug stream to this stream and returns a reference to
     this stream.
 */
-QDebug &QDebug::operator=(const QDebug &other)
-{
-    if (d_ptr != other.d_ptr) {
-        QDebug copy(other);
-        qSwap(d_ptr, copy.d_ptr);
-    }
-    return *this;
-}
 
 /*!
+    \fn QDebug::~QDebug()
+
     Flushes any pending data to be written and destroys the debug stream.
 */
-QDebug::~QDebug()
-{
-    if (!d_ptr->ref.deref()) {
-        if (!d_ptr->dev) {
-            qt_message_output(d_ptr->type, d_ptr->buffer.constData());
-        } else {
-            d_ptr->dev->write(d_ptr->buffer.constData(), d_ptr->buffer.size());
-        }
-        delete d_ptr;
-    }
-}
 
 /*!
+    \fn QDebug &QDebug::space()
+
     Writes a space character to the debug stream and returns a reference to
     the stream.
 
@@ -152,26 +108,19 @@ QDebug::~QDebug()
 
     \sa nospace(), maybeSpace()
 */
-QDebug &QDebug::space()
-{
-    d_ptr->space = true;
-    d_ptr->buffer.append(" ", 1);
-    return *this;
-}
 
 /*!
+    \fn QDebug &QDebug::nospace()
+
     Clears the stream's internal flag that records whether the last character
     was a space and returns a reference to the stream.
 
     \sa space(), maybeSpace()
 */
-QDebug &QDebug::nospace()
-{
-    d_ptr->space = false;
-    return *this;
-}
 
 /*!
+    \fn QDebug &QDebug::maybeSpace()
+
     Writes a space character to the debug stream, depending on the last
     character sent to the stream, and returns a reference to the stream.
 
@@ -180,218 +129,144 @@ QDebug &QDebug::nospace()
 
     \sa space(), nospace()
 */
-QDebug &QDebug::maybeSpace()
-{
-    if (d_ptr->space) {
-        d_ptr->buffer.append(" ", 1);
-    }
-    return *this;
-}
 
 /*!
+    \fn QDebug &QDebug::operator<<(QChar t)
+
     Writes the character, \a t, to the stream and returns a reference to the
     stream.
 */
-QDebug &QDebug::operator<<(QChar t)
-{
-    const char tc = t.toLatin1();
-    d_ptr->buffer.append("\'", 1);
-    d_ptr->buffer.append(&tc, 1);
-    d_ptr->buffer.append("\'", 1);
-    return maybeSpace();
-}
 
 /*!
+    \fn QDebug &QDebug::operator<<(bool t)
+
     Writes the boolean value, \a t, to the stream and returns a reference to the
     stream.
 */
-QDebug &QDebug::operator<<(bool t)
-{
-    if (t) {
-        d_ptr->buffer.append("true", 4);
-    } else {
-        d_ptr->buffer.append("false", 5);
-    }
-    return maybeSpace();
-}
 
 /*!
+    \fn QDebug &QDebug::operator<<(char t)
+
     Writes the character, \a t, to the stream and returns a reference to the
     stream.
 */
-QDebug &QDebug::operator<<(char t)
-{
-    d_ptr->buffer.append(&t, 1);
-    return maybeSpace();
-}
 
 /*!
-    Writes the signed short integer, \a t, to the stream and returns a reference
+    \fn QDebug &QDebug::operator<<(signed short i)
+
+    Writes the signed short integer, \a i, to the stream and returns a reference
     to the stream.
 */
-QDebug &QDebug::operator<<(qint8 t)
-{
-    return QDebug::operator<<(qint64(t));
-}
 
 /*!
-    Writes then unsigned short integer, \a t, to the stream and returns a
+    \fn QDebug &QDebug::operator<<(unsigned short i)
+
+    Writes then unsigned short integer, \a i, to the stream and returns a
     reference to the stream.
 */
-QDebug &QDebug::operator<<(quint8 t)
-{
-    return QDebug::operator<<(quint64(t));
-}
 
 /*!
-    Writes the signed integer, \a t, to the stream and returns a reference
+    \fn QDebug &QDebug::operator<<(signed int i)
+
+    Writes the signed integer, \a i, to the stream and returns a reference
     to the stream.
 */
-QDebug &QDebug::operator<<(qint16 t)
-{
-    return QDebug::operator<<(qint64(t));
-}
 
 /*!
-    Writes then unsigned integer, \a t, to the stream and returns a reference to
+    \fn QDebug &QDebug::operator<<(unsigned int i)
+
+    Writes then unsigned integer, \a i, to the stream and returns a reference to
     the stream.
 */
-QDebug &QDebug::operator<<(quint16 t)
-{
-    return QDebug::operator<<(quint64(t));
-}
 
 /*!
-    Writes the signed integer, \a t, to the stream and returns a reference
+    \fn QDebug &QDebug::operator<<(signed long l)
+
+    Writes the signed long integer, \a l, to the stream and returns a reference
     to the stream.
 */
-QDebug &QDebug::operator<<(qint32 t)
-{
-    return QDebug::operator<<(qint64(t));
-}
 
 /*!
-    Writes then unsigned integer, \a t, to the stream and returns a reference to
+    \fn QDebug &QDebug::operator<<(unsigned long l)
+
+    Writes then unsigned long integer, \a l, to the stream and returns a reference
+    to the stream.
+*/
+
+/*!
+    \fn QDebug &QDebug::operator<<(qint64 i)
+
+    Writes the signed 64-bit integer, \a i, to the stream and returns a reference
+    to the stream.
+*/
+
+/*!
+    \fn QDebug &QDebug::operator<<(quint64 i)
+
+    Writes then unsigned 64-bit integer, \a i, to the stream and returns a
+    reference to the stream.
+*/
+
+/*!
+    \fn QDebug &QDebug::operator<<(float f)
+
+    Writes the 32-bit floating point number, \a f, to the stream and returns a
+    reference to the stream.
+*/
+
+/*!
+    \fn QDebug &QDebug::operator<<(double f)
+
+    Writes the 64-bit floating point number, \a f, to the stream and returns a
+    reference to the stream.
+*/
+
+/*!
+    \fn QDebug &QDebug::operator<<(const char *s)
+
+    Writes the '\0'-terminated string, \a s, to the stream and returns a
+    reference to the stream.
+*/
+
+/*!
+    \fn QDebug &QDebug::operator<<(const QString &s)
+
+    Writes the string, \a s, to the stream and returns a reference to the stream.
+*/
+
+/*!
+    \fn QDebug &QDebug::operator<<(const QStringRef &s)
+
+    Writes the string reference, \a s, to the stream and returns a reference to
     the stream.
 */
-QDebug &QDebug::operator<<(quint32 t)
-{
-    return QDebug::operator<<(quint64(t));
-}
 
 /*!
-    Writes the signed long integer, \a t, to the stream and returns a reference
-    to the stream.
-*/
-QDebug &QDebug::operator<<(long int t)
-{
-    return QDebug::operator<<(qint64(t));
-}
+    \fn QDebug &QDebug::operator<<(const QLatin1String &s)
 
-/*!
-    Writes then unsigned long integer, \a t, to the stream and returns a reference
-    to the stream.
-*/
-QDebug &QDebug::operator<<(unsigned long int t)
-{
-    return QDebug::operator<<(quint64(t));
-}
-
-/*!
-    Writes the signed 64-bit integer, \a t, to the stream and returns a reference
-    to the stream.
-*/
-QDebug &QDebug::operator<<(qint64 t)
-{
-    d_ptr->buffer.append(QByteArray::number(t));
-    return maybeSpace();
-}
-
-/*!
-    Writes then unsigned 64-bit integer, \a t, to the stream and returns a
-    reference to the stream.
-*/
-QDebug &QDebug::operator<<(quint64 t)
-{
-    d_ptr->buffer.append(QByteArray::number(t));
-    return maybeSpace();
-}
-
-/*!
-    Writes the 32-bit floating point number, \a t, to the stream and returns a
-    reference to the stream.
-*/
-QDebug &QDebug::operator<<(float t)
-{
-    d_ptr->buffer.append(QByteArray::number(t));
-    return maybeSpace();
-}
-
-/*!
-    Writes the 64-bit floating point number, \a t, to the stream and returns a
-    reference to the stream.
-*/
-QDebug &QDebug::operator<<(double t)
-{
-    d_ptr->buffer.append(QByteArray::number(t));
-    return maybeSpace();
-}
-
-/*!
-    Writes the '\0'-terminated string, \a t, to the stream and returns a
-    reference to the stream.
-*/
-QDebug &QDebug::operator<<(const char* t)
-{
-    d_ptr->buffer.append(t);
-    return maybeSpace();
-}
-
-/*!
-    Writes the string, \a t, to the stream and returns a reference to the stream.
-*/
-QDebug &QDebug::operator<<(const QString &t)
-{
-    return QDebug::operator<<(t.toLocal8Bit());
-}
-
-/*!
-    Writes the string reference, \a t, to the stream and returns a reference to
-    the stream.
-*/
-QDebug &QDebug::operator<<(const QStringRef &t)
-{
-    return QDebug::operator<<(t.toString());
-}
-
-/*!
     Writes the Latin1-encoded string, \a s, to the stream and returns a reference
     to the stream.
 */
-QDebug &QDebug::operator<<(const QLatin1String &t)
-{
-    return QDebug::operator<<(t.latin1());
-}
 
 /*!
-    Writes the byte array, \a t, to the stream and returns a reference to the
+    \fn QDebug &QDebug::operator<<(const QByteArray &b)
+
+    Writes the byte array, \a b, to the stream and returns a reference to the
     stream.
 */
-QDebug &QDebug::operator<<(const QByteArray &t)
-{
-    d_ptr->buffer.append('\"');
-    d_ptr->buffer.append(t.constData(), t.size());
-    d_ptr->buffer.append('\"');
-    return maybeSpace();
-}
 
 /*!
-    Writes a pointer, \a t, to the stream and returns a reference to the stream.
-*/
-QDebug &QDebug::operator<<(const void* t)
-{
-    d_ptr->buffer.append(QByteArray::number(qulonglong(quintptr(t))));
-    return maybeSpace();
-}
+    \fn QDebug &QDebug::operator<<(const void *p)
 
-QT_END_NAMESPACE
+    Writes a pointer, \a p, to the stream and returns a reference to the stream.
+*/
+
+/*!
+    \fn QDebug &QDebug::operator<<(QTextStreamFunction f)
+    \internal
+*/
+
+/*!
+    \fn QDebug &QDebug::operator<<(QTextStreamManipulator m)
+    \internal
+*/

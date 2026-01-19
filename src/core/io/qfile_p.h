@@ -33,9 +33,8 @@
 // We mean it.
 //
 
+#include "qabstractfileengine.h"
 #include "qiodevice_p.h"
-#include "qfilesystementry_p.h"
-#include "qfilesystemmetadata_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -47,15 +46,13 @@ protected:
     QFilePrivate();
     ~QFilePrivate();
 
-    bool openExternalFile(QIODevice::OpenMode mode, int fd, QFile::FileHandleFlags handleFlags);
-    bool doStat(QFileSystemMetaData::MetaDataFlags flags) const;
+    bool openExternalFile(int flags, int fd, QFile::FileHandleFlags handleFlags);
+
+    QString fileName;
+    mutable QAbstractFileEngine *fileEngine;
 
     QFile::FileError error;
-    QFileSystemEntry fileEntry;
-    mutable QFileSystemMetaData metaData;
-    int fd;
-    bool closeFileHandle;
-
+    void setError(QFile::FileError err);
     void setError(QFile::FileError err, const QString &errorString);
 };
 

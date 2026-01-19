@@ -20,17 +20,20 @@
 ****************************************************************************/
 
 #include "qdbusmetaobject_p.h"
-#include "qbytearray.h"
-#include "qhash.h"
-#include "qstring.h"
+
+#include <QtCore/qbytearray.h>
+#include <QtCore/qhash.h>
+#include <QtCore/qstring.h>
+#include <QtCore/qvarlengtharray.h>
+
 #include "qdbusutil_p.h"
 #include "qdbuserror.h"
 #include "qdbusmetatype.h"
 #include "qdbusargument.h"
 #include "qdbusintrospection_p.h"
 #include "qdbusabstractinterface_p.h"
+
 #include "qmetaobject_p.h"
-#include "qstdcontainers_p.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -53,8 +56,8 @@ private:
         QByteArray name;
         QByteArray inputSignature;
         QByteArray outputSignature;
-        QStdVector<int> inputTypes;
-        QStdVector<int> outputTypes;
+        QVarLengthArray<int, 4> inputTypes;
+        QVarLengthArray<int, 4> outputTypes;
         int flags;
     };
     
@@ -341,27 +344,16 @@ void QDBusMetaObjectGenerator::write(QDBusMetaObject *obj)
         className = QLatin1String("QDBusInterface");
 
     static const int QDBusMetaObjectPrivateSize = (sizeof(QDBusMetaObjectPrivate) / sizeof(int));
-
-    const int methodCount = (signals_.count() + methods.count());
-    const int propertyCount = properties.count();
-    int data_size = QDBusMetaObjectPrivateSize +
-                    (methodCount * (5+intsPerMethod)) +
-                    (propertyCount * (3+intsPerProperty));
-    foreach (const Method &mm, signals_)
-        data_size += 2 + mm.inputTypes.count() + mm.outputTypes.count();
-    foreach (const Method &mm, methods)
-        data_size += 2 + mm.inputTypes.count() + mm.outputTypes.count();
-
-    QStdVector<int> idata(data_size + 1);
+    QVarLengthArray<int> idata(QDBusMetaObjectPrivateSize);
 
     QDBusMetaObjectPrivate *header = reinterpret_cast<QDBusMetaObjectPrivate *>(idata.data());
     header->revision = qmetaobjectrevision;
     header->className = 0;
     header->classInfoCount = 0;
     header->classInfoData = 0;
-    header->methodCount = methodCount;
-    header->methodData = QDBusMetaObjectPrivateSize;
-    header->propertyCount = propertyCount;
+    header->methodCount = signals_.count() + methods.count();
+    header->methodData = idata.size();
+    header->propertyCount = properties.count();
     header->propertyData = header->methodData + header->methodCount * 5;
     header->enumeratorCount = 0;
     header->enumeratorData = 0;
@@ -372,6 +364,15 @@ void QDBusMetaObjectGenerator::write(QDBusMetaObject *obj)
     // These are specific to QDBusMetaObject:
     header->propertyDBusData = header->propertyData + header->propertyCount * 3;
     header->methodDBusData = header->propertyDBusData + header->propertyCount * intsPerProperty;
+
+    int data_size = idata.size() +
+                    (header->methodCount * (5+intsPerMethod)) +
+                    (header->propertyCount * (3+intsPerProperty));
+    foreach (const Method &mm, signals_)
+        data_size += 2 + mm.inputTypes.count() + mm.outputTypes.count();
+    foreach (const Method &mm, methods)
+        data_size += 2 + mm.inputTypes.count() + mm.outputTypes.count();
+    idata.resize(data_size + 1);
 
     char null('\0');
     QByteArray stringdata = className.toLatin1();
@@ -492,6 +493,7 @@ void QDBusMetaObjectGenerator::writeWithoutXml(const QString &interface)
     d.extradata = 0;
     d.stringdata = stringdata;
     d.superdata = &QDBusAbstractInterface::staticMetaObject;
+    cached = false;
 }
 #endif
 
@@ -515,7 +517,7 @@ QDBusMetaObject *QDBusMetaObject::createMetaObject(const QString &interface, con
         QDBusMetaObject *obj = cache.value(it.key(), 0);
         if ( !obj && ( us || !interface.startsWith( QLatin1String("local.") ) ) ) {
             // not in cache; create
-            obj = new QDBusMetaObject();
+            obj = new QDBusMetaObject;
             QDBusMetaObjectGenerator generator(it.key(), it.value().constData());
             generator.write(obj);
 
@@ -538,9 +540,10 @@ QDBusMetaObject *QDBusMetaObject::createMetaObject(const QString &interface, con
     
     if (parsed.isEmpty()) {
         // object didn't return introspection
-        we = new QDBusMetaObject();
+        we = new QDBusMetaObject;
         QDBusMetaObjectGenerator generator(interface, 0);
         generator.write(we);
+        we->cached = false;
         return we;
     } else if (interface.isEmpty()) {
         // merge all interfaces
@@ -557,9 +560,10 @@ QDBusMetaObject *QDBusMetaObject::createMetaObject(const QString &interface, con
         merged.name = QLatin1String("local.Merged");
         merged.introspection.clear();
 
-        we = new QDBusMetaObject();
+        we = new QDBusMetaObject;
         QDBusMetaObjectGenerator generator(merged.name, &merged);
         generator.write(we);
+        we->cached = false;
         return we;
     }
 
@@ -571,7 +575,6 @@ QDBusMetaObject *QDBusMetaObject::createMetaObject(const QString &interface, con
 }
 
 QDBusMetaObject::QDBusMetaObject()
-    : cached(false)
 {
 }
 

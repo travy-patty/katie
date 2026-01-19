@@ -21,19 +21,19 @@
 
 #include "qstringlist.h"
 #include "qregexp.h"
-#include "qtextcodec_p.h"
+#include "qicucodec_p.h"
 #include "qdatastream.h"
 #include "qlist.h"
 #include "qlocale.h"
 #include "qlocale_p.h"
 #include "qlocale_tools_p.h"
 #include "qstringmatcher.h"
+#include "qvarlengtharray.h"
 #include "qhash.h"
 #include "qdebug.h"
 #include "qendian.h"
 #include "qmutex.h"
 #include "qbitarray.h"
-#include "qstdcontainers_p.h"
 #include "qcorecommon_p.h"
 
 #ifndef QT_NO_TEXTCODEC
@@ -49,6 +49,10 @@
 #include <unicode/unorm2.h>
 
 QT_BEGIN_NAMESPACE
+
+#ifndef QT_NO_TEXTCODEC
+QTextCodec *QString::codecForCStrings = QTextCodec::codecForName("UTF-8");
+#endif
 
 // internal
 int qFindString(const QChar *haystack, int haystackLen, int from,
@@ -269,7 +273,9 @@ static int findChar(const QChar *str, int len, QChar ch, int from,
     \snippet doc/src/snippets/qstring/main.cpp 0
 
     QString converts the \c{const char *} data into Unicode using the
-    fromAscii() function.
+    fromAscii() function. By default, fromAscii() treats character
+    characters as UTF-8, but this can be changed by calling
+    QTextCodec::setCodecForCStrings().
 
     In all of the QString functions that take \c{const char *}
     parameters, the \c{const char *} is interpreted as a classic
@@ -407,7 +413,9 @@ static int findChar(const QChar *str, int len, QChar ch, int from,
     toLatin1(), toUtf8(), and toLocal8Bit().
 
     \list
-    \o toAscii() returns a US-ASCII encoded 8-bit string.
+    \o toAscii() returns an 8-bit string encoded using the codec
+       specified by QTextCodec::codecForCStrings (by default, that is
+       UTF-8).
     \o toLatin1() returns a Latin-1 (ISO 8859-1) encoded 8-bit string.
     \o toUtf8() returns a UTF-8 encoded 8-bit string. UTF-8 is a
        superset of US-ASCII (ANSI X3.4-1986) that supports the entire
@@ -1462,52 +1470,58 @@ void QString::replace_helper(uint *indices, int nIndices, int blen, const QChar 
         ::memcpy(afterBuffer, after, alen*sizeof(QChar));
     }
 
-    if (blen == alen) {
-        // replace in place
-        detach();
-        for (int i = 0; i < nIndices; ++i)
-            memcpy(d->data + indices[i], afterBuffer, alen * sizeof(QChar));
-    } else if (alen < blen) {
-        // replace from front
-        detach();
-        uint to = indices[0];
-        if (alen)
-            memcpy(d->data+to, after, alen*sizeof(QChar));
-        to += alen;
-        uint movestart = indices[0] + blen;
-        for (int i = 1; i < nIndices; ++i) {
-            int msize = indices[i] - movestart;
-            if (msize > 0) {
+    QT_TRY {
+        if (blen == alen) {
+            // replace in place
+            detach();
+            for (int i = 0; i < nIndices; ++i)
+                memcpy(d->data + indices[i], afterBuffer, alen * sizeof(QChar));
+        } else if (alen < blen) {
+            // replace from front
+            detach();
+            uint to = indices[0];
+            if (alen)
+                memcpy(d->data+to, after, alen*sizeof(QChar));
+            to += alen;
+            uint movestart = indices[0] + blen;
+            for (int i = 1; i < nIndices; ++i) {
+                int msize = indices[i] - movestart;
+                if (msize > 0) {
+                    memmove(d->data + to, d->data + movestart, msize * sizeof(QChar));
+                    to += msize;
+                }
+                if (alen) {
+                    memcpy(d->data + to, afterBuffer, alen*sizeof(QChar));
+                    to += alen;
+                }
+                movestart = indices[i] + blen;
+            }
+            int msize = d->size - movestart;
+            if (msize > 0)
                 memmove(d->data + to, d->data + movestart, msize * sizeof(QChar));
-                to += msize;
-            }
-            if (alen) {
-                memcpy(d->data + to, afterBuffer, alen*sizeof(QChar));
-                to += alen;
-            }
-            movestart = indices[i] + blen;
-        }
-        int msize = d->size - movestart;
-        if (msize > 0)
-            memmove(d->data + to, d->data + movestart, msize * sizeof(QChar));
-        resize(d->size - nIndices*(blen-alen));
-    } else {
-        // replace from back
-        int adjust = nIndices*(alen-blen);
-        int newLen = d->size + adjust;
-        int moveend = d->size;
-        resize(newLen);
+            resize(d->size - nIndices*(blen-alen));
+        } else {
+            // replace from back
+            int adjust = nIndices*(alen-blen);
+            int newLen = d->size + adjust;
+            int moveend = d->size;
+            resize(newLen);
 
-        while (nIndices) {
-            --nIndices;
-            int movestart = indices[nIndices] + blen;
-            int insertstart = indices[nIndices] + nIndices*(alen-blen);
-            int moveto = insertstart + alen;
-            memmove(d->data + moveto, d->data + movestart,
-                    (moveend - movestart)*sizeof(QChar));
-            memcpy(d->data + insertstart, afterBuffer, alen*sizeof(QChar));
-            moveend = movestart-blen;
+            while (nIndices) {
+                --nIndices;
+                int movestart = indices[nIndices] + blen;
+                int insertstart = indices[nIndices] + nIndices*(alen-blen);
+                int moveto = insertstart + alen;
+                memmove(d->data + moveto, d->data + movestart,
+                        (moveend - movestart)*sizeof(QChar));
+                memcpy(d->data + insertstart, afterBuffer, alen*sizeof(QChar));
+                moveend = movestart-blen;
+            }
         }
+    } QT_CATCH(const std::bad_alloc &) {
+        if (afterBuffer != after)
+            free(afterBuffer);
+        QT_RETHROW;
     }
     if (afterBuffer != after)
         free(afterBuffer);
@@ -1591,7 +1605,7 @@ QString& QString::replace(QChar ch, const QString &after, Qt::CaseSensitivity cs
 
     int index = 0;
     while (1) {
-        QSTACKARRAY(uint, indices, 1024);
+        uint indices[1024];
         uint pos = 0;
         if (cs == Qt::CaseSensitive) {
             while (pos < 1023 && index < d->size) {
@@ -1666,14 +1680,14 @@ QString &QString::replace(const QLatin1String &before,
                           Qt::CaseSensitivity cs)
 {
     int alen = qstrlen(after.latin1());
-    QStdVector<ushort> a(alen);
+    QSTACKARRAY(ushort, a, alen);
     for (int i = 0; i < alen; ++i)
         a[i] = (uchar)after.latin1()[i];
     int blen = qstrlen(before.latin1());
-    QStdVector<ushort> b(blen);
+    QSTACKARRAY(ushort, b, blen);
     for (int i = 0; i < blen; ++i)
         b[i] = (uchar)before.latin1()[i];
-    return replace(reinterpret_cast<const QChar*>(b.constData()), blen, reinterpret_cast<const QChar*>(a.constData()), alen, cs);
+    return replace(reinterpret_cast<const QChar*>(b), blen, reinterpret_cast<const QChar*>(a), alen, cs);
 }
 
 /*!
@@ -1693,7 +1707,7 @@ QString &QString::replace(const QLatin1String &before,
                           Qt::CaseSensitivity cs)
 {
     int blen = qstrlen(before.latin1());
-    QStdVector<ushort> b(blen);
+    QVarLengthArray<ushort> b(blen);
     for (int i = 0; i < blen; ++i)
         b[i] = (uchar)before.latin1()[i];
     return replace((const QChar *)b.data(), blen, after.constData(), after.d->size, cs);
@@ -1716,7 +1730,7 @@ QString &QString::replace(const QString &before,
                           Qt::CaseSensitivity cs)
 {
     int alen = qstrlen(after.latin1());
-    QStdVector<ushort> a(alen);
+    QVarLengthArray<ushort> a(alen);
     for (int i = 0; i < alen; ++i)
         a[i] = (uchar)after.latin1()[i];
     return replace(before.constData(), before.d->size, (const QChar *)a.data(), alen, cs);
@@ -1737,7 +1751,7 @@ QString &QString::replace(const QString &before,
 QString &QString::replace(QChar c, const QLatin1String &after, Qt::CaseSensitivity cs)
 {
     int alen = qstrlen(after.latin1());
-    QStdVector<ushort> a(alen);
+    QVarLengthArray<ushort> a(alen);
     for (int i = 0; i < alen; ++i)
         a[i] = (uchar)after.latin1()[i];
     return replace(&c, 1, (const QChar *)a.data(), alen, cs);
@@ -2324,7 +2338,7 @@ int QString::lastIndexOf(const QLatin1String &str, int from, Qt::CaseSensitivity
     if (from > delta)
         from = delta;
 
-    QStdVector<ushort> s(sl);
+    QVarLengthArray<ushort> s(sl);
     for (int i = 0; i < sl; ++i)
         s[i] = str.latin1()[i];
 
@@ -3144,12 +3158,12 @@ static QByteArray toLatin1_helper(const QChar *data, int length)
     if (!length) {
         return QByteArray();
     }
-    QStdVector<char> result(length);
+    QSTACKARRAY(char, result, length);
     for (int i = 0; i < length; i++) {
         const ushort ucs = data[i].unicode();
         result[i] = (ucs > 0xff) ? '?' : char(ucs);
     }
-    return QByteArray(result.constData(), length);
+    return QByteArray(result, length);
 }
 
 /*!
@@ -3169,6 +3183,10 @@ QByteArray QString::toLatin1() const
 /*!
     Returns an 8-bit representation of the string as a QByteArray.
 
+    If a codec has been set using QTextCodec::setCodecForCStrings(),
+    it is used to convert Unicode to 8-bit char; otherwise this
+    function does the same as toLatin1().
+
     Note that, despite the name, this function does not necessarily return an US-ASCII
     (ANSI X3.4-1986) string and its result may not be US-ASCII compatible.
 
@@ -3176,13 +3194,20 @@ QByteArray QString::toLatin1() const
 */
 QByteArray QString::toAscii() const
 {
-    return QTextCodecPrivate::convertFrom(constData(), length(), "US-ASCII");
+#ifndef QT_NO_TEXTCODEC
+    if (codecForCStrings)
+        return codecForCStrings->fromUnicode(unicode(), length());
+#endif // QT_NO_TEXTCODEC
+    return toLatin1();
 }
 
-static inline QByteArray toLocal8Bit_helper(const QChar *data, int length)
+static QByteArray toLocal8Bit_helper(const QChar *data, int length)
 {
-    const QByteArray localecodec = qt_locale_codec();
-    return QTextCodecPrivate::convertFrom(data, length, localecodec.constData());
+#ifndef QT_NO_TEXTCODEC
+    return QTextCodec::codecForLocale()->fromUnicode(data, length);
+#else
+    return toLatin1_helper(data, length);
+#endif // QT_NO_TEXTCODEC
 }
 
 /*!
@@ -3202,7 +3227,11 @@ static inline QByteArray toLocal8Bit_helper(const QChar *data, int length)
 */
 QByteArray QString::toLocal8Bit() const
 {
-    return toLocal8Bit_helper(unicode(), length());
+#ifndef QT_NO_TEXTCODEC
+    return QTextCodec::codecForLocale()->fromUnicode(unicode(), length());
+#else
+    return toLatin1();
+#endif // QT_NO_TEXTCODEC
 }
 
 /*!
@@ -3226,7 +3255,7 @@ QByteArray QString::toUtf8() const
     if (isNull())
         return QByteArray();
 
-    return QTextCodecPrivate::convertFrom(constData(), length(), "UTF-8");
+    return QIcuCodec::convertFrom(constData(), length(), "UTF-8");
 }
 
 /*!
@@ -3276,21 +3305,26 @@ QString::Data *QString::fromLatin1_helper(const char *str, int size)
 
 QString::Data *QString::fromAscii_helper(const char *str, int size)
 {
-    Data *d;
-    if (!str) {
-        d = &shared_null;
-        d->ref.ref();
-    } else if (size == 0 || (!*str && size < 0)) {
-        d = &shared_empty;
-        d->ref.ref();
-    } else {
-        if (size < 0)
-            size = qstrlen(str);
-        QString s = QString::fromAscii(str, size);
-        d = s.d;
-        d->ref.ref();
+#ifndef QT_NO_TEXTCODEC
+    if (codecForCStrings) {
+        Data *d;
+        if (!str) {
+            d = &shared_null;
+            d->ref.ref();
+        } else if (size == 0 || (!*str && size < 0)) {
+            d = &shared_empty;
+            d->ref.ref();
+        } else {
+            if (size < 0)
+                size = qstrlen(str);
+            QString s = codecForCStrings->toUnicode(str, size);
+            d = s.d;
+            d->ref.ref();
+        }
+        return d;
     }
-    return d;
+#endif
+    return fromLatin1_helper(str, size);
 }
 
 /*!
@@ -3304,14 +3338,10 @@ QString::Data *QString::fromAscii_helper(const char *str, int size)
 */
 QString QString::fromLatin1(const char *str, int size)
 {
-    if (!str) {
-        return QString();
-    }
-    if (size < 0) {
-        size = qstrlen(str);
-    }
-    return QTextCodecPrivate::convertTo(str, size, "latin1");
+    return QString(fromLatin1_helper(str, size), 0);
 }
+
+
 
 /*!
     Returns a QString initialized with the first \a size characters
@@ -3333,8 +3363,7 @@ QString QString::fromLocal8Bit(const char *str, int size)
 #if !defined(QT_NO_TEXTCODEC)
     if (size < 0)
         size = qstrlen(str);
-    const QByteArray localecodec = qt_locale_codec();
-    return QTextCodecPrivate::convertTo(str, size, localecodec.constData());
+    return QTextCodec::codecForLocale()->toUnicode(str, size);
 #else
     return fromLatin1(str, size);
 #endif // !QT_NO_TEXTCODEC
@@ -3347,17 +3376,17 @@ QString QString::fromLocal8Bit(const char *str, int size)
     If \a size is -1 (default), it is taken to be qstrlen(\a
     str).
 
+    Note that, despite the name, this function actually uses the codec
+    defined by QTextCodec::setCodecForCStrings() to convert \a str to
+    Unicode. Depending on the codec, it may not accept valid US-ASCII (ANSI
+    X3.4-1986) input. If no codec has been set, this function does the same
+    as fromLatin1().
+
     \sa toAscii(), fromLatin1(), fromUtf8(), fromLocal8Bit()
 */
 QString QString::fromAscii(const char *str, int size)
 {
-    if (!str) {
-        return QString();
-    }
-    if (size < 0) {
-        size = qstrlen(str);
-    }
-    return QTextCodecPrivate::convertTo(str, size, "US-ASCII");
+    return QString(fromAscii_helper(str, size), 0);
 }
 
 /*!
@@ -3383,13 +3412,12 @@ QString QString::fromAscii(const char *str, int size)
 */
 QString QString::fromUtf8(const char *str, int size)
 {
-    if (!str) {
+    if (!str)
         return QString();
-    }
-    if (size < 0) {
+    if (size < 0)
         size = qstrlen(str);
-    }
-    return QTextCodecPrivate::convertTo(str, size, "UTF-8");
+
+    return QIcuCodec::convertTo(str, size, "UTF-8");
 }
 
 /*!
@@ -3411,16 +3439,14 @@ QString QString::fromUtf8(const char *str, int size)
 */
 QString QString::fromUtf16(const ushort *unicode, int size)
 {
-    if (!unicode) {
+    if (!unicode)
         return QString();
-    }
     if (size < 0) {
         size = 0;
-        while (unicode[size] != 0) {
+        while (unicode[size] != 0)
             ++size;
-        }
     }
-    return QTextCodecPrivate::convertTo((const char *)unicode, size, "UTF-16");
+    return QIcuCodec::convertTo((const char *)unicode, size, "UTF-16");
 }
 
 
@@ -3437,16 +3463,14 @@ QString QString::fromUtf16(const ushort *unicode, int size)
 */
 QString QString::fromUcs4(const uint *unicode, int size)
 {
-    if (!unicode) {
+    if (!unicode)
         return QString();
-    }
     if (size < 0) {
         size = 0;
-        while (unicode[size] != 0) {
+        while (unicode[size] != 0)
             ++size;
-        }
     }
-    return QTextCodecPrivate::convertTo((const char *)unicode, size, "UTF-32");
+    return QIcuCodec::convertTo((const char *)unicode, size, "UTF-32");
 }
 
 /*!
@@ -3501,7 +3525,7 @@ QString QString::simplified() const
     if (d->size == 0)
         return *this;
 
-    QStdVector<QChar> result(d->size);
+    QSTACKARRAY(QChar, result, d->size);
     const QChar *from = reinterpret_cast<const QChar*>(d->data);
     const QChar *fromend = from + d->size;
     int outc = 0;
@@ -3517,7 +3541,7 @@ QString QString::simplified() const
     }
     if (outc > 0 && result[outc-1] == QLatin1Char(' '))
         outc--;
-    return QString(result.constData(), outc);
+    return QString(result, outc);
 }
 
 /*!
@@ -4159,10 +4183,9 @@ int QString::localeAwareCompare_helper(const QChar *data1, int length1,
         return res;
     } // else fall through
 
-    const QByteArray databytes1 = toLocal8Bit_helper(data1, length1);
-    const QByteArray databytes2 = toLocal8Bit_helper(data2, length2);
     // declared in <string.h>
-    int delta = strcoll(databytes1.constData(), databytes2.constData());
+    int delta = strcoll(toLocal8Bit_helper(data1, length1).constData(),
+                        toLocal8Bit_helper(data2, length2).constData());
     if (delta == 0)
         delta = ucstrcmp(data1, length1, data2, length2);
     return delta;
@@ -4295,13 +4318,13 @@ QString QString::toLower() const
 
     UErrorCode error = U_ZERO_ERROR;
     const int maxchars = d->size + 1; // ICU will write zero-terminator
-    QStdVector<UChar> result(maxchars);
-    const int lowerresult = u_strToLower(result.data(), maxchars,
+    QSTACKARRAY(UChar, result, maxchars);
+    const int lowerresult = u_strToLower(result, maxchars,
         reinterpret_cast<const UChar*>(d->data), d->size, "C", &error);
     if (Q_UNLIKELY(lowerresult > maxchars || U_FAILURE(error))) {
         return QString();
     }
-    return QString(reinterpret_cast<const QChar*>(result.constData()), lowerresult);
+    return QString(reinterpret_cast<QChar*>(result), lowerresult);
 }
 
 /*!
@@ -4310,18 +4333,18 @@ QString QString::toLower() const
 */
 QString QString::toCaseFolded() const
 {
-    if (!d->data || !d->size) {
+    if (!d->data || !d->size)
         return *this;
-    }
+
     UErrorCode error = U_ZERO_ERROR;
     const int maxchars = d->size + 1; // ICU will write zero-terminator
-    QStdVector<UChar> result(maxchars);
-    const int foldresult = u_strFoldCase(result.data(), maxchars,
+    QSTACKARRAY(UChar, result, maxchars);
+    const int foldresult = u_strFoldCase(result, maxchars,
         reinterpret_cast<const UChar*>(d->data), d->size, U_FOLD_CASE_DEFAULT, &error);
     if (Q_UNLIKELY(foldresult > maxchars || U_FAILURE(error))) {
         return QString();
     }
-    return QString(reinterpret_cast<const QChar*>(result.constData()), foldresult);
+    return QString(reinterpret_cast<QChar*>(result), foldresult);
 }
 
 /*!
@@ -4337,18 +4360,18 @@ QString QString::toCaseFolded() const
 
 QString QString::toUpper() const
 {
-    if (!d->data || !d->size) {
+    if (!d->data || !d->size)
         return *this;
-    }
+
     UErrorCode error = U_ZERO_ERROR;
     const int maxchars = d->size + 1; // ICU will write zero-terminator
-    QStdVector<UChar> result(maxchars);
-    const int upperresult = u_strToUpper(result.data(), maxchars,
+    QSTACKARRAY(UChar, result, maxchars);
+    const int upperresult = u_strToUpper(result, maxchars,
         reinterpret_cast<const UChar*>(d->data), d->size, "C", &error);
     if (Q_UNLIKELY(upperresult > maxchars || U_FAILURE(error))) {
         return QString();
     }
-    return QString(reinterpret_cast<const QChar*>(result.constData()), upperresult);
+    return QString(reinterpret_cast<QChar*>(result), upperresult);
 }
 
 // ### Qt 5: Consider whether this function shouldn't be removed See task 202871.
@@ -4425,7 +4448,10 @@ QString &QString::vsprintf(const char* cformat, va_list ap)
         int i = 0;
         while (*(c + i) != '\0' && *(c + i) != '%')
             ++i;
-        result.append(QString::fromAscii(c, i));
+        if (codecForCStrings)
+            result.append(codecForCStrings->toUnicode(c, i));
+        else
+            result.append(fromLatin1(c, i));
         c += i;
 #else
         while (*c != '\0' && *c != '%')
@@ -5527,19 +5553,33 @@ QString QString::normalized(QString::NormalizationForm mode) const
 */
 QString QString::repeated(int times) const
 {
-    if (d->size == 0 || times == 1) {
+    if (d->size == 0 || times == 1)
         return *this;
-    }
+
     if (times < 1) {
         return QString();
     }
 
-    const int resultsize = (times * d->size);
-    QString result(resultsize, Qt::Uninitialized);
-    for (int i = 0; i < times; i++) {
-        ::memcpy(result.d->data + (i * d->size), d->data, d->size * sizeof(QChar));
+    const int resultSize = times * d->size;
+
+    QString result(resultSize, Qt::Uninitialized);
+    if (result.d->alloc != resultSize)
+        return QString(); // not enough memory
+
+    memcpy(result.d->data, d->data, d->size * sizeof(ushort));
+
+    int sizeSoFar = d->size;
+    ushort *end = result.d->data + sizeSoFar;
+
+    const int halfResultSize = resultSize >> 1;
+    while (sizeSoFar <= halfResultSize) {
+        memcpy(end, result.d->data, sizeSoFar * sizeof(ushort));
+        end += sizeSoFar;
+        sizeSoFar <<= 1;
     }
-    result.d->data[resultsize] = '\0';
+    memcpy(end, result.d->data, (resultSize - sizeSoFar) * sizeof(ushort));
+    result.d->data[resultSize] = '\0';
+    result.d->size = resultSize;
     return result;
 }
 
@@ -6279,7 +6319,9 @@ bool QString::isRightToLeft() const
     This operator is mostly useful to pass a QString to a function
     that accepts a std::string object.
 
-    Using this operator can lead to loss of information.
+    If the QString contains Unicode characters that the
+    QTextCodec::codecForCStrings() codec cannot handle, using this operator
+    can lead to loss of information.
 
     This operator is only available if Qt is configured with STL
     compatibility enabled.
@@ -6639,9 +6681,17 @@ QString &QString::setRawData(const QChar *unicode, int size)
 QDataStream &operator<<(QDataStream &out, const QString &str)
 {
     if (!str.isEmpty()) {
-        const quint32 bytes = (str.length() * sizeof(QChar));
-        out << bytes;
-        out.writeRawData(reinterpret_cast<const char *>(str.unicode()), bytes);
+        if (out.byteOrder() == QDataStream::HostEndian) {
+            out.writeBytes(reinterpret_cast<const char *>(str.unicode()), sizeof(QChar) * str.length());
+        } else {
+            QSTACKARRAY(ushort, buffer, str.length());
+            const ushort *data = reinterpret_cast<const ushort *>(str.constData());
+            for (int i = 0; i < str.length(); i++) {
+                buffer[i] = qbswap(*data);
+                ++data;
+            }
+            out.writeBytes(reinterpret_cast<const char *>(buffer), sizeof(ushort) * str.length());
+        }
     } else {
         // write null marker
         out << (quint32)0xffffffff;
@@ -6657,6 +6707,7 @@ QDataStream &operator<<(QDataStream &out, const QString &str)
 
     \sa {Serializing Qt Data Types}
 */
+
 QDataStream &operator>>(QDataStream &in, QString &str)
 {
     quint32 bytes = 0;
@@ -6670,12 +6721,21 @@ QDataStream &operator>>(QDataStream &in, QString &str)
             return in;
         }
 
-        str.resize(bytes / sizeof(QChar));
-        const int readlen = in.readRawData(reinterpret_cast<char *>(str.data()), bytes);
+        int len = (bytes / sizeof(QChar));
+        str.resize(len);
+        const quint32 readlen = in.readRawData(reinterpret_cast<char *>(str.data()), bytes);
         if (readlen != bytes) {
             str.clear();
             in.setStatus(QDataStream::ReadPastEnd);
             return in;
+        }
+
+        if (in.byteOrder() != QDataStream::HostEndian) {
+            ushort *data = reinterpret_cast<ushort *>(str.data());
+            while (len--) {
+                *data = qbswap(*data);
+                ++data;
+            }
         }
     } else {
         str = QLatin1String("");
@@ -7102,8 +7162,7 @@ ownership of it, no memory is freed when instances are destroyed.
     \sa string()
 */
 
-QString QStringRef::toString() const
-{
+QString QStringRef::toString() const {
     if (!m_string)
         return QString();
     if (m_size && m_position == 0 && m_size == m_string->size())
@@ -7653,7 +7712,7 @@ int QStringRef::lastIndexOf(QLatin1String str, int from, Qt::CaseSensitivity cs)
     if (from > delta)
         from = delta;
 
-    QStdVector<ushort> s(sl);
+    QVarLengthArray<ushort> s(sl);
     for (int i = 0; i < sl; ++i)
         s[i] = str.latin1()[i];
 
@@ -7987,7 +8046,7 @@ static inline int qt_find_latin1_string(const QChar *haystack, int size,
 {
     const char *latin1 = needle.latin1();
     int len = qstrlen(latin1);
-    QStdVector<ushort> s(len);
+    QVarLengthArray<ushort> s(len);
     for (int i = 0; i < len; ++i)
         s[i] = latin1[i];
 
@@ -8095,6 +8154,10 @@ QByteArray QStringRef::toLatin1() const
 
     Returns an 8-bit representation of the string as a QByteArray.
 
+    If a codec has been set using QTextCodec::setCodecForCStrings(),
+    it is used to convert Unicode to 8-bit char; otherwise this
+    function does the same as toLatin1().
+
     Note that, despite the name, this function does not necessarily return an US-ASCII
     (ANSI X3.4-1986) string and its result may not be US-ASCII compatible.
 
@@ -8102,7 +8165,11 @@ QByteArray QStringRef::toLatin1() const
 */
 QByteArray QStringRef::toAscii() const
 {
-    return QTextCodecPrivate::convertFrom(constData(), length(), "US-ASCII");
+#ifndef QT_NO_TEXTCODEC
+    if (QString::codecForCStrings)
+        return QString::codecForCStrings->fromUnicode(unicode(), length());
+#endif // QT_NO_TEXTCODEC
+    return toLatin1();
 }
 
 /*!
@@ -8124,7 +8191,11 @@ QByteArray QStringRef::toAscii() const
 */
 QByteArray QStringRef::toLocal8Bit() const
 {
-    return toLocal8Bit_helper(unicode(), length());
+#ifndef QT_NO_TEXTCODEC
+    return QTextCodec::codecForLocale()->fromUnicode(unicode(), length());
+#else
+    return toLatin1();
+#endif // QT_NO_TEXTCODEC
 }
 
 /*!
@@ -8149,7 +8220,7 @@ QByteArray QStringRef::toUtf8() const
 {
     if (isNull())
         return QByteArray();
-    return QTextCodecPrivate::convertFrom(constData(), length(), "UTF-8");
+    return QIcuCodec::convertFrom(constData(), length(), "UTF-8");
 }
 
 /*!

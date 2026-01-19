@@ -32,7 +32,6 @@
 
 #include <QStack>
 #include <QCoreApplication>
-#include <QTextStream>
 #include <QDebug>
 
 QT_BEGIN_NAMESPACE

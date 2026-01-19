@@ -27,6 +27,7 @@
 #include "qtextcursor.h"
 #include "qtextlist.h"
 #include "qabstracttextdocumentlayout.h"
+#include "qtextengine_p.h"
 #include "qdebug.h"
 
 QT_BEGIN_NAMESPACE

@@ -35,9 +35,6 @@ public:
         SystemTime,
         MonotonicClock
     };
-
-    QElapsedTimer();
-
     static ClockType clockType();
     static bool isMonotonic();
 

@@ -52,6 +52,11 @@ Q_GLOBAL_STATIC(QStringList, g_widgets)
 class QUiLoader;
 class QUiLoaderPrivate;
 
+#ifdef QFORMINTERNAL_NAMESPACE
+namespace QFormInternal
+{
+#endif
+
 class TranslatingTextBuilder : public QTextBuilder
 {
 public:
@@ -501,10 +506,18 @@ bool FormBuilderPrivate::addItem(DomWidget *ui_widget, QWidget *widget, QWidget 
     return true;
 }
 
+#ifdef QFORMINTERNAL_NAMESPACE
+}
+#endif
+
 class QUiLoaderPrivate
 {
 public:
+#ifdef QFORMINTERNAL_NAMESPACE
+    QFormInternal::FormBuilderPrivate builder;
+#else
     FormBuilderPrivate builder;
+#endif
 
     void setupWidgetMap() const;
 };
@@ -536,7 +549,8 @@ void QUiLoaderPrivate::setupWidgetMap() const
     deriving your own loader class.
 
     If you have a custom component or an application that embeds \QD, you can
-    also use the QFormBuilder class to create user interfaces from UI files.
+    also use the QFormBuilder class provided by the QtDesigner module to create
+    user interfaces from UI files.
 
     The QUiLoader class provides a collection of functions allowing you to
     create widgets based on the information stored in UI files (created
@@ -546,6 +560,11 @@ void QUiLoaderPrivate::setupWidgetMap() const
     example:
 
     \snippet doc/src/snippets/quiloader/mywidget.cpp 0
+
+    By including the user interface in the form's resources (\c myform.qrc), we
+    ensure that it will be present at run-time:
+
+    \quotefile doc/src/snippets/quiloader/mywidget.qrc
 
     The availableWidgets() function returns a QStringList with the class names
     of the widgets available in the specified plugin paths. To create these
@@ -582,14 +601,12 @@ QUiLoader::QUiLoader(QObject *parent)
     d->builder.loader = this;
 
     QStringList paths;
-#ifndef QT_NO_LIBRARY
-    foreach (const QString &path, QApplication::pluginPaths()) {
+    foreach (const QString &path, QApplication::libraryPaths()) {
         QString libPath = path;
         libPath  += QDir::separator();
         libPath  += QLatin1String("designer");
         paths.append(libPath);
     }
-#endif // QT_NO_LIBRARY
 
     d->builder.setPluginPath(paths);
 }
@@ -738,7 +755,7 @@ QStringList QUiLoader::availableWidgets() const
 
     d->setupWidgetMap();
 
-    foreach (QCustomWidget *plugin, d->builder.customWidgets()) {
+    foreach (QDesignerCustomWidgetInterface *plugin, d->builder.customWidgets()) {
         g_widgets()->append(plugin->name());
     }
 
@@ -791,6 +808,37 @@ QDir QUiLoader::workingDirectory() const
 {
     Q_D(const QUiLoader);
     return d->builder.workingDirectory();
+}
+
+/*!
+    \internal
+    \since 4.3
+
+    If \a enabled is true, the loader will be able to execute scripts.
+    Otherwise, execution of scripts will be disabled.
+
+    \sa isScriptingEnabled()
+*/
+
+void QUiLoader::setScriptingEnabled(bool enabled)
+{
+    Q_D(QUiLoader);
+    d->builder.setScriptingEnabled(enabled);
+}
+
+/*!
+    \internal
+    \since 4.3
+
+    Returns true if execution of scripts is enabled; returns false otherwise.
+
+    \sa setScriptingEnabled()
+*/
+
+bool QUiLoader::isScriptingEnabled() const
+{
+    Q_D(const QUiLoader);
+    return d->builder.isScriptingEnabled();
 }
 
 /*!

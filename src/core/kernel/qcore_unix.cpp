@@ -22,8 +22,6 @@
 #include "qcore_unix_p.h"
 #include "qelapsedtimer.h"
 #include "qbytearray.h"
-#include "qdir.h"
-#include "qfilesystemmetadata_p.h"
 #include "qdebug.h"
 
 #include <sys/select.h>
@@ -32,33 +30,23 @@
 
 QT_BEGIN_NAMESPACE
 
-QStatInfo::QStatInfo()
-    : m_mode(0),
-    m_uid(QFileSystemMetaData::nobodyID),
-    m_gid(QFileSystemMetaData::nobodyID),
-    m_mtime(0),
-    m_size(0)
-{
-}
-
 QStatInfo::QStatInfo(const QString &path, const bool listdir)
     : m_mode(0),
-    m_uid(QFileSystemMetaData::nobodyID),
-    m_gid(QFileSystemMetaData::nobodyID),
+    m_uid(-2),
+    m_gid(-2),
     m_mtime(0),
     m_size(0),
-    m_path(path),
-    m_native(QFile::encodeName(path))
+    m_path(path.toLocal8Bit())
 {
     QT_STATBUF statbuf;
-    if (QT_STAT(m_native.constData(), &statbuf) == 0) {
+    if (QT_STAT(m_path.constData(), &statbuf) == 0) {
         m_mode = statbuf.st_mode;
         m_uid = statbuf.st_uid;
         m_gid = statbuf.st_gid;
         m_mtime = statbuf.st_mtime;
         m_size = statbuf.st_size;
         if (listdir && S_ISDIR(statbuf.st_mode)) {
-            m_entries = dirInfos(m_native, path);
+            m_entries = dirInfos(m_path, path);
         }
     }
 }
@@ -70,8 +58,7 @@ QStatInfo::QStatInfo(const QStatInfo &other)
     m_mtime(other.m_mtime),
     m_size(other.m_size),
     m_entries(other.m_entries),
-    m_path(other.m_path),
-    m_native(other.m_native)
+    m_path(other.m_path)
 {
 }
 
@@ -84,7 +71,6 @@ QStatInfo& QStatInfo::operator=(const QStatInfo &other)
     m_size = other.m_size;
     m_entries = other.m_entries;
     m_path = other.m_path;
-    m_native = other.m_native;
     return *this;
 }
 
@@ -92,28 +78,25 @@ bool QStatInfo::operator==(const QStatInfo &other) const
 {
     if (m_mode != other.m_mode || m_uid != other.m_uid
         || m_gid != other.m_gid || m_mtime != other.m_mtime
-        || m_size != other.m_size || m_entries != other.m_entries) {
+        || m_size != other.m_size) {
         return false;
     }
-    if (m_path == other.m_path) {
-        return true;
-    }
-    return (QDir::cleanPath(m_path) == QDir::cleanPath(other.m_path));
+    return (m_entries == other.m_entries && m_path == other.m_path);
 }
 
 bool QStatInfo::isReadable() const
 {
-    return (QT_ACCESS(m_native.constData(), R_OK) == 0);
+    return (QT_ACCESS(m_path.constData(), R_OK) == 0);
 }
 
 bool QStatInfo::isWritable() const
 {
-    return (QT_ACCESS(m_native.constData(), W_OK) == 0);
+    return (QT_ACCESS(m_path.constData(), W_OK) == 0);
 }
 
 bool QStatInfo::isExecutable() const
 {
-    return (QT_ACCESS(m_native.constData(), X_OK) == 0);
+    return (QT_ACCESS(m_path.constData(), X_OK) == 0);
 }
 
 bool QStatInfo::dirEquals(const QStatInfo &other) const
@@ -122,7 +105,8 @@ bool QStatInfo::dirEquals(const QStatInfo &other) const
         return false;
     }
     if (isDir() && other.isDir()) {
-        if (m_entries != dirInfos(other.m_native, other.m_path)) {
+        const QString localpath = QString::fromLocal8Bit(other.m_path);
+        if (m_entries != dirInfos(other.m_path, localpath)) {
             return false;
         }
     }
@@ -140,7 +124,7 @@ QList<QStatInfo> QStatInfo::dirInfos(const QByteArray &nativepath, const QString
                 dirent = QT_READDIR(dir);
                 continue;
             }
-            const QString dirlocal = QFile::decodeName(dirent->d_name);
+            const QString dirlocal = QString::fromLocal8Bit(dirent->d_name);
             const QString fulllocal = QString::fromLatin1("%1/%2").arg(localpath, dirlocal);
 #ifdef QT_HAVE_DIRENT_D_TYPE
             switch (dirent->d_type) {
@@ -149,18 +133,18 @@ QList<QStatInfo> QStatInfo::dirInfos(const QByteArray &nativepath, const QString
                 case DT_FIFO:
                 case DT_SOCK:
                 case DT_LNK:
-                case DT_REG: {
+                case DT_REG:
+                case DT_DIR: {
                     result.append(QStatInfo(fulllocal, false));
                     break;
                 }
-                case DT_DIR:
                 case DT_UNKNOWN:
                 default: {
                     break;
                 }
             }
 #else
-            const QByteArray fullnative = QFile::encodeName(fulllocal);
+            const QByteArray fullnative = fulllocal.toLocal8Bit();
             QT_STATBUF statbuf;
             if (QT_STAT(fullnative.constData(), &statbuf) == 0) {
                 result.append(QStatInfo(fulllocal, false));

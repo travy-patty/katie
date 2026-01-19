@@ -25,12 +25,18 @@
 
 QT_BEGIN_NAMESPACE
 
+#ifdef QFORMINTERNAL_NAMESPACE
+namespace QFormInternal {
+#endif
+
 QTextBuilder::QTextBuilder()
 {
+
 }
 
 QTextBuilder::~QTextBuilder()
 {
+
 }
 
 QVariant QTextBuilder::loadText(const DomProperty *property) const
@@ -50,5 +56,9 @@ DomProperty *QTextBuilder::saveText(const QVariant &value) const
     Q_UNUSED(value)
     return 0;
 }
+
+#ifdef QFORMINTERNAL_NAMESPACE
+} // namespace QFormInternal
+#endif
 
 QT_END_NAMESPACE

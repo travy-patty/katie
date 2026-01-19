@@ -24,7 +24,7 @@
 #include "qtextimagehandler_p.h"
 #include "qtexttable.h"
 #include "qtextlist.h"
-#include "qfixed_p.h"
+#include "qtextengine_p.h"
 #include "qcssutil_p.h"
 #include "qabstracttextdocumentlayout_p.h"
 #include "qcssparser_p.h"
@@ -33,11 +33,11 @@
 #include "qrect.h"
 #include "qpalette.h"
 #include "qdebug.h"
+#include "qvarlengtharray.h"
 #include "qstyle.h"
 #include "qbasictimer.h"
 #include "qfontmetrics.h"
 #include "qx11info_x11.h"
-#include "qstdcontainers_p.h"
 
 #include <limits.h>
 
@@ -382,7 +382,7 @@ static inline bool operator<(const QCheckPoint &checkPoint, int pos)
 static void fillBackground(QPainter *p, const QRectF &rect, QBrush brush, const QPointF &origin, QRectF gradientRect = QRectF())
 {
     p->save();
-    if (brush.style() == Qt::LinearGradientPattern || brush.style() == Qt::RadialGradientPattern) {
+    if (brush.style() >= Qt::LinearGradientPattern && brush.style() <= Qt::ConicalGradientPattern) {
         if (!gradientRect.isNull()) {
             QTransform m;
             m.translate(gradientRect.left(), gradientRect.top());
@@ -935,7 +935,7 @@ void QTextDocumentLayoutPrivate::drawFrame(const QPointF &offset, QPainter *pain
         const int columns = table->columns();
         QTextTableData *td = static_cast<QTextTableData *>(data(table));
 
-        QStdVector<int> selectedTableCells(context.selections.size() * 4);
+        QVarLengthArray<int> selectedTableCells(context.selections.size() * 4);
         for (int i = 0; i < context.selections.size(); ++i) {
             const QAbstractTextDocumentLayout::Selection &s = context.selections.at(i);
             int row_start = -1, col_start = -1, num_rows = -1, num_cols = -1;
@@ -1290,10 +1290,11 @@ void QTextDocumentLayoutPrivate::drawBlock(const QPointF &offset, QPainter *pain
 
     tl->draw(painter, offset, selections, context.clip.isValid() ? (context.clip & clipRect) : clipRect);
 
-    if (context.cursorPosition >= blpos && context.cursorPosition < blpos + bllen) {
+    if ((context.cursorPosition >= blpos && context.cursorPosition < blpos + bllen)
+        || (context.cursorPosition < -1 && !tl->preeditAreaText().isEmpty())) {
         int cpos = context.cursorPosition;
         if (cpos < -1)
-            cpos = (cpos + 2) - 1;
+            cpos = tl->preeditAreaPosition() - (cpos + 2);
         else
             cpos -= blpos;
         tl->drawCursor(painter, offset, cpos, cursorWidth);
@@ -1702,7 +1703,7 @@ recalc_minmax_widths:
 
     // for variable columns distribute the remaining space
     if (variableCols > 0 && remainingWidth > 0) {
-        QStdVector<int> columnsWithProperMaxSize;
+        QVarLengthArray<int> columnsWithProperMaxSize;
         for (int i = 0; i < columns; ++i)
             if (columnWidthConstraints.at(i).type() == QTextLength::VariableLength
                 && td->maxWidths.at(i) != QFIXED_MAX)
@@ -1771,7 +1772,7 @@ recalc_minmax_widths:
     if (pageHeight <= 0)
         pageHeight = QFIXED_MAX;
 
-    QStdVector<QFixed> heightToDistribute(columns);
+    QVarLengthArray<QFixed> heightToDistribute(columns);
 
     td->headerHeight = 0;
     const int headerRowCount = qMin(table->format().headerRowCount(), rows - 1);
@@ -2530,9 +2531,15 @@ void QTextDocumentLayoutPrivate::layoutBlock(const QTextBlock &bl, int blockPosi
 
     Qt::LayoutDirection dir = bl.textDirection();
 
+    QFixed extraMargin;
+    if (docPrivate->defaultTextOption.flags() & QTextOption::AddSpaceForLineAndParagraphSeparators) {
+        QFontMetricsF fm(bl.charFormat().font());
+        extraMargin = QFixed::fromReal(fm.width(QChar(QChar(0x21B5))));
+    }
+
     const QFixed indent = this->blockIndent(blockFormat);
-    const QFixed totalLeftMargin = QFixed::fromReal(blockFormat.leftMargin()) + (dir == Qt::RightToLeft ? QFixed() : indent);
-    const QFixed totalRightMargin = QFixed::fromReal(blockFormat.rightMargin()) + (dir == Qt::RightToLeft ? indent : QFixed());
+    const QFixed totalLeftMargin = QFixed::fromReal(blockFormat.leftMargin()) + (dir == Qt::RightToLeft ? extraMargin : indent);
+    const QFixed totalRightMargin = QFixed::fromReal(blockFormat.rightMargin()) + (dir == Qt::RightToLeft ? indent : extraMargin);
 
     const QPointF oldPosition = tl->position();
     tl->setPosition(QPointF(layoutStruct->x_left.toReal(), layoutStruct->y.toReal()));
@@ -2545,6 +2552,7 @@ void QTextDocumentLayoutPrivate::layoutBlock(const QTextBlock &bl, int blockPosi
         LDEBUG << " do layout";
         QTextOption option = docPrivate->defaultTextOption;
         option.setTextDirection(dir);
+        option.setTabs( blockFormat.tabPositions() );
 
         Qt::Alignment align = docPrivate->defaultTextOption.alignment();
         if (blockFormat.hasProperty(QTextFormat::BlockAlignment))
@@ -2552,7 +2560,7 @@ void QTextDocumentLayoutPrivate::layoutBlock(const QTextBlock &bl, int blockPosi
         option.setAlignment(QStyle::visualAlignment(dir, align)); // for paragraph that are RTL, alignment is auto-reversed;
 
         if (blockFormat.nonBreakableLines() || document->pageSize().width() < 0) {
-            option.setWrapMode(QTextOption::NoWrap);
+            option.setWrapMode(QTextOption::ManualWrap);
         }
 
         tl->setTextOption(option);
@@ -2940,6 +2948,8 @@ int QTextDocumentLayout::hitTest(const QPointF &point, Qt::HitTestAccuracy accur
 
     // ensure we stay within document bounds
     int lastPos = f->lastPosition();
+    if (l && !l->preeditAreaText().isEmpty())
+        lastPos += l->preeditAreaText().length();
     if (position > lastPos)
         position = lastPos;
     else if (position < 0)

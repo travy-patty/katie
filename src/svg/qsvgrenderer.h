@@ -23,6 +23,9 @@
 #define QSVGRENDERER_H
 
 #include <QtGui/qmatrix.h>
+
+#ifndef QT_NO_SVGRENDERER
+
 #include <QtCore/qobject.h>
 #include <QtCore/qsize.h>
 #include <QtCore/qrect.h>
@@ -41,6 +44,8 @@ class Q_SVG_EXPORT QSvgRenderer : public QObject
     Q_OBJECT
 
     Q_PROPERTY(QRectF viewBox READ viewBoxF WRITE setViewBox)
+    Q_PROPERTY(int framesPerSecond READ framesPerSecond WRITE setFramesPerSecond)
+    Q_PROPERTY(int currentFrame READ currentFrame WRITE setCurrentFrame)
 public:
     QSvgRenderer(QObject *parent=0);
     QSvgRenderer(const QString &filename, QObject *parent=0);
@@ -56,6 +61,13 @@ public:
     QRectF viewBoxF() const;
     void setViewBox(const QRect &viewbox);
     void setViewBox(const QRectF &viewbox);
+
+    bool animated() const;
+    int framesPerSecond() const;
+    void setFramesPerSecond(int num);
+    int currentFrame() const;
+    void setCurrentFrame(int);
+    int animationDuration() const;//in seconds
 
     QRectF boundsOnElement(const QString &id) const;
     bool elementExists(const QString &id) const;
@@ -80,4 +92,6 @@ private:
 
 QT_END_NAMESPACE
 
+
+#endif // QT_NO_SVGRENDERER
 #endif // QSVGRENDERER_H

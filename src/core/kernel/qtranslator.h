@@ -22,33 +22,33 @@
 #ifndef QTRANSLATOR_H
 #define QTRANSLATOR_H
 
-#include <QtCore/qstring.h>
+#include <QtCore/qobject.h>
+
 
 QT_BEGIN_NAMESPACE
+
 
 #ifndef QT_NO_TRANSLATION
 
 class QTranslatorPrivate;
 
-class Q_CORE_EXPORT QTranslator
+class Q_CORE_EXPORT QTranslator : public QObject
 {
+    Q_OBJECT
 public:
-    QTranslator();
-    virtual ~QTranslator();
+    explicit QTranslator(QObject *parent = nullptr);
+    ~QTranslator();
 
     virtual QString translate(const char *context, const char *sourceText) const;
-    virtual QString translateStrict(const char *context, const char *sourceText) const;
 
     virtual bool isEmpty() const;
 
-    bool load(const QString &domain, const QString &locale = QString());
-    bool loadFromData(const QByteArray &data);
+    bool load(const QString &domain);
+
 
 private:
     Q_DISABLE_COPY(QTranslator)
     Q_DECLARE_PRIVATE(QTranslator)
-
-    QTranslatorPrivate *d_ptr;
 };
 
 #endif // QT_NO_TRANSLATION

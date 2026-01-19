@@ -598,7 +598,6 @@ protected:
     QStyleOptionGroupBox(int version);
 };
 
-#ifndef QT_NO_SIZEGRIP
 class Q_GUI_EXPORT QStyleOptionSizeGrip : public QStyleOptionComplex
 {
 public:
@@ -612,7 +611,6 @@ public:
 protected:
     QStyleOptionSizeGrip(int version);
 };
-#endif // QT_NO_SIZEGRIP
 
 class Q_GUI_EXPORT QStyleOptionGraphicsItem : public QStyleOption
 {

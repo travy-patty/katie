@@ -59,6 +59,9 @@ public:
     void setWorkingDirectory(const QDir &dir);
     QDir workingDirectory() const;
 
+    void setScriptingEnabled(bool enabled);
+    bool isScriptingEnabled() const;
+
     void setLanguageChangeEnabled(bool enabled);
     bool isLanguageChangeEnabled() const;
 

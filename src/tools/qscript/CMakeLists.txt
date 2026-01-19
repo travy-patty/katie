@@ -1,6 +1,6 @@
 # add_definitions()
 set(EXTRA_QTSCRIPT_LIBS
-    KtCore KtScript KtGui
+    KtCore KtScript KtGui KtScriptTools
 )
 
 include_directories(
@@ -9,6 +9,7 @@ include_directories(
     ${CMAKE_BINARY_DIR}/include/QtCore
     ${CMAKE_BINARY_DIR}/include/QtScript
     ${CMAKE_BINARY_DIR}/include/QtGui
+    ${CMAKE_BINARY_DIR}/include/QtScriptTools
 )
 
 add_executable(qscript ${CMAKE_CURRENT_SOURCE_DIR}/qscript.cpp)
@@ -21,7 +22,7 @@ set_target_properties(qscript PROPERTIES
 
 install(
     TARGETS qscript
-    EXPORT KatieTargets
+    EXPORT KatieTargets ${INSTALL_TARGETS_DEFAULT_ARGS}
     RUNTIME DESTINATION ${KATIE_BINARIES_PATH}
     COMPONENT Tools
 )

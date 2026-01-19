@@ -368,3 +368,7 @@ void QOutlineMapper::clipElements(const QPointF *elements,
 }
 
 QT_END_NAMESPACE
+
+
+
+

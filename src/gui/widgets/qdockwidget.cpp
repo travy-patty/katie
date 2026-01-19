@@ -357,7 +357,7 @@ void QDockWidgetLayout::setWidgetForRole(Role r, QWidget *w)
 
     if (w != 0) {
         addChildWidget(w);
-        item_list[r] = new QWidgetItem(w);
+        item_list[r] = new QWidgetItemV2(w);
         w->show();
     } else {
         item_list[r] = 0;
@@ -856,6 +856,52 @@ bool QDockWidgetPrivate::mouseReleaseEvent(QMouseEvent *event)
     return false;
 }
 
+void QDockWidgetPrivate::nonClientAreaMouseEvent(QMouseEvent *event)
+{
+    Q_Q(QDockWidget);
+
+    int fw = q->style()->pixelMetric(QStyle::PM_DockWidgetFrameWidth, 0, q);
+
+    QRect geo = q->geometry();
+    QRect titleRect = q->frameGeometry();
+    titleRect.setLeft(geo.left());
+    titleRect.setRight(geo.right());
+    titleRect.setBottom(geo.top() - 1);
+    titleRect.adjust(0, fw, 0, 0);
+
+    switch (event->type()) {
+        case QEvent::NonClientAreaMouseButtonPress:
+            if (!titleRect.contains(event->globalPos()))
+                break;
+            if (state != 0)
+                break;
+            if (qobject_cast<QMainWindow*>(parent) == 0)
+                break;
+            if (isAnimating())
+                break;
+            initDrag(event->pos(), true);
+            if (state == 0)
+                break;
+            state->ctrlDrag = event->modifiers() & Qt::ControlModifier;
+            startDrag();
+            break;
+        case QEvent::NonClientAreaMouseMove:
+            if (state == 0 || !state->dragging)
+                break;
+            if (state->nca) {
+                endDrag();
+            }
+            break;
+        case QEvent::NonClientAreaMouseButtonRelease:
+            break;
+        case QEvent::NonClientAreaMouseButtonDblClick:
+            _q_toggleTopLevel();
+            break;
+        default:
+            break;
+    }
+}
+
 void QDockWidgetPrivate::moveEvent(QMoveEvent *event)
 {
     Q_Q(QDockWidget);
@@ -1288,8 +1334,8 @@ bool QDockWidget::event(QEvent *event)
         const QPoint parentTopLeft = isWindow() ?
             QApplication::desktop()->availableGeometry(this).topLeft() : QPoint(0, 0);
         emit visibilityChanged(geometry().right() >= parentTopLeft.x() && geometry().bottom() >= parentTopLeft.y());
+}
         break;
-    }
 #endif
     case QEvent::ApplicationLayoutDirectionChange:
     case QEvent::LayoutDirectionChange:
@@ -1335,6 +1381,12 @@ bool QDockWidget::event(QEvent *event)
         if (d->mouseReleaseEvent(static_cast<QMouseEvent *>(event)))
             return true;
         break;
+    case QEvent::NonClientAreaMouseMove:
+    case QEvent::NonClientAreaMouseButtonPress:
+    case QEvent::NonClientAreaMouseButtonRelease:
+    case QEvent::NonClientAreaMouseButtonDblClick:
+        d->nonClientAreaMouseEvent(static_cast<QMouseEvent*>(event));
+        return true;
     case QEvent::Move:
         d->moveEvent(static_cast<QMoveEvent*>(event));
         break;

@@ -183,6 +183,8 @@ protected:
     void changeEvent(QEvent *);
     void initStyleOption(QStyleOptionTab *option, int tabIndex) const;
 
+
+    friend class QAccessibleTabBar;
 private:
     Q_DISABLE_COPY(QTabBar)
     Q_DECLARE_PRIVATE(QTabBar)

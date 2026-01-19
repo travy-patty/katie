@@ -189,9 +189,15 @@ protected:
     int rowHeight(const QModelIndex &index) const;
 
     bool isIndexHidden(const QModelIndex &index) const;
+    void selectionChanged(const QItemSelection &selected,
+                          const QItemSelection &deselected);
     void currentChanged(const QModelIndex &current, const QModelIndex &previous);
 
 private:
+    friend class QAccessibleItemView;
+    friend class QAccessibleTable2;
+    friend class QAccessibleTree;
+    friend class QAccessibleTable2Cell;
     int visualIndex(const QModelIndex &index) const;
 
     Q_DECLARE_PRIVATE(QTreeView)

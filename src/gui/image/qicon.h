@@ -42,12 +42,14 @@ public:
     QIcon();
     QIcon(const QPixmap &pixmap);
     QIcon(const QIcon &other);
-    explicit QIcon(const QString &fileName);
+    explicit QIcon(const QString &fileName); // file or resource name
     explicit QIcon(QIconEngine *engine);
     ~QIcon();
     QIcon &operator=(const QIcon &other);
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QIcon &operator=(QIcon &&other)
     { qSwap(d, other.d); return *this; }
+#endif
     inline void swap(QIcon &other) { qSwap(d, other.d); }
 
     operator QVariant() const;

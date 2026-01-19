@@ -24,7 +24,6 @@
 #include "qmatrix.h"
 #include "qregion.h"
 #include "qpainterpath.h"
-#include "qpainterpath_p.h"
 #include "qvariant.h"
 #include "qmath.h"
 #include "qcorecommon_p.h"
@@ -671,7 +670,7 @@ QPainterPath QMatrix::map(const QPainterPath &path) const
     if (path.isEmpty())
         return QPainterPath();
 
-    QPainterPath copy(path);
+    QPainterPath copy = path;
 
     // Translate or identity
     if (_m11 == 1.0 && _m22 == 1.0 && _m12 == 0.0 && _m21 == 0.0) {
@@ -1079,12 +1078,12 @@ Q_GUI_EXPORT QPainterPath operator *(const QPainterPath &p, const QMatrix &m)
 
 QDataStream &operator<<(QDataStream &s, const QMatrix &m)
 {
-    s << (qreal)m.m11()
-        << (qreal)m.m12()
-        << (qreal)m.m21()
-        << (qreal)m.m22()
-        << (qreal)m.dx()
-        << (qreal)m.dy();
+    s << double(m.m11())
+        << double(m.m12())
+        << double(m.m21())
+        << double(m.m22())
+        << double(m.dx())
+        << double(m.dy());
     return s;
 }
 
@@ -1100,12 +1099,7 @@ QDataStream &operator<<(QDataStream &s, const QMatrix &m)
 
 QDataStream &operator>>(QDataStream &s, QMatrix &m)
 {
-    qreal m11 = 0.0;
-    qreal m12 = 0.0;
-    qreal m21 = 0.0;
-    qreal m22 = 0.0;
-    qreal dx = 0.0;
-    qreal dy = 0.0;
+    double m11, m12, m21, m22, dx, dy;
     s >> m11;
     s >> m12;
     s >> m21;

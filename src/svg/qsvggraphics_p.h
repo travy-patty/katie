@@ -34,6 +34,9 @@
 //
 
 #include "qsvgnode_p.h"
+
+#ifndef QT_NO_SVG
+
 #include "QtGui/qpainterpath.h"
 #include "QtGui/qimage.h"
 #include "QtGui/qtextlayout.h"
@@ -41,6 +44,13 @@
 #include "QtCore/qstack.h"
 
 QT_BEGIN_NAMESPACE
+
+class QSvgAnimation : public QSvgNode
+{
+public:
+    virtual void draw(QPainter *p, QSvgExtraStates &states);
+    virtual Type type() const;
+};
 
 class QSvgArc : public QSvgNode
 {
@@ -213,6 +223,14 @@ private:
     const QPointF   m_start;
 };
 
+class QSvgVideo : public QSvgNode
+{
+public:
+    virtual void draw(QPainter *p, QSvgExtraStates &states);
+    virtual Type type() const;
+};
+
 QT_END_NAMESPACE
 
+#endif // QT_NO_SVG
 #endif // QSVGGRAPHICS_P_H

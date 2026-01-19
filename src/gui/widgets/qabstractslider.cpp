@@ -24,7 +24,9 @@
 #include "qevent.h"
 #include "qabstractslider_p.h"
 #include "qdebug.h"
-
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
 #include <limits.h>
 
 QT_BEGIN_NAMESPACE
@@ -507,6 +509,9 @@ void QAbstractSlider::setValue(int value)
         if (d->pressed)
             emit sliderMoved((d->position = value));
     }
+#ifndef QT_NO_ACCESSIBILITY
+    QAccessible::updateAccessibility(this, 0, QAccessible::ValueChanged);
+#endif
     sliderChange(SliderValueChange);
     emit valueChanged(value);
 }

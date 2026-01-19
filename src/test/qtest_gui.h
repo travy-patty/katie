@@ -38,6 +38,7 @@
 
 QT_BEGIN_NAMESPACE
 
+
 namespace QTest
 {
 
@@ -64,5 +65,6 @@ extern void qt_x11_wait_for_window_manager(QWidget *w);
 #endif
 
 QT_END_NAMESPACE
+
 
 #endif

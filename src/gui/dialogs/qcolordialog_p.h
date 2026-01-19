@@ -97,8 +97,8 @@ public:
     bool nativeDialogInUse;
 };
 
-QT_END_NAMESPACE
-
 #endif // QT_NO_COLORDIALOG
+
+QT_END_NAMESPACE
 
 #endif // QCOLORDIALOG_P_H

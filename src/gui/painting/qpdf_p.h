@@ -52,6 +52,9 @@ QT_BEGIN_NAMESPACE
 #define PPK_CupsPaperRect QPrintEngine::PrintEnginePropertyKey(0xfe02)
 #define PPK_CupsStringPageSize QPrintEngine::PrintEnginePropertyKey(0xfe03)
 
+const char *qt_real_to_string(qreal val, char *buf);
+const char *qt_int_to_string(int val, char *buf);
+
 namespace QPdf {
 
     class ByteStream
@@ -78,6 +81,10 @@ namespace QPdf {
         static inline int maxMemorySize() { return 100000000; }
         static inline int chunkSize()     { return 10000000; }
 
+    protected:
+        void constructor_helper(QIODevice *dev);
+        void constructor_helper(QByteArray *ba);
+
     private:
         void prepareBuffer();
 
@@ -99,6 +106,9 @@ namespace QPdf {
     QByteArray generateMatrix(const QTransform &matrix);
     QByteArray generateDashes(const QPen &pen);
     QByteArray patternForBrush(const QBrush &b);
+#ifdef USE_NATIVE_GRADIENTS
+    QByteArray generateLinearGradientShader(const QLinearGradient *lg, const QPointF *page_rect, bool alpha = false);
+#endif
 
     struct Stroker {
         Stroker();
@@ -154,6 +164,7 @@ class QPdfBaseEngine : public QAlphaPaintEngine, public QPrintEngine
     Q_DECLARE_PRIVATE(QPdfBaseEngine)
 public:
     QPdfBaseEngine(QPdfBaseEnginePrivate &d, PaintEngineFeatures f);
+    ~QPdfBaseEngine() {}
 
     // reimplementations QPaintEngine
     bool begin(QPaintDevice *pdev);
@@ -189,7 +200,7 @@ class QPdfBaseEnginePrivate : public QAlphaPaintEnginePrivate
 {
     Q_DECLARE_PUBLIC(QPdfBaseEngine)
 public:
-    QPdfBaseEnginePrivate();
+    QPdfBaseEnginePrivate(QPrinter::PrinterMode m);
     ~QPdfBaseEnginePrivate();
 
     bool openPrintDevice();
@@ -229,6 +240,7 @@ public:
     int fd;
 
     // printer options
+    QString outputFileName;
     QString printerName;
     QString selectionOption;
     QString title;

@@ -46,18 +46,128 @@
 #include "qtextformat.h"
 #include "qwizard.h"
 #include "qdir.h"
+#include "qsettings.h"
 #include "qpixmapcache.h"
 #include "qguiplatformplugin.h"
 #include "qstylehelper_p.h"
-#include "qguiimages_p.h"
 
 #ifndef QT_NO_ITEMVIEWS
-#  include "qtextengine_p.h"
+#   include "qtextengine_p.h"
 #endif
 
 #include <limits.h>
 
 QT_BEGIN_NAMESPACE
+
+#ifndef QT_NO_IMAGEFORMAT_XPM
+static const char * const tree_branch_open_xpm[] = {
+"9 9 2 1",
+"  c None",
+"# c #000000",
+"#########",
+"#       #",
+"# ##### #",
+"#  ###  #",
+"#  ###  #",
+"#   #   #",
+"#   #   #",
+"#       #",
+"#########"};
+
+static const char * const tree_branch_closed_xpm[] = {
+"9 9 2 1",
+"  c None",
+"# c #000000",
+"#########",
+"#       #",
+"# #     #",
+"# ###   #",
+"# ##### #",
+"# ###   #",
+"# #     #",
+"#       #",
+"#########"};
+
+static const char * const tb_extension_arrow_v_xpm[] = {
+    "5 8 3 1",
+    "            c None",
+    ".            c #000000",
+    "+            c none",
+    ".+++.",
+    "..+..",
+    "+...+",
+    "++.++",
+    ".+++.",
+    "..+..",
+    "+...+",
+    "++.++"
+};
+
+static const char * const tb_extension_arrow_h_xpm[] = {
+    "8 5 3 1",
+    "            c None",
+    ".            c #000000",
+    "+            c none",
+    "..++..++",
+    "+..++..+",
+    "++..++..",
+    "+..++..+",
+    "..++..++",
+};
+
+static const char * const filedialog_start_xpm[]={
+    "16 15 8 1",
+    "a c #cec6bd",
+    "# c #000000",
+    "e c #ffff00",
+    "b c #999999",
+    "f c #cccccc",
+    "d c #dcdcdc",
+    "c c #ffffff",
+    ". c None",
+    ".....######aaaaa",
+    "...bb#cccc##aaaa",
+    "..bcc#cccc#d#aaa",
+    ".bcef#cccc#dd#aa",
+    ".bcfe#cccc#####a",
+    ".bcef#ccccccccc#",
+    "bbbbbbbbbbbbccc#",
+    "bccccccccccbbcc#",
+    "bcefefefefee#bc#",
+    ".bcefefefefef#c#",
+    ".bcfefefefefe#c#",
+    "..bcfefefefeeb##",
+    "..bbbbbbbbbbbbb#",
+    "...#############",
+    "................"};
+
+static const char * const filedialog_end_xpm[]={
+    "16 15 9 1",
+    "d c #a0a0a0",
+    "c c #c3c3c3",
+    "# c #cec6bd",
+    ". c #000000",
+    "f c #ffff00",
+    "e c #999999",
+    "g c #cccccc",
+    "b c #ffffff",
+    "a c None",
+    "......####aaaaaa",
+    ".bbbb..###aaaaaa",
+    ".bbbb.c.##aaaaaa",
+    ".bbbb....ddeeeea",
+    ".bbbbbbb.bbbbbe.",
+    ".bbbbbbb.bcfgfe.",
+    "eeeeeeeeeeeeefe.",
+    "ebbbbbbbbbbeege.",
+    "ebfgfgfgfgff.ee.",
+    "aebfgfgfgfgfg.e.",
+    "aebgfgfgfgfgf.e.",
+    "aaebgfgfgfgffe..",
+    "aaeeeeeeeeeeeee.",
+    "aaa.............",
+    "aaaaaaaaaaaaaaaa"};
+#endif // QT_NO_IMAGEFORMAT_XPM
 
 /*!
     \class QCommonStyle
@@ -79,7 +189,7 @@ QT_BEGIN_NAMESPACE
     subElementRect() are documented here.
     \endomit
 
-    \sa QStyle, QWindowsStyle
+    \sa QStyle, QMotifStyle, QWindowsStyle
 */
 
 /*!
@@ -250,21 +360,19 @@ void QCommonStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, Q
         int bef_v = mid_v;
         int aft_h = mid_h;
         int aft_v = mid_v;
+#ifndef QT_NO_IMAGEFORMAT_XPM
         static const int decoration_size = 9;
+        static QPixmap open(tree_branch_open_xpm);
+        static QPixmap closed(tree_branch_closed_xpm);
         if (opt->state & State_Children) {
             int delta = decoration_size / 2;
             bef_h -= delta;
             bef_v -= delta;
             aft_h += delta;
             aft_v += delta;
-            QPixmap statepm;
-            if (opt->state & State_Open) {
-                statepm.loadFromData(tree_branch_open_png, tree_branch_open_png_len, qt_images_format);
-            } else {
-                statepm.loadFromData(tree_branch_closed_png, tree_branch_closed_png_len, qt_images_format);
-            }
-            p->drawPixmap(bef_h, bef_v, statepm);
+            p->drawPixmap(bef_h, bef_v, opt->state & State_Open ? open : closed);
         }
+#endif // QT_NO_IMAGEFORMAT_XPM
         if (opt->state & State_Item) {
             if (opt->direction == Qt::RightToLeft)
                 p->drawLine(opt->rect.left(), mid_v, bef_h, mid_v);
@@ -346,8 +454,17 @@ void QCommonStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, Q
     }
     case PE_IndicatorTabClose: {
         if (d->tabBarcloseButtonIcon.isNull()) {
-            d->tabBarcloseButtonIcon = standardIcon(QStyle::SP_DialogCloseButton, opt, widget);
+            d->tabBarcloseButtonIcon.addPixmap(QPixmap(
+                        QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-closetab-16.png")),
+                        QIcon::Normal, QIcon::Off);
+            d->tabBarcloseButtonIcon.addPixmap(QPixmap(
+                        QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-closetab-down-16.png")),
+                        QIcon::Normal, QIcon::On);
+            d->tabBarcloseButtonIcon.addPixmap(QPixmap(
+                        QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-closetab-hover-16.png")),
+                        QIcon::Active, QIcon::Off);
         }
+
         int size = proxy()->pixelMetric(QStyle::PM_SmallIconSize);
         QIcon::Mode mode = opt->state & State_Enabled ?
                             (opt->state & State_Raised ? QIcon::Active : QIcon::Normal)
@@ -775,7 +892,7 @@ void QCommonStylePrivate::viewItemDrawText(QPainter *p, const QStyleOptionViewIt
     QRect textRect = rect.adjusted(textMargin, 0, -textMargin, 0); // remove width padding
     const bool wrapText = option->features & QStyleOptionViewItemV2::WrapText;
     QTextOption textOption;
-    textOption.setWrapMode(wrapText ? QTextOption::WordWrap : QTextOption::NoWrap);
+    textOption.setWrapMode(wrapText ? QTextOption::WordWrap : QTextOption::ManualWrap);
     textOption.setTextDirection(option->direction);
     textOption.setAlignment(QStyle::visualAlignment(option->direction, option->displayAlignment));
     QTextLayout textLayout;
@@ -797,9 +914,8 @@ void QCommonStylePrivate::viewItemDrawText(QPainter *p, const QStyleOptionViewIt
             if ((nextLine.y() + nextLine.height()) > textRect.height()) {
                 int start = line.textStart();
                 int length = line.textLength() + nextLine.textLength();
-                const QFontMetrics fm(option->font);
-                elidedText = fm.elidedText(textLayout.text().mid(start, length),
-                                           option->textElideMode, textRect.width());
+                const QStackTextEngine engine(textLayout.text().mid(start, length), option->font);
+                elidedText = engine.elidedText(option->textElideMode, textRect.width());
                 height += line.height();
                 width = textRect.width();
                 elidedIndex = j;
@@ -809,9 +925,8 @@ void QCommonStylePrivate::viewItemDrawText(QPainter *p, const QStyleOptionViewIt
         if (line.naturalTextWidth() > textRect.width()) {
             int start = line.textStart();
             int length = line.textLength();
-            const QFontMetrics fm(option->font);
-            elidedText = fm.elidedText(textLayout.text().mid(start, length),
-                                       option->textElideMode, textRect.width());
+            const QStackTextEngine engine(textLayout.text().mid(start, length), option->font);
+            elidedText = engine.elidedText(option->textElideMode, textRect.width());
             height += line.height();
             width = textRect.width();
             elidedIndex = j;
@@ -3521,6 +3636,68 @@ void QCommonStyle::drawComplexControl(ComplexControl cc, const QStyleOptionCompl
         }
         break;
 #endif // QT_NO_GROUPBOX
+#ifndef QT_NO_WORKSPACE
+    case CC_MdiControls:
+        {
+            QStyleOptionButton btnOpt;
+            btnOpt.QStyleOption::operator=(*opt);
+            btnOpt.state &= ~State_MouseOver;
+            int bsx = 0;
+            int bsy = 0;
+            if (opt->subControls & QStyle::SC_MdiCloseButton) {
+                if (opt->activeSubControls & QStyle::SC_MdiCloseButton && (opt->state & State_Sunken)) {
+                    btnOpt.state |= State_Sunken;
+                    btnOpt.state &= ~State_Raised;
+                    bsx = proxy()->pixelMetric(PM_ButtonShiftHorizontal);
+                    bsy = proxy()->pixelMetric(PM_ButtonShiftVertical);
+                } else {
+                    btnOpt.state |= State_Raised;
+                    btnOpt.state &= ~State_Sunken;
+                    bsx = 0;
+                    bsy = 0;
+                }
+                btnOpt.rect = proxy()->subControlRect(CC_MdiControls, opt, SC_MdiCloseButton, widget);
+                proxy()->drawPrimitive(PE_PanelButtonCommand, &btnOpt, p, widget);
+                QPixmap pm = standardIcon(SP_TitleBarCloseButton).pixmap(16, 16);
+                proxy()->drawItemPixmap(p, btnOpt.rect.translated(bsx, bsy), Qt::AlignCenter, pm);
+            }
+            if (opt->subControls & QStyle::SC_MdiNormalButton) {
+                if (opt->activeSubControls & QStyle::SC_MdiNormalButton && (opt->state & State_Sunken)) {
+                    btnOpt.state |= State_Sunken;
+                    btnOpt.state &= ~State_Raised;
+                    bsx = proxy()->pixelMetric(PM_ButtonShiftHorizontal);
+                    bsy = proxy()->pixelMetric(PM_ButtonShiftVertical);
+                } else {
+                    btnOpt.state |= State_Raised;
+                    btnOpt.state &= ~State_Sunken;
+                    bsx = 0;
+                    bsy = 0;
+                }
+                btnOpt.rect = proxy()->subControlRect(CC_MdiControls, opt, SC_MdiNormalButton, widget);
+                proxy()->drawPrimitive(PE_PanelButtonCommand, &btnOpt, p, widget);
+                QPixmap pm = standardIcon(SP_TitleBarNormalButton).pixmap(16, 16);
+                proxy()->drawItemPixmap(p, btnOpt.rect.translated(bsx, bsy), Qt::AlignCenter, pm);
+            }
+            if (opt->subControls & QStyle::SC_MdiMinButton) {
+                if (opt->activeSubControls & QStyle::SC_MdiMinButton && (opt->state & State_Sunken)) {
+                    btnOpt.state |= State_Sunken;
+                    btnOpt.state &= ~State_Raised;
+                    bsx = proxy()->pixelMetric(PM_ButtonShiftHorizontal);
+                    bsy = proxy()->pixelMetric(PM_ButtonShiftVertical);
+                } else {
+                    btnOpt.state |= State_Raised;
+                    btnOpt.state &= ~State_Sunken;
+                    bsx = 0;
+                    bsy = 0;
+                }
+                btnOpt.rect = proxy()->subControlRect(CC_MdiControls, opt, SC_MdiMinButton, widget);
+                proxy()->drawPrimitive(PE_PanelButtonCommand, &btnOpt, p, widget);
+                QPixmap pm = standardIcon(SP_TitleBarMinButton).pixmap(16, 16);
+                proxy()->drawItemPixmap(p, btnOpt.rect.translated(bsx, bsy), Qt::AlignCenter, pm);
+            }
+        }
+        break;
+#endif // QT_NO_WORKSPACE
 
     default:
         qWarning("QCommonStyle::drawComplexControl: Control %d not handled", cc);
@@ -3644,6 +3821,20 @@ QStyle::SubControl QCommonStyle::hitTestComplexControl(ComplexControl cc, const 
         }
         break;
 #endif // QT_NO_GROUPBOX
+    case CC_MdiControls:
+        {
+            QRect r;
+            uint ctrl = SC_MdiMinButton;
+            while (ctrl <= SC_MdiCloseButton) {
+                r = proxy()->subControlRect(CC_MdiControls, opt, QStyle::SubControl(ctrl), widget);
+                if (r.isValid() && r.contains(pt) && (opt->subControls & ctrl)) {
+                    sc = QStyle::SubControl(ctrl);
+                    return sc;
+                }
+                ctrl <<= 1;
+            }
+        }
+        break;
     default:
         qWarning("QCommonStyle::hitTestComplexControl: Case %d not handled", cc);
     }
@@ -4033,6 +4224,49 @@ QRect QCommonStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex 
         break;
     }
 #endif // QT_NO_GROUPBOX
+#ifndef QT_NO_WORKSPACE
+    case CC_MdiControls: {
+        int numSubControls = 0;
+        if (opt->subControls & SC_MdiCloseButton)
+            ++numSubControls;
+        if (opt->subControls & SC_MdiMinButton)
+            ++numSubControls;
+        if (opt->subControls & SC_MdiNormalButton)
+            ++numSubControls;
+        if (numSubControls == 0)
+            break;
+
+        int buttonWidth = opt->rect.width()/ numSubControls - 1;
+        int offset = 0;
+        switch (sc) {
+        case SC_MdiCloseButton:
+            // Only one sub control, no offset needed.
+            if (numSubControls == 1)
+                break;
+            offset += buttonWidth + 2;
+            //FALL THROUGH
+        case SC_MdiNormalButton:
+            // No offset needed if
+            // 1) There's only one sub control
+            // 2) We have a close button and a normal button (offset already added in SC_MdiClose)
+            if (numSubControls == 1 || (numSubControls == 2 && !(opt->subControls & SC_MdiMinButton)))
+                break;
+            if (opt->subControls & SC_MdiNormalButton)
+                offset += buttonWidth;
+            break;
+        default:
+            break;
+        }
+
+        // Subtract one pixel if we only have one sub control. At this point
+        // buttonWidth is the actual width + 1 pixel margin, but we don't want the
+        // margin when there are no other controllers.
+        if (numSubControls == 1)
+            --buttonWidth;
+        ret = QRect(offset, 0, buttonWidth, opt->rect.height());
+        break;
+    }
+#endif // QT_NO_WORKSPACE
      default:
         qWarning("QCommonStyle::subControlRect: Case %d not handled", cc);
     }
@@ -4111,6 +4345,14 @@ int QCommonStyle::pixelMetric(PixelMetric m, const QStyleOption *opt, const QWid
     case PM_TabBarBaseOverlap:
     case PM_TabBarBaseHeight:
         ret = proxy()->pixelMetric(PM_DefaultFrameWidth, opt, widget);
+        break;
+
+    case PM_MdiSubWindowFrameWidth:
+        ret = 4;
+        break;
+
+    case PM_MdiSubWindowMinimizedWidth:
+        ret = 196;
         break;
 
 #ifndef QT_NO_SCROLLBAR
@@ -4478,6 +4720,20 @@ QSize QCommonStyle::sizeFromContents(ContentsType ct, const QStyleOption *opt,
             sz += QSize(!grb->isFlat() ? 16 : 0, 0);
         break;
 #endif // QT_NO_GROUPBOX
+    case CT_MdiControls:
+        if (const QStyleOptionComplex *styleOpt = qstyleoption_cast<const QStyleOptionComplex *>(opt)) {
+            int width = 1;
+            if (styleOpt->subControls & SC_MdiMinButton)
+                width += 16 + 1;
+            if (styleOpt->subControls & SC_MdiNormalButton)
+                width += 16 + 1;
+            if (styleOpt->subControls & SC_MdiCloseButton)
+                width += 16 + 1;
+            sz = QSize(width, 16);
+        } else {
+            sz = QSize(52, 16);
+        }
+        break;
 #ifndef QT_NO_ITEMVIEWS
     case CT_ItemViewItem:
         if (const QStyleOptionViewItemV4 *vopt = qstyleoption_cast<const QStyleOptionViewItemV4 *>(opt)) {
@@ -4786,7 +5042,8 @@ QPixmap QCommonStyle::standardPixmap(StandardPixmap sp, const QStyleOption *opti
     const bool rtl = (option && option->direction == Qt::RightToLeft) || (!option && QApplication::isRightToLeft());
     QPixmap pixmap;
 
-    switch (sp) {
+    if (QApplication::desktopSettingsAware() && !QIcon::themeName().isEmpty()) {
+        switch (sp) {
         case SP_DialogYesButton:
         case SP_DialogOkButton:
             pixmap = QIcon::fromTheme(QLatin1String("dialog-ok")).pixmap(16);
@@ -4852,9 +5109,6 @@ QPixmap QCommonStyle::standardPixmap(StandardPixmap sp, const QStyleOption *opti
             pixmap = QIcon::fromTheme(QLatin1String("drive-harddisk"),
                                       QIcon::fromTheme(QLatin1String("hdd_unmount"))).pixmap(16);
             break;
-        case SP_DriveNetIcon:
-            pixmap = QIcon::fromTheme(QLatin1String("folder-remote")).pixmap(16);
-            break;
         case SP_FileDialogToParent:
             pixmap = QIcon::fromTheme(QLatin1String("go-up"),
                                       QIcon::fromTheme(QLatin1String("up"))).pixmap(16);
@@ -4885,8 +5139,7 @@ QPixmap QCommonStyle::standardPixmap(StandardPixmap sp, const QStyleOption *opti
             pixmap = QIcon::fromTheme(QLatin1String("view_icon")).pixmap(16);
             break;
         case SP_BrowserReload:
-            pixmap = QIcon::fromTheme(QLatin1String("reload"),
-                                      QIcon::fromTheme(QLatin1String("view-refresh"))).pixmap(16);
+            pixmap = QIcon::fromTheme(QLatin1String("reload")).pixmap(16);
             break;
         case SP_BrowserStop:
             pixmap = QIcon::fromTheme(QLatin1String("process-stop")).pixmap(16);
@@ -4952,46 +5205,135 @@ QPixmap QCommonStyle::standardPixmap(StandardPixmap sp, const QStyleOption *opti
             break;
         default:
             break;
+        }
     }
 
-    if (!pixmap.isNull()) {
+    if (!pixmap.isNull())
         return pixmap;
-    }
 
     switch (sp) {
-        case SP_ToolBarHorizontalExtensionButton: {
-            if (rtl) {
-                QImage im = QImage::fromData(
-                    reinterpret_cast<const char*>(tb_extension_arrow_h_png), tb_extension_arrow_h_png_len,
-                    qt_images_format
-                );
-                im = im.mirrored(true, false);
-                return QPixmap::fromImage(im);
-            }
-            QPixmap pm;
-            pm.loadFromData(tb_extension_arrow_h_png, tb_extension_arrow_h_png_len, qt_images_format);
-            return pm;
+#ifndef QT_NO_IMAGEFORMAT_XPM
+    case SP_ToolBarHorizontalExtensionButton:
+        if (rtl) {
+            QImage im(tb_extension_arrow_h_xpm);
+            im = im.convertToFormat(QImage::Format_ARGB32).mirrored(true, false);
+            return QPixmap::fromImage(im);
         }
-        case SP_ToolBarVerticalExtensionButton: {
-            QPixmap pm;
-            pm.loadFromData(tb_extension_arrow_v_png, tb_extension_arrow_v_png_len, qt_images_format);
-            return pm;
-        }
-        case SP_CommandLink:
-        case SP_ArrowForward:
-            if (rtl)
-                return proxy()->standardPixmap(SP_ArrowLeft, option, widget);
-            return proxy()->standardPixmap(SP_ArrowRight, option, widget);
-        case SP_ArrowBack:
-            if (rtl)
-                return proxy()->standardPixmap(SP_ArrowRight, option, widget);
+        return QPixmap(tb_extension_arrow_h_xpm);
+    case SP_ToolBarVerticalExtensionButton:
+        return QPixmap(tb_extension_arrow_v_xpm);
+    case SP_FileDialogStart:
+        return QPixmap(filedialog_start_xpm);
+    case SP_FileDialogEnd:
+        return QPixmap(filedialog_end_xpm);
+#endif
+
+    case SP_CommandLink:
+    case SP_ArrowForward:
+        if (rtl)
             return proxy()->standardPixmap(SP_ArrowLeft, option, widget);
-        case SP_FileDialogToParent:
-            return proxy()->standardPixmap(SP_ArrowUp, option, widget);
-        case SP_FileDialogBack:
-            return proxy()->standardPixmap(SP_ArrowBack, option, widget);
-        default:
-            break;
+        return proxy()->standardPixmap(SP_ArrowRight, option, widget);
+    case SP_ArrowBack:
+        if (rtl)
+            return proxy()->standardPixmap(SP_ArrowRight, option, widget);
+        return proxy()->standardPixmap(SP_ArrowLeft, option, widget);
+    case SP_ArrowLeft:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/left-16.png"));
+    case SP_ArrowRight:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/right-16.png"));
+    case SP_ArrowUp:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/up-16.png"));
+    case SP_ArrowDown:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/down-16.png"));
+    case SP_FileDialogToParent:
+        return proxy()->standardPixmap(SP_ArrowUp, option, widget);
+    case SP_FileDialogNewFolder:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/newdirectory-16.png"));
+    case SP_FileDialogDetailedView:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/viewdetailed-16.png"));
+    case SP_FileDialogInfoView:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/fileinfo-16.png"));
+    case SP_FileDialogContentsView:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/filecontents-16.png"));
+    case SP_FileDialogListView:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/viewlist-16.png"));
+    case SP_FileDialogBack:
+        return proxy()->standardPixmap(SP_ArrowBack, option, widget);
+    case SP_DriveHDIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/harddrive-16.png"));
+    case SP_TrashIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/trash-16.png"));
+    case SP_DriveFDIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/floppy-16.png"));
+    case SP_DriveNetIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/networkdrive-16.png"));
+    case SP_DesktopIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/desktop-16.png"));
+    case SP_ComputerIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/computer-16.png"));
+    case SP_DriveCDIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/cdr-16.png"));
+    case SP_DriveDVDIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/dvd-16.png"));
+    case SP_DirHomeIcon:
+    case SP_DirOpenIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/diropen-16.png"));
+    case SP_DirIcon:
+    case SP_DirClosedIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/dirclosed-16.png"));
+    case SP_DirLinkIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/dirlink-16.png"));
+    case SP_FileIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/file-16.png"));
+    case SP_FileLinkIcon:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/filelink-16.png"));
+    case SP_DialogOkButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-ok-16.png"));
+    case SP_DialogCancelButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-cancel-16.png"));
+    case SP_DialogHelpButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-help-16.png"));
+    case SP_DialogOpenButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-open-16.png"));
+    case SP_DialogSaveButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-save-16.png"));
+    case SP_DialogCloseButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-close-16.png"));
+    case SP_DialogApplyButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-apply-16.png"));
+    case SP_DialogResetButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-clear-16.png"));
+    case SP_DialogDiscardButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-delete-16.png"));
+    case SP_DialogYesButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-yes-16.png"));
+    case SP_DialogNoButton:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-no-16.png"));
+    case SP_BrowserReload:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/refresh-24.png"));
+    case SP_BrowserStop:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/stop-24.png"));
+    case SP_MediaPlay:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/media-play-32.png"));
+    case SP_MediaPause:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/media-pause-32.png"));
+    case SP_MediaStop:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/media-stop-32.png"));
+    case SP_MediaSeekForward:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/media-seek-forward-32.png"));
+    case SP_MediaSeekBackward:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/media-seek-backward-32.png"));
+    case SP_MediaSkipForward:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/media-skip-forward-32.png"));
+    case SP_MediaSkipBackward:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/media-skip-backward-32.png"));
+    case SP_MediaVolume:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/media-volume-16.png"));
+    case SP_MediaVolumeMuted:
+        return QPixmap(QLatin1String(":/trolltech/styles/commonstyle/images/media-volume-muted-16.png"));
+
+    default:
+        break;
     }
     return QPixmap();
 }
@@ -5004,7 +5346,8 @@ QIcon QCommonStyle::standardIcon(StandardPixmap standardicon, const QStyleOption
 {
     QIcon icon;
     const bool rtl = (option && option->direction == Qt::RightToLeft) || (!option && QApplication::isRightToLeft());
-    switch (standardicon) {
+    if (QApplication::desktopSettingsAware() && !QIcon::themeName().isEmpty()) {
+        switch (standardicon) {
         case SP_DirHomeIcon:
             icon = QIcon::fromTheme(QLatin1String("user-home"));
             break;
@@ -5176,46 +5519,215 @@ QIcon QCommonStyle::standardIcon(StandardPixmap standardicon, const QStyleOption
         }
         default:
             break;
-    }
-    if (!icon.isNull()) {
+        }
+    } // if (QApplication::desktopSettingsAware() && !QIcon::themeName().isEmpty())
+    if (!icon.isNull())
         return icon;
-    }
 
     switch (standardicon) {
-        case SP_FileDialogBack:
-            return standardIcon(SP_ArrowBack, option, widget);
-        case SP_FileDialogToParent:
-            return standardIcon(SP_ArrowUp, option, widget);
-        case SP_ArrowForward:
-            if (rtl)
-                return standardIcon(SP_ArrowLeft, option, widget);
-            return standardIcon(SP_ArrowRight, option, widget);
-        case SP_ArrowBack:
-            if (rtl)
-                return standardIcon(SP_ArrowRight, option, widget);
+    case SP_FileDialogNewFolder:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/newdirectory-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/newdirectory-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/newdirectory-128.png"), QSize(128, 128));
+        break;
+    case SP_FileDialogBack:
+        return standardIcon(SP_ArrowBack, option, widget);
+    case SP_FileDialogToParent:
+        return standardIcon(SP_ArrowUp, option, widget);
+    case SP_FileDialogDetailedView:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/viewdetailed-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/viewdetailed-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/viewdetailed-128.png"), QSize(128, 128));
+        break;
+    case SP_FileDialogInfoView:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/fileinfo-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/fileinfo-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/fileinfo-128.png"), QSize(128, 128));
+        break;
+    case SP_FileDialogContentsView:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/filecontents-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/filecontents-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/filecontents-128.png"), QSize(128, 128));
+        break;
+    case SP_FileDialogListView:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/viewlist-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/viewlist-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/viewlist-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogOkButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-ok-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-ok-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-ok-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogCancelButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-cancel-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-cancel-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-cancel-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogHelpButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-help-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-help-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-help-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogOpenButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-open-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-open-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-open-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogSaveButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-save-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-save-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-save-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogCloseButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-close-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-close-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-close-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogApplyButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-apply-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-apply-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-apply-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogResetButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-clear-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-clear-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-clear-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogDiscardButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-delete-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-delete-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-delete-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogYesButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-yes-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-yes-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-yes-128.png"), QSize(128, 128));
+        break;
+    case SP_DialogNoButton:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-no-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-no-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/standardbutton-no-128.png"), QSize(128, 128));
+        break;
+    case SP_ArrowForward:
+        if (rtl)
             return standardIcon(SP_ArrowLeft, option, widget);
-        default:
-            icon.addPixmap(proxy()->standardPixmap(standardicon, option, widget));
-            break;
+        return standardIcon(SP_ArrowRight, option, widget);
+    case SP_ArrowBack:
+        if (rtl)
+            return standardIcon(SP_ArrowRight, option, widget);
+        return standardIcon(SP_ArrowLeft, option, widget);
+    case SP_ArrowLeft:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/left-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/left-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/left-128.png"), QSize(128, 128));
+        break;
+    case SP_ArrowRight:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/right-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/right-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/right-128.png"), QSize(128, 128));
+        break;
+    case SP_ArrowUp:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/up-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/up-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/up-128.png"), QSize(128, 128));
+        break;
+    case SP_ArrowDown:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/down-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/down-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/down-128.png"), QSize(128, 128));
+        break;
+   case SP_DirHomeIcon:
+   case SP_DirIcon:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/dirclosed-16.png"),
+                     QSize(), QIcon::Normal, QIcon::Off);
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/diropen-16.png"),
+                     QSize(), QIcon::Normal, QIcon::On);
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/dirclosed-32.png"),
+                     QSize(32, 32), QIcon::Normal, QIcon::Off);
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/diropen-32.png"),
+                     QSize(32, 32), QIcon::Normal, QIcon::On);
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/dirclosed-128.png"),
+                     QSize(128, 128), QIcon::Normal, QIcon::Off);
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/diropen-128.png"),
+                     QSize(128, 128), QIcon::Normal, QIcon::On);
+        break;
+    case SP_DriveCDIcon:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/cdr-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/cdr-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/cdr-128.png"), QSize(128, 128));
+        break;
+    case SP_DriveDVDIcon:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/dvd-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/dvd-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/dvd-128.png"), QSize(128, 128));
+        break;
+    case SP_FileIcon:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/file-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/file-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/file-128.png"), QSize(128, 128));
+        break;
+    case SP_FileLinkIcon:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/filelink-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/filelink-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/filelink-128.png"), QSize(128, 128));
+        break;
+    case SP_TrashIcon:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/trash-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/trash-32.png"), QSize(32, 32));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/trash-128.png"), QSize(128, 128));
+        break;
+    case SP_BrowserReload:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/refresh-24.png"), QSize(24, 24));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/refresh-32.png"), QSize(32, 32));
+        break;
+    case SP_BrowserStop:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/stop-24.png"), QSize(24, 24));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/stop-32.png"), QSize(32, 32));
+        break;
+    case SP_MediaPlay:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-play-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-play-32.png"), QSize(32, 32));
+        break;
+    case SP_MediaPause:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-pause-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-pause-32.png"), QSize(32, 32));
+        break;
+    case SP_MediaStop:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-stop-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-stop-32.png"), QSize(32, 32));
+        break;
+    case SP_MediaSeekForward:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-seek-forward-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-seek-forward-32.png"), QSize(32, 32));
+        break;
+    case SP_MediaSeekBackward:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-seek-backward-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-seek-backward-32.png"), QSize(32, 32));
+        break;
+    case SP_MediaSkipForward:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-skip-forward-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-skip-forward-32.png"), QSize(32, 32));
+        break;
+    case SP_MediaSkipBackward:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-skip-backward-16.png"), QSize(16, 16));
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-skip-backward-32.png"), QSize(32, 32));
+        break;
+    case SP_MediaVolume:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-volume-16.png"), QSize(16, 16));
+        break;
+    case SP_MediaVolumeMuted:
+        icon.addFile(QLatin1String(":/trolltech/styles/commonstyle/images/media-volume-muted-16.png"), QSize(16, 16));
+        break;
+    default:
+        icon.addPixmap(proxy()->standardPixmap(standardicon, option, widget));
+        break;
     }
     return icon;
 }
 
-
-// grayscales the image to dest (same as source).
-static void qt_grayscale(const QImage &image, QImage &dest)
-{
-    Q_ASSERT(image.depth() == 32 && dest.depth() == 32);
-
-    unsigned int *outData = (unsigned int *)dest.bits();
-    const unsigned int *data = (const unsigned int *)image.constBits();
-    // grayscaling everything
-    const int pixels = dest.width() * dest.height();
-    for (int i = 0; i < pixels; ++i) {
-        int val = qGray(data[i]);
-        outData[i] = qRgba(val, val, val, qAlpha(data[i]));
-    }
-}
+// in qpixmapfilter.cpp
+extern Q_GUI_EXPORT void qt_grayscale(const QImage &image, QImage &dest);
 
 /*! \reimp */
 QPixmap QCommonStyle::generatedIconPixmap(QIcon::Mode iconMode, const QPixmap &pixmap,

@@ -48,7 +48,6 @@
 #include "qmath.h"
 #include "qstylehelper_p.h"
 #include "qguicommon_p.h"
-#include "qguiimages_p.h"
 
 #include <limits.h>
 
@@ -146,7 +145,7 @@ bool QWindowsStyle::eventFilter(QObject *o, QEvent *e)
     \ingroup appearance
 
     \img qwindowsstyle.png
-    \sa QCleanlooksStyle
+    \sa QPlastiqueStyle, QMotifStyle
 */
 
 /*!
@@ -337,133 +336,257 @@ int QWindowsStyle::pixelMetric(PixelMetric pm, const QStyleOption *opt, const QW
     return ret;
 }
 
+#ifndef QT_NO_IMAGEFORMAT_XPM
+
+/* XPM */
+static const char * const qt_windows_menu_xpm[] = {
+"16 16 72 1",
+"  c None",
+". c #65AF36",
+"+ c #66B036",
+"@ c #77B94C",
+"# c #A7D28C",
+"$ c #BADBA4",
+"% c #A4D088",
+"& c #72B646",
+"* c #9ACB7A",
+"= c #7FBD56",
+"- c #85C05F",
+"; c #F4F9F0",
+"> c #FFFFFF",
+", c #E5F1DC",
+"' c #ECF5E7",
+") c #7ABA50",
+"! c #83BF5C",
+"~ c #AED595",
+"{ c #D7EACA",
+"] c #A9D28D",
+"^ c #BCDDA8",
+"/ c #C4E0B1",
+"( c #81BE59",
+"_ c #D0E7C2",
+": c #D4E9C6",
+"< c #6FB542",
+"[ c #6EB440",
+"} c #88C162",
+"| c #98CA78",
+"1 c #F4F9F1",
+"2 c #8FC56C",
+"3 c #F1F8EC",
+"4 c #E8F3E1",
+"5 c #D4E9C7",
+"6 c #74B748",
+"7 c #80BE59",
+"8 c #73B747",
+"9 c #6DB43F",
+"0 c #CBE4BA",
+"a c #80BD58",
+"b c #6DB33F",
+"c c #FEFFFE",
+"d c #68B138",
+"e c #F9FCF7",
+"f c #91C66F",
+"g c #E8F3E0",
+"h c #DCEDD0",
+"i c #91C66E",
+"j c #A3CF86",
+"k c #C9E3B8",
+"l c #B0D697",
+"m c #E3F0DA",
+"n c #95C873",
+"o c #E6F2DE",
+"p c #9ECD80",
+"q c #BEDEAA",
+"r c #C7E2B6",
+"s c #79BA4F",
+"t c #6EB441",
+"u c #BCDCA7",
+"v c #FAFCF8",
+"w c #F6FAF3",
+"x c #84BF5D",
+"y c #EDF6E7",
+"z c #FAFDF9",
+"A c #88C263",
+"B c #98CA77",
+"C c #CDE5BE",
+"D c #67B037",
+"E c #D9EBCD",
+"F c #6AB23C",
+"G c #77B94D",
+" .++++++++++++++",
+".+++++++++++++++",
+"+++@#$%&+++*=+++",
+"++-;>,>')+!>~+++",
+"++{>]+^>/(_>:~<+",
+"+[>>}+|>123>456+",
+"+7>>8+->>90>~+++",
+"+a>>b+a>c[0>~+++",
+"+de>=+f>g+0>~+++",
+"++h>i+j>k+0>~+++",
+"++l>mno>p+q>rst+",
+"++duv>wl++xy>zA+",
+"++++B>Cb++++&D++",
+"+++++0zE++++++++",
+"++++++FG+++++++.",
+"++++++++++++++. "};
+
+static const char * const qt_windows_close_xpm[] = {
+"10 10 2 1",
+"# c #000000",
+". c None",
+"..........",
+".##....##.",
+"..##..##..",
+"...####...",
+"....##....",
+"...####...",
+"..##..##..",
+".##....##.",
+"..........",
+".........."};
+
+static const char * const qt_windows_maximize_xpm[]={
+"10 10 2 1",
+"# c #000000",
+". c None",
+"#########.",
+"#########.",
+"#.......#.",
+"#.......#.",
+"#.......#.",
+"#.......#.",
+"#.......#.",
+"#.......#.",
+"#########.",
+".........."};
+
+static const char * const qt_windows_minimize_xpm[] = {
+"10 10 2 1",
+"# c #000000",
+". c None",
+"..........",
+"..........",
+"..........",
+"..........",
+"..........",
+"..........",
+"..........",
+".#######..",
+".#######..",
+".........."};
+
+static const char * const qt_windows_normalizeup_xpm[] = {
+"10 10 2 1",
+"# c #000000",
+". c None",
+"...######.",
+"...######.",
+"...#....#.",
+".######.#.",
+".######.#.",
+".#....###.",
+".#....#...",
+".#....#...",
+".######...",
+".........."};
+
+static const char * const qt_windows_help_xpm[] = {
+"10 10 2 1",
+". c None",
+"# c #000000",
+"..........",
+"..######..",
+".##....##.",
+"......##..",
+".....##...",
+"....##....",
+"....##....",
+"..........",
+"....##....",
+".........."};
+
+static const char * const qt_windows_shade_xpm[] = {
+"10 10 2 1",
+"# c #000000",
+". c None",
+"..........",
+"..........",
+"..........",
+"..........",
+"....#.....",
+"...###....",
+"..#####...",
+".#######..",
+"..........",
+".........."};
+
+static const char * const qt_windows_unshade_xpm[] = {
+"10 10 2 1",
+"# c #000000",
+". c None",
+"..........",
+"..........",
+"..........",
+".#######..",
+"..#####...",
+"...###....",
+"....#.....",
+"..........",
+"..........",
+".........."};
+
+static const char * qt_windows_dock_widget_close_xpm[] = {
+"8 8 2 1",
+"# c #000000",
+". c None",
+"........",
+".##..##.",
+"..####..",
+"...##...",
+"..####..",
+".##..##.",
+"........",
+"........"};
+#endif //QT_NO_IMAGEFORMAT_XPM
+
 /*!
  \reimp
  */
 QPixmap QWindowsStyle::standardPixmap(StandardPixmap standardpixmap, const QStyleOption *opt,
                                       const QWidget *widget) const
 {
+#ifndef QT_NO_IMAGEFORMAT_XPM
     switch (standardpixmap) {
-    case SP_TitleBarMenuButton: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_windows_menu_png,
-            windows_qt_windows_menu_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_TitleBarShadeButton: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_windows_shade_png,
-            windows_qt_windows_shade_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_TitleBarUnshadeButton: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_windows_unshade_png,
-            windows_qt_windows_unshade_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_TitleBarNormalButton: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_windows_normalizeup_png,
-            windows_qt_windows_normalizeup_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_TitleBarMinButton: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_windows_minimize_png,
-            windows_qt_windows_minimize_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_TitleBarMaxButton: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_windows_maximize_png,
-            windows_qt_windows_maximize_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_TitleBarCloseButton: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_windows_close_png,
-            windows_qt_windows_close_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_TitleBarContextHelpButton: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_windows_help_png,
-            windows_qt_windows_help_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_DockWidgetCloseButton: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_windows_dock_widget_close_png,
-            windows_qt_windows_dock_widget_close_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_MessageBoxInformation: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_information_png,
-            windows_qt_information_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_MessageBoxWarning: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_warning_png,
-            windows_qt_warning_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_MessageBoxCritical: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_critical_png,
-            windows_qt_critical_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
-    case SP_MessageBoxQuestion: {
-        QPixmap pix;
-        pix.loadFromData(
-            windows_qt_question_png,
-            windows_qt_question_png_len,
-            qt_images_format
-        );
-        return pix;
-    }
+    case SP_TitleBarMenuButton:
+        return QPixmap(qt_windows_menu_xpm);
+    case SP_TitleBarShadeButton:
+        return QPixmap(qt_windows_shade_xpm);
+    case SP_TitleBarUnshadeButton:
+        return QPixmap(qt_windows_unshade_xpm);
+    case SP_TitleBarNormalButton:
+        return QPixmap(qt_windows_normalizeup_xpm);
+    case SP_TitleBarMinButton:
+        return QPixmap(qt_windows_minimize_xpm);
+    case SP_TitleBarMaxButton:
+        return QPixmap(qt_windows_maximize_xpm);
+    case SP_TitleBarCloseButton:
+        return QPixmap(qt_windows_close_xpm);
+    case SP_TitleBarContextHelpButton:
+        return QPixmap(qt_windows_help_xpm);
+    case SP_DockWidgetCloseButton:
+        return QPixmap(qt_windows_dock_widget_close_xpm);
+    case SP_MessageBoxInformation:
+        return QPixmap(qt_information_xpm);
+    case SP_MessageBoxWarning:
+        return QPixmap(qt_warning_xpm);
+    case SP_MessageBoxCritical:
+        return QPixmap(qt_critical_xpm);
+    case SP_MessageBoxQuestion:
+        return QPixmap(qt_question_xpm);
     default:
         break;
     }
+#endif //QT_NO_IMAGEFORMAT_XPM
     return QCommonStyle::standardPixmap(standardpixmap, opt, widget);
 }
 
@@ -882,6 +1005,7 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
         bool down = opt->state & State_Sunken;
         bool enabled = opt->state & State_Enabled;
         bool on = opt->state & State_On;
+        QPolygon a;
 
         //center when rect is larger than indicator size
         int xOffset = 0;
@@ -1015,10 +1139,10 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
         break;
     }
     case PE_FrameWindow: {
-        QPalette popupPal = opt->palette;
-        popupPal.setColor(QPalette::Light, opt->palette.background().color());
-        popupPal.setColor(QPalette::Midlight, opt->palette.light().color());
-        qDrawWinPanel(p, opt->rect, popupPal, opt->state & State_Sunken);
+         QPalette popupPal = opt->palette;
+         popupPal.setColor(QPalette::Light, opt->palette.background().color());
+         popupPal.setColor(QPalette::Midlight, opt->palette.light().color());
+         qDrawWinPanel(p, opt->rect, popupPal, opt->state & State_Sunken);
         break;
     }
 #ifndef QT_NO_DOCKWIDGET

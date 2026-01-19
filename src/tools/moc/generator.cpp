@@ -21,11 +21,10 @@
 
 #include "generator.h"
 #include "utils.h"
-#include "qvariant.h"
-#include "qmetatype.h"
-#include "qmetaobject_p.h" //for the flags.
-
+#include <QtCore/qmetatype.h>
 #include <stdio.h>
+
+#include "qmetaobject_p.h" //for the flags.
 
 QT_BEGIN_NAMESPACE
 

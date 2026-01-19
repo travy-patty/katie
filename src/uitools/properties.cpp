@@ -28,6 +28,7 @@
 #include <QtCore/QDateTime>
 #include <QtCore/QUrl>
 #include <QtCore/qdebug.h>
+
 #include <QtGui/QIcon>
 #include <QtGui/QPixmap>
 #include <QtGui/QFont>
@@ -35,6 +36,11 @@
 #include <QtGui/QAbstractScrollArea>
 
 QT_BEGIN_NAMESPACE
+
+#ifdef QFORMINTERNAL_NAMESPACE
+namespace QFormInternal
+{
+#endif
 
 static inline void fixEnum(QString &s)
 {
@@ -211,7 +217,10 @@ QVariant domPropertyToVariant(const DomProperty *p)
         if (font->hasElementKerning())
             f.setKerning(font->elementKerning());
         if (font->hasElementAntialiasing())
-            f.setHintingPreference(font->elementAntialiasing() ? QFont::PreferDefaultHinting : QFont::PreferNoHinting);
+            f.setStyleStrategy(font->elementAntialiasing() ? QFont::PreferDefault : QFont::NoAntialias);
+        if (font->hasElementStyleStrategy()) {
+            f.setStyleStrategy(enumKeyOfObjectToValue<QAbstractFormBuilderGadget, QFont::StyleStrategy>("styleStrategy", font->elementStyleStrategy().toLatin1()));
+        }
         return QVariant::fromValue(f);
     }
 
@@ -434,6 +443,10 @@ static bool applySimpleProperty(const QVariant &v, bool translateString, DomProp
             fnt->setElementUnderline(font.underline());
         if (mask & QFont::KerningResolved)
             fnt->setElementKerning(font.kerning());
+        if (mask & QFont::StyleStrategyResolved) {
+            const QMetaEnum styleStrategy_enum = metaEnum<QAbstractFormBuilderGadget>("styleStrategy");
+            fnt->setElementStyleStrategy(QLatin1String(styleStrategy_enum.valueToKey(font.styleStrategy())));
+        }
         dom_prop->setElementFont(fnt);
         return true;
     }
@@ -642,6 +655,10 @@ DomProperty *variantToDomProperty(QAbstractFormBuilder *afb, const QMetaObject *
     }
     return dom_prop;
 }
+
+#ifdef QFORMINTERNAL_NAMESPACE
+}
+#endif
 
 QT_END_NAMESPACE
 

@@ -96,6 +96,7 @@ public:
     bool mouseMoveEvent(QMouseEvent *event);
     bool mouseReleaseEvent(QMouseEvent *event);
     void setWindowState(bool floating, bool unplug = false, const QRect &rect = QRect());
+    void nonClientAreaMouseEvent(QMouseEvent *event);
     void initDrag(const QPoint &pos, bool nca);
     void startDrag();
     void endDrag(bool abort = false);

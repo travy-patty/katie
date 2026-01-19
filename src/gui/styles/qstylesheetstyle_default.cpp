@@ -303,13 +303,12 @@ StyleSheet QStyleSheetStyle::getDefaultStyleSheet() const
         ADD_STYLE_RULE;
     }
 
-/*
+    /*QComboBox[style="QPlastiqueStyle"][readOnly="true"],
     QComboBox[style="QCleanlooksStyle"][readOnly="true"]
     {
         -qt-background-role: button;
-    }
-*/
-    if (baseStyle()->inherits("QCleanlooksStyle"))
+    }*/
+    if (baseStyle()->inherits("QPlastiqueStyle")  || baseStyle()->inherits("QCleanlooksStyle"))
     {
         SET_ELEMENT_NAME(QLatin1String("QComboBox"));
         ADD_ATTRIBUTE_SELECTOR(QLatin1String("readOnly"), QLatin1String("true"), AttributeSelector::MatchEqual);
@@ -472,6 +471,8 @@ StyleSheet QStyleSheetStyle::getDefaultStyleSheet() const
     return sheet;
 }
 
+#endif // #ifndef QT_NO_STYLE_STYLESHEET
+
 QT_END_NAMESPACE
 
-#endif // #ifndef QT_NO_STYLE_STYLESHEET
+

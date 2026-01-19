@@ -50,6 +50,11 @@ class QWidget;
 class QAbstractButton;
 class QAbstractItemView;
 
+#ifdef QFORMINTERNAL_NAMESPACE
+namespace QFormInternal
+{
+#endif
+
 class DomAction;
 class DomActionGroup;
 class DomButtonGroup;
@@ -62,6 +67,7 @@ class DomCustomWidgets;
 class DomLayout;
 class DomLayoutItem;
 class DomProperty;
+class DomResources;
 class DomSpacer;
 class DomString;
 class DomTabStops;
@@ -71,6 +77,10 @@ class DomResourcePixmap;
 
 class QResourceBuilder;
 class QTextBuilder;
+
+#ifndef QT_FORMBUILDER_NO_SCRIPT
+class QFormScriptRunner;
+#endif
 
 class Q_UITOOLS_EXPORT QAbstractFormBuilder
 {
@@ -83,6 +93,9 @@ public:
 
     virtual QWidget *load(QIODevice *dev, QWidget *parentWidget=0);
     virtual void save(QIODevice *dev, QWidget *widget);
+
+    void setScriptingEnabled(bool enabled);
+    bool isScriptingEnabled() const;
 
 protected:
 //
@@ -111,6 +124,7 @@ protected:
 
     virtual void createCustomWidgets(DomCustomWidgets *) {}
     virtual void createConnections(DomConnections *, QWidget *) {}
+    virtual void createResources(DomResources*) {}
 
     virtual bool addItem(DomLayoutItem *ui_item, QLayoutItem *item, QLayout *layout);
     virtual bool addItem(DomWidget *ui_widget, QWidget *widget, QWidget *parentWidget);
@@ -136,12 +150,20 @@ protected:
     virtual DomConnections *saveConnections();
     virtual DomCustomWidgets *saveCustomWidgets();
     virtual DomTabStops *saveTabStops();
+    virtual DomResources *saveResources();
     DomButtonGroups *saveButtonGroups(const QWidget *mainContainer);
     virtual QList<DomProperty*> computeProperties(QObject *obj);
     virtual bool checkProperty(QObject *obj, const QString &prop) const;
     virtual DomProperty *createProperty(QObject *object, const QString &propertyName, const QVariant &value);
 
     virtual void layoutInfo(DomLayout *layout, QObject *parent, int *margin, int *spacing);
+
+    virtual QIcon nameToIcon(const QString &filePath, const QString &qrcPath);
+    virtual QString iconToFilePath(const QIcon &pm) const;
+    virtual QString iconToQrcPath(const QIcon &pm) const;
+    virtual QPixmap nameToPixmap(const QString &filePath, const QString &qrcPath);
+    virtual QString pixmapToFilePath(const QPixmap &pm) const;
+    virtual QString pixmapToQrcPath(const QPixmap &pm) const;
 
     void loadListWidgetExtraInfo(DomWidget *ui_widget, QListWidget *listWidget, QWidget *parentWidget);
     void loadTreeWidgetExtraInfo(DomWidget *ui_widget, QTreeWidget *treeWidget, QWidget *parentWidget);
@@ -182,6 +204,9 @@ protected:
     void reset();
     void initialize(const DomUI *ui);
 
+#ifndef QT_FORMBUILDER_NO_SCRIPT
+    QFormScriptRunner *formScriptRunner() const;
+#endif
 //
 //  utils
 //
@@ -191,8 +216,20 @@ protected:
 //
 //  Icon/pixmap stuff
 //
-    void setIconProperty(DomProperty &, const QString &) const;
-    void setPixmapProperty(DomProperty &, const QString &) const;
+    // A Pair of icon path/qrc path.
+    typedef QPair<QString, QString> IconPaths;
+
+    IconPaths iconPaths(const QIcon &) const;
+    IconPaths pixmapPaths(const QPixmap &) const;
+    void setIconProperty(DomProperty &, const IconPaths &) const;
+    void setPixmapProperty(DomProperty &, const IconPaths &) const;
+    DomProperty* iconToDomProperty(const QIcon &) const;
+
+    static const DomResourcePixmap *domPixmap(const DomProperty* p);
+    QIcon domPropertyToIcon(const DomResourcePixmap *);
+    QIcon domPropertyToIcon(const DomProperty* p);
+    QPixmap domPropertyToPixmap(const DomResourcePixmap* p);
+    QPixmap domPropertyToPixmap(const DomProperty* p);
 
     QSet<QObject*> m_laidout;
     QHash<QString, QAction*> m_actions;
@@ -214,6 +251,11 @@ private:
     friend Q_UITOOLS_EXPORT QVariant domPropertyToVariant(QAbstractFormBuilder *abstractFormBuilder,const QMetaObject *meta, const DomProperty *property);
 };
 
+#ifdef QFORMINTERNAL_NAMESPACE
+}
+#endif
+
 QT_END_NAMESPACE
+
 
 #endif // ABSTRACTFORMBUILDER_H

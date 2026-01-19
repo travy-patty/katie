@@ -32,10 +32,9 @@
 #include <QtCore/qstringlist.h>
 #include <QtCore/qbitarray.h>
 #include <QtCore/qmimedata.h>
+
 #include "qstandarditemmodel_p.h"
 #include "qdebug.h"
-
-#include <limits.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -1057,6 +1056,51 @@ Qt::ItemFlags QStandardItem::flags() const
     Sets the check state of the item to be \a state.
 
     \sa checkState(), setCheckable()
+*/
+
+/*!
+    \fn QString QStandardItem::accessibleText() const
+
+    Returns the item's accessible text.
+
+    The accessible text is used by assistive technologies (i.e. for users who
+    cannot use conventional means of interaction).
+
+    \sa setAccessibleText(), accessibleDescription()
+*/
+
+/*!
+    \fn void QStandardItem::setAccessibleText(const QString &accessibleText)
+
+    Sets the item's accessible text to the string specified by \a accessibleText.
+
+    The accessible text is used by assistive technologies (i.e. for users who
+    cannot use conventional means of interaction).
+
+    \sa accessibleText(), setAccessibleDescription()
+*/
+
+/*!
+    \fn QString QStandardItem::accessibleDescription() const
+
+    Returns the item's accessible description.
+
+    The accessible description is used by assistive technologies (i.e. for
+    users who cannot use conventional means of interaction).
+
+    \sa setAccessibleDescription(), accessibleText()
+*/
+
+/*!
+    \fn void QStandardItem::setAccessibleDescription(const QString &accessibleDescription)
+
+    Sets the item's accessible description to the string specified by \a
+    accessibleDescription.
+
+    The accessible description is used by assistive technologies (i.e. for
+    users who cannot use conventional means of interaction).
+
+    \sa accessibleDescription(), setAccessibleText()
 */
 
 /*!

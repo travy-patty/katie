@@ -51,6 +51,7 @@ public:
     QStyle *proxyStyle;
 };
 
+
 #define BEGIN_STYLE_PIXMAPCACHE(a) \
     QRect rect = option->rect; \
     QPixmap internalPixmapCache; \
@@ -69,6 +70,8 @@ public:
             imageCache.fill(0); \
             p = new QPainter(&imageCache); \
         }
+
+
 
 #define END_STYLE_PIXMAPCACHE \
         if (doPixmapCache) { \

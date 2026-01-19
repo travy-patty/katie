@@ -26,7 +26,7 @@
 #include "qscriptengine.h"
 #include "qscriptengine_p.h"
 #include "qscriptvalue_p.h"
-#include "qstdcontainers_p.h"
+#include "qlinkedlist.h"
 
 
 #include "JSObject.h"
@@ -123,9 +123,9 @@ public:
     }
 
     QScriptValue objectValue;
-    QStdVector<JSC::Identifier> propertyNames;
-    QStdVector<JSC::Identifier>::iterator it;
-    QStdVector<JSC::Identifier>::iterator current;
+    QLinkedList<JSC::Identifier> propertyNames;
+    QLinkedList<JSC::Identifier>::iterator it;
+    QLinkedList<JSC::Identifier>::iterator current;
     bool initialized;
 };
 
@@ -340,7 +340,7 @@ void QScriptValueIterator::remove()
         return;
     QScript::APIShim shim(d->engine());
     d->object()->setProperty(*d->current, JSC::JSValue());
-    d->it = d->propertyNames.erase(d->current);
+    d->propertyNames.erase(d->current);
 }
 
 /*!

@@ -248,12 +248,12 @@ void QDeclarativeContext::setContextObject(QObject *object)
 
     QDeclarativeContextData *data = d->data;
 
-    if (Q_UNLIKELY(data->isInternal)) {
+    if (data->isInternal) {
         qWarning("QDeclarativeContext: Cannot set context object for internal context.");
         return;
     }
 
-    if (Q_UNLIKELY(!isValid())) {
+    if (!isValid()) {
         qWarning("QDeclarativeContext: Cannot set context object on invalid context.");
         return;
     }
@@ -272,12 +272,12 @@ void QDeclarativeContext::setContextProperty(const QString &name, const QVariant
 
     QDeclarativeContextData *data = d->data;
 
-    if (Q_UNLIKELY(data->isInternal)) {
+    if (data->isInternal) {
         qWarning("QDeclarativeContext: Cannot set property on internal context.");
         return;
     }
 
-    if (Q_UNLIKELY(!isValid())) {
+    if (!isValid()) {
         qWarning("QDeclarativeContext: Cannot set property on invalid context.");
         return;
     }
@@ -318,12 +318,12 @@ void QDeclarativeContext::setContextProperty(const QString &name, QObject *value
 
     QDeclarativeContextData *data = d->data;
 
-    if (Q_UNLIKELY(data->isInternal)) {
+    if (data->isInternal) {
         qWarning("QDeclarativeContext: Cannot set property on internal context.");
         return;
     }
 
-    if (Q_UNLIKELY(!isValid())) {
+    if (!isValid()) {
         qWarning("QDeclarativeContext: Cannot set property on invalid context.");
         return;
     }

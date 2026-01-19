@@ -21,8 +21,8 @@
 
 #include "qplatformdefs.h"
 #include "qfilesystemengine_p.h"
+#include "qfsfileengine.h"
 #include "qfile.h"
-#include "qdir.h"
 #include "qcore_unix_p.h"
 #include "qcorecommon_p.h"
 
@@ -43,7 +43,7 @@ QT_BEGIN_NAMESPACE
 const uint QFileSystemMetaData::nobodyID = (uint) -2;
 
 //static
-QString QFileSystemEngine::linkTarget(const QFileSystemEntry &link, QFileSystemMetaData &data)
+QFileSystemEntry QFileSystemEngine::getLinkTarget(const QFileSystemEntry &link, QFileSystemMetaData &data)
 {
     QByteArray lpath = link.nativeFilePath();
     QSTACKARRAY(char, readlinkbuf, PATH_MAX);
@@ -72,9 +72,9 @@ QString QFileSystemEngine::linkTarget(const QFileSystemEntry &link, QFileSystemM
         ret = QDir::cleanPath(ret);
         if (ret.size() > 1 && ret.endsWith(QLatin1Char('/')))
             ret.chop(1);
-        return ret;
+        return QFileSystemEntry(ret);
     }
-    return QString();
+    return QFileSystemEntry();
 }
 
 //static
@@ -88,7 +88,7 @@ QFileSystemEntry QFileSystemEngine::canonicalName(const QFileSystemEntry &entry,
     char *ret = ::realpath(path.constData(), realpathbuf);
     if (ret) {
         data.entryFlags |= QFileSystemMetaData::ExistsAttribute;
-        QString canonicalPath = QDir::cleanPath(QFile::decodeName(ret));
+        QString canonicalPath = QDir::cleanPath(QString::fromLocal8Bit(ret));
         return QFileSystemEntry(canonicalPath);
     } else if (errno == ENOENT) { // file doesn't exist
         data.entryFlags &= ~(QFileSystemMetaData::ExistsAttribute);
@@ -286,7 +286,7 @@ bool QFileSystemEngine::removeDirectory(const QFileSystemEntry &entry, bool remo
         }
         return true;
     }
-    const QByteArray path = entry.nativeFilePath();
+    const QByteArray path = QFile::encodeName(entry.filePath());
     return QT_RMDIR(path.constData()) == 0;
 }
 
@@ -378,32 +378,8 @@ bool QFileSystemEngine::renameFile(const QFileSystemEntry &source, const QFileSy
     if (::rename(spath.constData(), tpath.constData()) == 0)
         return true;
 #endif
-#ifdef EXDEV
-    // NOTE: rename() does not support cross-filesystem move so that is emulated
-    const int savederrno = errno;
-    if (errno == EXDEV) {
-        QT_STATBUF statbuf;
-        if (QT_STAT(tpath.constData(), &statbuf) == 0) {
-            *error = EXDEV;
-            return false;
-        }
-        int dummy = 0;
-        if (copyFile(source, target, &dummy) == false) {
-            *error = EXDEV;
-            return false;
-        }
-        if (::unlink(spath.constData()) == -1) {
-            *error = EXDEV;
-            return false;
-        }
-        return true;
-    }
-    *error = savederrno;
-    return false;
-#else
     *error = errno;
     return false;
-#endif // EXDEV
 }
 
 //static
@@ -455,7 +431,7 @@ bool QFileSystemEngine::setPermissions(const QFileSystemEntry &entry, QFile::Per
 
 QString QFileSystemEngine::homePath()
 {
-    const QString home = qGetEnv("HOME");
+    const QString home = QFile::decodeName(qgetenv("HOME"));
     if (Q_LIKELY(!home.isEmpty()))
         return QDir::cleanPath(home);
     return rootPath();
@@ -463,21 +439,21 @@ QString QFileSystemEngine::homePath()
 
 QString QFileSystemEngine::rootPath()
 {
-    return QString::fromLatin1("/");
+    return QLatin1String("/");
 }
 
 QString QFileSystemEngine::tempPath()
 {
-    const QString temp = qGetEnv("TMPDIR");
+    const QString temp = QFile::decodeName(qgetenv("TMPDIR"));
     if (!temp.isEmpty())
         return QDir::cleanPath(temp);
-    return QString::fromLatin1("/tmp");
+    return QLatin1String("/tmp");
 }
 
 bool QFileSystemEngine::setCurrentPath(const QFileSystemEntry &entry)
 {
     const QByteArray path = entry.nativeFilePath();
-    return (::chdir(path.constData()) >= 0);
+    return (QT_CHDIR(path.constData()) >= 0);
 }
 
 QFileSystemEntry QFileSystemEngine::currentPath()
@@ -493,14 +469,14 @@ QFileSystemEntry QFileSystemEngine::currentPath()
 #else
 #define GETCWDFUNCNAME "getcwd"
     QSTACKARRAY(char, getcwdbuffer, PATH_MAX);
-    if (::getcwd(getcwdbuffer, sizeof(getcwdbuffer))) {
+    if (QT_GETCWD(getcwdbuffer, sizeof(getcwdbuffer))) {
         result = QFileSystemEntry(QByteArray(getcwdbuffer), QFileSystemEntry::FromNativePath());
     }
 #endif // QT_HAVE_GET_CURRENT_DIR_NAME
 
 #ifndef QT_NO_DEBUG
     if (result.isEmpty())
-        qWarning("QFileSystemEngine::currentPath: " GETCWDFUNCNAME "() failed");
+        qWarning("QFSFileEngine::currentPath: " GETCWDFUNCNAME "() failed");
 #endif
 #undef GETCWDFUNCNAME
 
@@ -549,8 +525,6 @@ void QFileSystemMetaData::fillFromStatBuf(const QT_STATBUF &statBuffer)
         entryFlags |= QFileSystemMetaData::FileType;
     else if (S_ISDIR(statBuffer.st_mode))
         entryFlags |= QFileSystemMetaData::DirectoryType;
-    else if (S_ISLNK(statBuffer.st_mode))
-        entryFlags |= QFileSystemMetaData::LinkType;
     else
         entryFlags |= QFileSystemMetaData::SequentialType;
 
@@ -568,12 +542,11 @@ void QFileSystemMetaData::fillFromStatBuf(const QT_STATBUF &statBuffer)
     groupId_ = statBuffer.st_gid;
 }
 
-void QFileSystemMetaData::fillFromDirEnt(const QT_DIRENT *entry, const QFileSystemEntry::NativePath &nativePath)
+void QFileSystemMetaData::fillFromDirEnt(const QT_DIRENT &entry, const QFileSystemEntry::NativePath &nativePath)
 {
-    Q_ASSERT(entry);
     // ### This will clear all entry flags
 #ifdef QT_HAVE_DIRENT_D_TYPE
-    switch (entry->d_type) {
+    switch (entry.d_type) {
         case DT_DIR: {
             entryFlags = QFileSystemMetaData::DirectoryType
                 | QFileSystemMetaData::ExistsAttribute;

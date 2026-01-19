@@ -672,7 +672,7 @@ bool QDBusConnection::connect(const QString &service, const QString &path, const
         return false;
     }
 
-    QDBusLocker locker(ConnectAction, d);
+    QDBusWriteLocker locker(ConnectAction, d);
     return d->connectSignal(service, path, interface, name, argumentMatch, signature, receiver, slot);
 }
 
@@ -728,7 +728,7 @@ bool QDBusConnection::disconnect(const QString &service, const QString &path, co
     if (interface.isEmpty() && name.isEmpty())
         return false;
 
-    QDBusLocker locker(DisconnectAction, d);
+    QDBusWriteLocker locker(DisconnectAction, d);
     return d->disconnectSignal(service, path, interface, name, argumentMatch, signature, receiver, slot);
 }
 
@@ -754,7 +754,7 @@ bool QDBusConnection::registerObject(const QString &path, QObject *object, Regis
     QStringList pathComponents = path.split(QLatin1Char('/'));
     if (pathComponents.last().isEmpty())
         pathComponents.removeLast();
-    QDBusLocker locker(RegisterObjectAction, d);
+    QDBusWriteLocker locker(RegisterObjectAction, d);
 
     // lower-bound search for where this object should enter in the tree
     QDBusConnectionPrivate::ObjectTreeNode *node = &d->rootNode;
@@ -784,11 +784,7 @@ bool QDBusConnection::registerObject(const QString &path, QObject *object, Regis
             qLowerBound(node->children.begin(), node->children.end(), pathComponents.at(i));
         if (it != node->children.end() && it->name == pathComponents.at(i)) {
             // match: this node exists
-#ifdef QT_STRICT_ITERATORS
-            node = it.i;
-#else
             node = it;
-#endif
 
             // are we allowed to go deeper?
             if (node->flags & ExportChildObjects) {
@@ -799,11 +795,7 @@ bool QDBusConnection::registerObject(const QString &path, QObject *object, Regis
             }
         } else {
             // add entry
-#ifdef QT_STRICT_ITERATORS
-            node = node->children.insert(it, pathComponents.at(i)).i;
-#else
             node = node->children.insert(it, pathComponents.at(i));
-#endif
         }
 
         // iterate
@@ -825,7 +817,7 @@ void QDBusConnection::unregisterObject(const QString &path, UnregisterMode mode)
         return;
 
     QStringList pathComponents = path.split(QLatin1Char('/'));
-    QDBusLocker locker(UnregisterObjectAction, d);
+    QDBusWriteLocker locker(UnregisterObjectAction, d);
     QDBusConnectionPrivate::ObjectTreeNode *node = &d->rootNode;
     int i = 1;
 
@@ -850,11 +842,7 @@ void QDBusConnection::unregisterObject(const QString &path, UnregisterMode mode)
         if (it == node->children.end() || it->name != pathComponents.at(i))
             break;              // node not found
 
-#ifdef QT_STRICT_ITERATORS
-        node = it.i;
-#else
         node = it;
-#endif
         ++i;
     }
 }
@@ -875,7 +863,7 @@ QObject *QDBusConnection::objectRegisteredAt(const QString &path) const
         pathComponents.removeLast();
 
     // lower-bound search for where this object should enter in the tree
-    QDBusLocker lock(ObjectRegisteredAtAction, d);
+    QDBusReadLocker lock(ObjectRegisteredAtAction, d);
     const QDBusConnectionPrivate::ObjectTreeNode *node = &d->rootNode;
 
     int i = 1;
@@ -888,11 +876,7 @@ QObject *QDBusConnection::objectRegisteredAt(const QString &path) const
         if (it == node->children.constEnd() || it->name != pathComponents.at(i))
             break;              // node not found
 
-#ifdef QT_STRICT_ITERATORS
-        node = it.i;
-#else
         node = it;
-#endif
         ++i;
     }
     return 0;

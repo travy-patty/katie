@@ -26,9 +26,11 @@
 #include <QtNetwork/qhostaddress.h>
 #include <QtNetwork/qnetworkinterface.h>
 
-#ifndef QT_NO_UDPSOCKET
 
 QT_BEGIN_NAMESPACE
+
+
+#ifndef QT_NO_UDPSOCKET
 
 class QNetworkInterface;
 class QUdpSocketPrivate;
@@ -75,8 +77,9 @@ private:
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QUdpSocket::BindMode)
 
+#endif // QT_NO_UDPSOCKET
+
 QT_END_NAMESPACE
 
-#endif // QT_NO_UDPSOCKET
 
 #endif // QUDPSOCKET_H

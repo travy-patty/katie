@@ -43,6 +43,11 @@
 
 QT_BEGIN_NAMESPACE
 
+#ifdef QFORMINTERNAL_NAMESPACE
+namespace QFormInternal
+{
+#endif
+
 class QAbstractFormBuilder;
 class DomProperty;
 
@@ -64,6 +69,7 @@ class QAbstractFormBuilderGadget: public QWidget
     Q_PROPERTY(QSizePolicy::Policy sizeType READ fakeSizeType)
     Q_PROPERTY(QPalette::ColorRole colorRole READ fakeColorRole)
     Q_PROPERTY(QPalette::ColorGroup colorGroup READ fakeColorGroup)
+    Q_PROPERTY(QFont::StyleStrategy styleStrategy READ fakeStyleStrategy)
     Q_PROPERTY(Qt::CursorShape cursorShape READ fakeCursorShape)
     Q_PROPERTY(Qt::BrushStyle brushStyle READ fakeBrushStyle)
     Q_PROPERTY(Qt::ToolBarArea toolBarArea READ fakeToolBarArea)
@@ -79,6 +85,7 @@ public:
     QSizePolicy::Policy fakeSizeType() const    { Q_ASSERT(false); return QSizePolicy::Expanding; }
     QPalette::ColorGroup fakeColorGroup() const { Q_ASSERT(false); return static_cast<QPalette::ColorGroup>(0); }
     QPalette::ColorRole fakeColorRole() const   { Q_ASSERT(false); return static_cast<QPalette::ColorRole>(0); }
+    QFont::StyleStrategy fakeStyleStrategy() const     { Q_ASSERT(false); return QFont::PreferDefault; }
     Qt::CursorShape fakeCursorShape() const     { Q_ASSERT(false); return Qt::ArrowCursor; }
     Qt::BrushStyle fakeBrushStyle() const       { Q_ASSERT(false); return Qt::NoBrush; }
     Qt::ToolBarArea fakeToolBarArea() const {  Q_ASSERT(false); return Qt::NoToolBarArea; }
@@ -136,6 +143,10 @@ inline EnumType enumKeyOfObjectToValue(const char *enumName, const char *key, co
     const QMetaEnum me = metaEnum<QObjectType>(enumName);
     return enumKeyToValue<EnumType>(me, key);
 }
+
+#ifdef QFORMINTERNAL_NAMESPACE
+}
+#endif
 
 QT_END_NAMESPACE
 

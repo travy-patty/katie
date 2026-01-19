@@ -35,23 +35,22 @@
 #include "qdir.h"
 #include "qdebug.h"
 #include "qelapsedtimer.h"
-#include "qnetworkcommon_p.h"
+
+#define QT_CONNECT_TIMEOUT 30000
 
 QT_BEGIN_NAMESPACE
 
-QLocalSocketPrivate::QLocalSocketPrivate()
-    : QIODevicePrivate(),
-    connectingSocket(-1),
-    connectingOpenMode(0),
-    state(QLocalSocket::UnconnectedState)
+QLocalSocketPrivate::QLocalSocketPrivate() : QIODevicePrivate(),
+        delayConnect(0),
+        connectTimer(0),
+        connectingSocket(-1),
+        connectingOpenMode(0),
+        state(QLocalSocket::UnconnectedState)
 {
 }
 
 void QLocalSocketPrivate::init()
 {
-    qRegisterMetaType<QLocalSocket::LocalSocketState>();
-    qRegisterMetaType<QLocalSocket::LocalSocketError>();
-
     Q_Q(QLocalSocket);
     // QIODevice signals
     q->connect(&unixSocket, SIGNAL(aboutToClose()), q, SIGNAL(aboutToClose()));
@@ -289,7 +288,19 @@ void QLocalSocketPrivate::_q_connectToSocket()
             errorOccurred(QLocalSocket::SocketTimeoutError, function);
             break;
         case EAGAIN:
-            errorOccurred(QLocalSocket::UnfinishedSocketOperationError, function);
+            // Try again later, all of the sockets listening are full
+            if (!delayConnect) {
+                delayConnect = new QSocketNotifier(connectingSocket, QSocketNotifier::Write, q);
+                q->connect(delayConnect, SIGNAL(activated(int)), q, SLOT(_q_connectToSocket()));
+            }
+            if (!connectTimer) {
+                connectTimer = new QTimer(q);
+                q->connect(connectTimer, SIGNAL(timeout()),
+                                 q, SLOT(_q_abortConnectionAttempt()),
+                                 Qt::DirectConnection);
+                connectTimer->start(QT_CONNECT_TIMEOUT);
+            }
+            delayConnect->setEnabled(true);
             break;
         default:
             errorOccurred(QLocalSocket::UnknownSocketError, function);
@@ -299,6 +310,8 @@ void QLocalSocketPrivate::_q_connectToSocket()
     }
 
     // connected!
+    cancelDelayedConnect();
+
     serverName = connectingName;
     fullServerName = connectingPathName;
     if (unixSocket.setSocketDescriptor(connectingSocket,
@@ -314,7 +327,7 @@ void QLocalSocketPrivate::_q_connectToSocket()
     connectingOpenMode = 0;
 }
 
-bool QLocalSocket::setSocketDescriptor(int socketDescriptor,
+bool QLocalSocket::setSocketDescriptor(quintptr socketDescriptor,
         LocalSocketState socketState, OpenMode openMode)
 {
     Q_D(QLocalSocket);
@@ -345,7 +358,19 @@ void QLocalSocketPrivate::_q_abortConnectionAttempt()
     q->close();
 }
 
-int QLocalSocket::socketDescriptor() const
+void QLocalSocketPrivate::cancelDelayedConnect()
+{
+    if (delayConnect) {
+        delayConnect->setEnabled(false);
+        delete delayConnect;
+        delayConnect = 0;
+        connectTimer->stop();
+        delete connectTimer;
+        connectTimer = 0;
+    }
+}
+
+quintptr QLocalSocket::socketDescriptor() const
 {
     Q_D(const QLocalSocket);
     return d->unixSocket.socketDescriptor();
@@ -391,6 +416,7 @@ void QLocalSocket::close()
 {
     Q_D(QLocalSocket);
     d->unixSocket.close();
+    d->cancelDelayedConnect();
     if (d->connectingSocket != -1)
         qt_safe_close(d->connectingSocket);
     d->connectingSocket = -1;
@@ -485,7 +511,7 @@ bool QLocalSocket::waitForConnected(int msec)
         ::memset(&fds, 0, sizeof(struct pollfd));
         fds.fd = d->connectingSocket;
         fds.events = POLLIN;
-        int result = qt_safe_poll(&fds, msec);
+        int result = qt_safe_poll(&fds, 1, msec);
         if (result == -1) {
             d->errorOccurred( QLocalSocket::UnknownSocketError,
                     QLatin1String("QLocalSocket::waitForConnected"));
@@ -501,7 +527,7 @@ bool QLocalSocket::waitForConnected(int msec)
 bool QLocalSocket::waitForDisconnected(int msecs)
 {
     Q_D(QLocalSocket);
-    if (Q_UNLIKELY(state() == UnconnectedState)) {
+    if (state() == UnconnectedState) {
         qWarning() << "QLocalSocket::waitForDisconnected() is not allowed in UnconnectedState";
         return false;
     }

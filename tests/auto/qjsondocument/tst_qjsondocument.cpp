@@ -56,7 +56,7 @@ void tst_QJsonDocument::init()
     NestedObject.insert("MixedArray", QVariantList() << 2 << "b");
     testjsondata.insert("NestedObject", NestedObject);
 
-    testjsondata.insert("UTF8", QString::fromUtf8("УТФ"));
+    testjsondata.insert("UTF8", QString("УТФ"));
 }
 
 void tst_QJsonDocument::cleanup()
@@ -89,7 +89,7 @@ void tst_QJsonDocument::read()
     QCOMPARE(NestedObject, QVariantList() << 2 << "b");
 
     QString UTF8 = jsonmap.value("UTF8").toString();
-    QCOMPARE(UTF8, QString::fromUtf8("УТФ"));
+    QCOMPARE(UTF8, QString("УТФ"));
 
     QFile jsonfile(testjsonfile);
     QVERIFY(jsonfile.open(QIODevice::ReadOnly));
@@ -117,7 +117,7 @@ void tst_QJsonDocument::read()
     QCOMPARE(NestedObject, QVariantList() << 2 << "b");
 
     UTF8 = jsonmap.value("UTF8").toString();
-    QCOMPARE(UTF8, QString::fromUtf8("УТФ"));
+    QCOMPARE(UTF8, QString("УТФ"));
 
     // TODO: test other types too
 }
@@ -145,7 +145,7 @@ void tst_QJsonDocument::error()
     QVERIFY(jsondoc.isNull());
 
     jsondoc = QJsonDocument::fromVariant(QVariantMap());
-    QCOMPARE(jsondoc.errorString(), QLatin1String("Data variant is null"));
+    QCOMPARE(jsondoc.errorString(), QLatin1String("Data map is empty"));
     QVERIFY(jsondoc.isNull());
 
     // TODO: indermediate error test, e.g. maximum depth reached

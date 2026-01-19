@@ -643,7 +643,7 @@ QVariant QDeclarativeExpressionPrivate::value(QObject *secondaryScope, bool *isU
 {
     Q_Q(QDeclarativeExpression);
 
-    if (Q_UNLIKELY(!context() || !context()->isValid())) {
+    if (!context() || !context()->isValid()) {
         qWarning("QDeclarativeExpression: Attempted to evaluate an expression in an invalid context");
         return QVariant();
     }

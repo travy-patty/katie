@@ -28,7 +28,6 @@
 #include "qfontmetrics.h"
 #include "qbrush.h"
 #include "qimagereader.h"
-#include "qtextstream.h"
 
 #ifndef QT_NO_CSSPARSER
 
@@ -95,6 +94,7 @@ static const QCssKnownValue propertiesTbl[NumProperties - 1] = {
     { QLatin1String("font-family"), FontFamily },
     { QLatin1String("font-size"), FontSize },
     { QLatin1String("font-style"), FontStyle },
+    { QLatin1String("font-variant"), FontVariant },
     { QLatin1String("font-weight"), FontWeight },
     { QLatin1String("height"), Height },
     { QLatin1String("image"), QtImage },
@@ -139,6 +139,7 @@ static const QCssKnownValue propertiesTbl[NumProperties - 1] = {
     { QLatin1String("text-align"), TextAlignment },
     { QLatin1String("text-decoration"), TextDecoration },
     { QLatin1String("text-indent"), TextIndent },
+    { QLatin1String("text-transform"), TextTransform },
     { QLatin1String("text-underline-style"), TextUnderlineStyle },
     { QLatin1String("top"), Top },
     { QLatin1String("vertical-align"), VerticalAlignment },
@@ -181,6 +182,7 @@ static const QCssKnownValue valuesTbl[NumKnownValues - 1] = {
     { QLatin1String("link-visited"), Value_LinkVisited },
     { QLatin1String("lower-alpha"), Value_LowerAlpha },
     { QLatin1String("lower-roman"), Value_LowerRoman },
+    { QLatin1String("lowercase"), Value_Lowercase },
     { QLatin1String("medium"), Value_Medium },
     { QLatin1String("mid"), Value_Mid },
     { QLatin1String("middle"), Value_Middle },
@@ -201,6 +203,7 @@ static const QCssKnownValue valuesTbl[NumKnownValues - 1] = {
     { QLatin1String("selected"), Value_Selected },
     { QLatin1String("shadow"), Value_Shadow },
     { QLatin1String("small"), Value_Small },
+    { QLatin1String("small-caps"), Value_SmallCaps },
     { QLatin1String("solid"), Value_Solid },
     { QLatin1String("square"), Value_Square },
     { QLatin1String("sub"), Value_Sub },
@@ -211,6 +214,7 @@ static const QCssKnownValue valuesTbl[NumKnownValues - 1] = {
     { QLatin1String("underline"), Value_Underline },
     { QLatin1String("upper-alpha"), Value_UpperAlpha },
     { QLatin1String("upper-roman"), Value_UpperRoman },
+    { QLatin1String("uppercase"), Value_Uppercase },
     { QLatin1String("wave"), Value_Wave },
     { QLatin1String("window"), Value_Window },
     { QLatin1String("window-text"), Value_WindowText },
@@ -720,6 +724,7 @@ static BrushData parseBrushValue(const QCss::Value &v, const QPalette &pal)
     static const QStringList gradFuncs = QStringList()
         << QLatin1String("qlineargradient")
         << QLatin1String("qradialgradient")
+        << QLatin1String("qconicalgradient")
         << QLatin1String("qgradient");
     int gradType = -1;
 
@@ -793,6 +798,19 @@ static BrushData parseBrushValue(const QCss::Value &v, const QPalette &pal)
         if (spread != -1)
             rg.setSpread(QGradient::Spread(spread));
         BrushData bd = QBrush(rg);
+        if (dependsOnThePalette)
+            bd.type = BrushData::DependsOnThePalette;
+        return bd;
+    }
+
+    if (gradType == 2) {
+        QConicalGradient cg(vars.value(QLatin1String("cx")), vars.value(QLatin1String("cy")),
+                            vars.value(QLatin1String("angle")));
+        cg.setCoordinateMode(QGradient::ObjectBoundingMode);
+        cg.setStops(stops);
+        if (spread != -1)
+            cg.setSpread(QGradient::Spread(spread));
+        BrushData bd = QBrush(cg);
         if (dependsOnThePalette)
             bd.type = BrushData::DependsOnThePalette;
         return bd;
@@ -1075,9 +1093,25 @@ static bool setFontWeightFromValue(const QCss::Value &value, QFont *font)
  * and set it the \a font
  * \returns true if a family was extracted.
  */
-static bool setFontFamilyFromValues(const QCss::Value &value, QFont *font)
+static bool setFontFamilyFromValues(const QVector<QCss::Value> &values, QFont *font, int start = 0)
 {
-    const QString family = value.variant.toString();
+    QString family;
+    bool shouldAddSpace = false;
+    for (int i = start; i < values.count(); ++i) {
+        const QCss::Value &v = values.at(i);
+        if (v.type == Value::TermOperatorComma) {
+            family += QLatin1Char(',');
+            shouldAddSpace = false;
+            continue;
+        }
+        const QString str = v.variant.toString();
+        if (str.isEmpty())
+            break;
+        if (shouldAddSpace)
+            family += QLatin1Char(' ');
+        family += str;
+        shouldAddSpace = true;
+    }
     if (family.isEmpty())
         return false;
     font->setFamily(family);
@@ -1124,8 +1158,30 @@ static void parseShorthandFontProperty(const QVector<QCss::Value> &values, QFont
     }
 
     if (i < values.count()) {
-        setFontFamilyFromValues(values.at(i), font);
-        ++i;
+        setFontFamilyFromValues(values, font, i);
+    }
+}
+
+static void setFontVariantFromValue(const QCss::Value &value, QFont *font)
+{
+    if (value.type == Value::KnownIdentifier) {
+        switch (value.variant.toInt()) {
+            case Value_Normal: font->setCapitalization(QFont::MixedCase); break;
+            case Value_SmallCaps: font->setCapitalization(QFont::SmallCaps); break;
+            default: break;
+        }
+    }
+}
+
+static void setTextTransformFromValue(const QCss::Value &value, QFont *font)
+{
+    if (value.type == Value::KnownIdentifier) {
+        switch (value.variant.toInt()) {
+            case Value_None: font->setCapitalization(QFont::MixedCase); break;
+            case Value_Uppercase: font->setCapitalization(QFont::AllUppercase); break;
+            case Value_Lowercase: font->setCapitalization(QFont::AllLowercase); break;
+            default: break;
+        }
     }
 }
 
@@ -1147,9 +1203,11 @@ bool ValueExtractor::extractFont(QFont *font, int *fontSizeAdjustment)
             case FontSize: setFontSizeFromValue(val, font, fontSizeAdjustment); break;
             case FontStyle: setFontStyleFromValue(val, font); break;
             case FontWeight: setFontWeightFromValue(val, font); break;
-            case FontFamily: setFontFamilyFromValues(val, font); break;
+            case FontFamily: setFontFamilyFromValues(decl.d->values, font); break;
             case TextDecoration: setTextDecorationFromValues(decl.d->values, font); break;
             case Font: parseShorthandFontProperty(decl.d->values, font, fontSizeAdjustment); break;
+            case FontVariant: setFontVariantFromValue(val, font); break;
+            case TextTransform: setTextTransformFromValue(val, font); break;
             default: continue;
         }
         hit = true;

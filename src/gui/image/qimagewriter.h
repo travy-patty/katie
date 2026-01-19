@@ -62,6 +62,9 @@ public:
     void setCompression(int compression);
     int compression() const;
 
+    void setGamma(float gamma);
+    float gamma() const;
+
     bool canWrite() const;
     bool write(const QImage &image);
 
@@ -70,10 +73,7 @@ public:
 
     bool supportsOption(QImageIOHandler::ImageOption option) const;
 
-    static QByteArray defaultImageFormat();
     static QList<QByteArray> supportedImageFormats();
-    static QByteArray formatForMimeType(const QByteArray &mime);
-    static QList<QByteArray> supportedMimeTypes();
 
 private:
     Q_DISABLE_COPY(QImageWriter)

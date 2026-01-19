@@ -2,8 +2,6 @@
 #define QCORECOMMON_P_H
 
 #include "qstring.h"
-#include "qstringlist.h"
-#include "qfile.h"
 
 #include <time.h>
 #include <limits.h>
@@ -26,15 +24,27 @@ QT_BEGIN_NAMESPACE
     arraytype arrayname[arraysize]; \
     ::memset(arrayname, 0, arraysize * sizeof(arraytype));
 
+template <typename T>
+class QThreadLocalDeleter
+{
+public:
+    T* threadLocal;
+    QThreadLocalDeleter(T* _threadLocal)
+        : threadLocal(_threadLocal)
+    { }
+
+    inline ~QThreadLocalDeleter()
+    {
+        delete threadLocal;
+    }
+};
+
+#define QTHREADLOCAL(localtype, localname) \
+    thread_local localtype* localname(nullptr); \
+    thread_local QThreadLocalDeleter<localtype> localname## _deleter(localname);
+
 static const qreal q_deg2rad = qreal(0.01745329251994329576923690768489); /* pi/180 */
 static const qreal q_rad2deg = qreal(57.295779513082320876798154814105); /* 180/pi */
-
-#ifndef QT_NO_TEXTCODEC
-static const uchar qt_utf32le_bom[] = { 0xff, 0xfe, 0x00, 0x00 }; // MIB 1019
-static const uchar qt_utf32be_bom[] = { 0x00, 0x00, 0xfe, 0xff }; // MIB 1018
-static const uchar qt_utf16le_bom[] = { 0xff, 0xfe }; // MIB 1014
-static const uchar qt_utf16be_bom[] = { 0xfe, 0xff }; // MIB 1013
-#endif
 
 static inline uint foldCase(const ushort *ch, const ushort *start)
 {
@@ -103,24 +113,6 @@ static inline QByteArray qt_prettyDebug(const char *data, int len, int maxSize)
         out += "...";
 
     return out;
-}
-
-static inline QString qGetEnv(const char* const name)
-{
-    return QFile::decodeName(qgetenv(name));
-}
-
-static inline QStringList qGetEnvList(const char* const name)
-{
-    QStringList result;
-    const QByteArray location(qgetenv(name));
-    foreach (const QByteArray &path, location.split(':')) {
-        if (path.isEmpty()) {
-            continue;
-        }
-        result.append(QFile::decodeName(path));
-    }
-    return result;
 }
 
 QT_END_NAMESPACE

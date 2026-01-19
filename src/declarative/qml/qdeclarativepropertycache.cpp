@@ -127,14 +127,14 @@ void QDeclarativePropertyCache::clear()
         if (data) data->release(); 
     }
 
-    for (StringCache::ConstIterator iter = stringCache.constBegin(); 
-            iter != stringCache.constEnd(); ++iter) {
+    for (StringCache::ConstIterator iter = stringCache.begin(); 
+            iter != stringCache.end(); ++iter) {
         RData *data = (*iter);
         data->release(); 
     }
 
-    for (IdentifierCache::ConstIterator iter = identifierCache.constBegin(); 
-            iter != identifierCache.constEnd(); ++iter) {
+    for (IdentifierCache::ConstIterator iter = identifierCache.begin(); 
+            iter != identifierCache.end(); ++iter) {
         RData *data = (*iter);
         data->release(); 
     }

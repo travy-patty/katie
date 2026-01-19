@@ -20,6 +20,9 @@
 ****************************************************************************/
 
 #include "qsvgtinydocument_p.h"
+
+#ifndef QT_NO_SVG
+
 #include "qsvghandler_p.h"
 #include "qsvgfont_p.h"
 #include "qplatformdefs.h"
@@ -30,12 +33,16 @@
 #include "qqueue.h"
 #include "qstack.h"
 #include "qdebug.h"
-#include "qcorecommon_p.h"
+
+#include <zlib.h>
 
 QT_BEGIN_NAMESPACE
 
 QSvgTinyDocument::QSvgTinyDocument()
     : QSvgStructureNode(0)
+    , m_animated(false)
+    , m_animationDuration(0)
+    , m_fps(30)
 {
 }
 
@@ -43,33 +50,134 @@ QSvgTinyDocument::~QSvgTinyDocument()
 {
 }
 
+#ifdef QT_BUILD_INTERNAL
+Q_AUTOTEST_EXPORT QByteArray qt_inflateGZipDataFrom(QIODevice *device)
+#else
+static QByteArray qt_inflateGZipDataFrom(QIODevice *device)
+#endif
+{
+    Q_ASSERT(device);
+
+    if (!device->isOpen())
+        device->open(QIODevice::ReadOnly);
+
+    Q_ASSERT(device->isOpen() && device->isReadable());
+
+    int zlibResult = Z_OK;
+
+    QByteArray source;
+    QByteArray destination;
+
+    // Initialize zlib stream struct
+    z_stream zlibStream;
+    zlibStream.next_in = Z_NULL;
+    zlibStream.avail_in = 0;
+    zlibStream.avail_out = 0;
+    zlibStream.zalloc = Z_NULL;
+    zlibStream.zfree = Z_NULL;
+    zlibStream.opaque = Z_NULL;
+
+    // Adding 16 to the window size gives us gzip decoding
+    if (inflateInit2(&zlibStream, MAX_WBITS + 16) != Z_OK) {
+        qWarning("Cannot initialize zlib, because: %s",
+                (zlibStream.msg != NULL ? zlibStream.msg : "Unknown error"));
+        return QByteArray();
+    }
+
+    bool stillMoreWorkToDo = true;
+    while (stillMoreWorkToDo) {
+
+        if (!zlibStream.avail_in) {
+            source = device->read(QT_BUFFSIZE);
+
+            if (source.isEmpty())
+                break;
+
+            zlibStream.avail_in = source.size();
+            zlibStream.next_in = reinterpret_cast<Bytef*>(source.data());
+        }
+
+        do {
+            // Prepare the destination buffer
+            int oldSize = destination.size();
+            destination.resize(oldSize + QT_BUFFSIZE);
+            zlibStream.next_out = reinterpret_cast<Bytef*>(
+                    destination.data() + oldSize - zlibStream.avail_out);
+            zlibStream.avail_out += QT_BUFFSIZE;
+
+            zlibResult = inflate(&zlibStream, Z_NO_FLUSH);
+            switch (zlibResult) {
+                case Z_NEED_DICT:
+                case Z_DATA_ERROR:
+                case Z_STREAM_ERROR:
+                case Z_MEM_ERROR: {
+                    inflateEnd(&zlibStream);
+                    qWarning("Error while inflating gzip file: %s",
+                            (zlibStream.msg != NULL ? zlibStream.msg : "Unknown error"));
+                    destination.chop(zlibStream.avail_out);
+                    return destination;
+                }
+            }
+
+        // If the output buffer still has more room after calling inflate
+        // it means we have to provide more data, so exit the loop here
+        } while (!zlibStream.avail_out);
+
+        if (zlibResult == Z_STREAM_END) {
+            // Make sure there are no more members to process before exiting
+            if (!(zlibStream.avail_in && inflateReset(&zlibStream) == Z_OK))
+                stillMoreWorkToDo = false;
+        }
+    }
+
+    // Chop off trailing space in the buffer
+    destination.chop(zlibStream.avail_out);
+
+    inflateEnd(&zlibStream);
+    return destination;
+}
+
 QSvgTinyDocument * QSvgTinyDocument::load(const QString &fileName)
 {
     QFile file(fileName);
-    if (Q_UNLIKELY(!file.open(QFile::ReadOnly))) {
+    if (!file.open(QFile::ReadOnly)) {
         qWarning("Cannot open file '%s', because: %s",
                  qPrintable(fileName), qPrintable(file.errorString()));
-        return nullptr;
+        return 0;
     }
 
-    return load(file.readAll());
+    if (fileName.endsWith(QLatin1String(".svgz"), Qt::CaseInsensitive)
+            || fileName.endsWith(QLatin1String(".svg.gz"), Qt::CaseInsensitive)) {
+        return load(qt_inflateGZipDataFrom(&file));
+    }
+
+    QSvgTinyDocument *doc = 0;
+    QSvgHandler handler(&file);
+    if (handler.ok()) {
+        doc = handler.document();
+        doc->m_animationDuration = handler.animationDuration();
+    } else {
+        qWarning("Cannot read file '%s', because: %s (line %d)",
+                 qPrintable(fileName), qPrintable(handler.errorString()), handler.lineNumber());
+    }
+    return doc;
 }
 
 QSvgTinyDocument * QSvgTinyDocument::load(const QByteArray &contents)
 {
     // Check for gzip magic number and inflate if appropriate
     if (contents.startsWith("\x1f\x8b")) {
-        return load(qUncompress(contents.constData(), contents.size()));
+        QBuffer buffer;
+        buffer.setData(contents.constData(), contents.size());
+        return load(qt_inflateGZipDataFrom(&buffer));
     }
 
     QSvgHandler handler(contents);
 
-    QSvgTinyDocument *doc = nullptr;
-    if (Q_UNLIKELY(!handler.ok())) {
-        qWarning("Cannot read SVG, because: %s (line %d)",
-                 qPrintable(handler.errorString()), handler.lineNumber());
-    } else {
+    QSvgTinyDocument *doc = 0;
+    if (handler.ok()) {
         doc = handler.document();
+        doc->m_animationDuration = handler.animationDuration();
     }
     return doc;
 }
@@ -78,18 +186,20 @@ QSvgTinyDocument * QSvgTinyDocument::load(QXmlStreamReader *contents)
 {
     QSvgHandler handler(contents);
 
-    QSvgTinyDocument *doc = nullptr;
-    if (Q_UNLIKELY(!handler.ok())) {
-        qWarning("Cannot read SVG, because: %s (line %d)",
-                 qPrintable(handler.errorString()), handler.lineNumber());
-    } else {
+    QSvgTinyDocument *doc = 0;
+    if (handler.ok()) {
         doc = handler.document();
+        doc->m_animationDuration = handler.animationDuration();
     }
     return doc;
 }
 
 void QSvgTinyDocument::draw(QPainter *p, const QRectF &bounds)
 {
+    if (m_time.isNull()) {
+        m_time.start();
+    }
+
     if (displayMode() == QSvgNode::NoneMode)
         return;
 
@@ -122,6 +232,9 @@ void QSvgTinyDocument::draw(QPainter *p, const QString &id,
     if (Q_UNLIKELY(!node)) {
         qDebug("Couldn't find node %s. Skipping rendering.", qPrintable(id));
         return;
+    }
+    if (m_time.isNull()) {
+        m_time.start();
     }
 
     if (node->displayMode() == QSvgNode::NoneMode)
@@ -216,6 +329,21 @@ QSvgFillStyleProperty *QSvgTinyDocument::namedStyle(const QString &id) const
     return m_namedStyles.value(id);
 }
 
+void QSvgTinyDocument::restartAnimation()
+{
+    m_time.restart();
+}
+
+bool QSvgTinyDocument::animated() const
+{
+    return m_animated;
+}
+
+void QSvgTinyDocument::setAnimated(bool a)
+{
+    m_animated = a;
+}
+
 void QSvgTinyDocument::draw(QPainter *p, QSvgExtraStates &)
 {
     draw(p, QRectF());
@@ -289,4 +417,33 @@ QMatrix QSvgTinyDocument::matrixForElement(const QString &id) const
     return t.toAffine();
 }
 
+int QSvgTinyDocument::currentFrame() const
+{
+    double runningPercentage = qMin(m_time.elapsed()/double(m_animationDuration), 1.);
+
+    int totalFrames = m_fps * m_animationDuration;
+
+    return int(runningPercentage * totalFrames);
+}
+
+void QSvgTinyDocument::setCurrentFrame(int frame)
+{
+    const int totalFrames = m_fps * m_animationDuration;
+    const int framePercentage = frame / totalFrames;
+    const int timeForFrame = m_animationDuration * framePercentage * 1000; //in ms
+    const int timeToAdd = timeForFrame - m_time.elapsed();
+    m_time = m_time.addMSecs(timeToAdd);
+}
+
+void QSvgTinyDocument::setFramesPerSecond(int num)
+{
+    m_fps = num;
+}
+
 QT_END_NAMESPACE
+
+#endif // QT_NO_SVG
+
+
+
+

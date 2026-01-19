@@ -38,6 +38,10 @@
 #include "qstyleditemdelegate.h"
 #include "qabstractitemview_p.h"
 #include "qabstractitemmodel_p.h"
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#include "qaccessible2.h"
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -82,6 +86,10 @@ QAbstractItemViewPrivate::QAbstractItemViewPrivate()
         moveCursorUpdatedView(false)
 {
     keyboardInputTime.invalidate();
+}
+
+QAbstractItemViewPrivate::~QAbstractItemViewPrivate()
+{
 }
 
 void QAbstractItemViewPrivate::init()
@@ -1010,6 +1018,14 @@ void QAbstractItemView::reset()
     setRootIndex(QModelIndex());
     if (d->selectionModel)
         d->selectionModel->reset();
+#ifndef QT_NO_ACCESSIBILITY
+#ifdef Q_WS_X11
+    if (QAccessible::isActive()) {
+        QAccessible::queryAccessibleInterface(this)->table2Interface()->modelReset();
+        QAccessible::updateAccessibility(this, 0, QAccessible::TableModelChanged);
+    }
+#endif
+#endif
 }
 
 /*!
@@ -3080,6 +3096,14 @@ void QAbstractItemViewPrivate::_q_rowsRemoved(const QModelIndex &index, int star
     if (q->isVisible())
         q->updateEditorGeometries();
     q->setState(QAbstractItemView::NoState);
+#ifndef QT_NO_ACCESSIBILITY
+#ifdef Q_WS_X11
+    if (QAccessible::isActive()) {
+        QAccessible::queryAccessibleInterface(q)->table2Interface()->rowsRemoved(index, start, end);
+        QAccessible::updateAccessibility(q, 0, QAccessible::TableModelChanged);
+    }
+#endif
+#endif
 }
 
 /*!
@@ -3152,6 +3176,14 @@ void QAbstractItemViewPrivate::_q_columnsRemoved(const QModelIndex &index, int s
     if (q->isVisible())
         q->updateEditorGeometries();
     q->setState(QAbstractItemView::NoState);
+#ifndef QT_NO_ACCESSIBILITY
+#ifdef Q_WS_X11
+    if (QAccessible::isActive()) {
+        QAccessible::queryAccessibleInterface(q)->table2Interface()->columnsRemoved(index, start, end);
+        QAccessible::updateAccessibility(q, 0, QAccessible::TableModelChanged);
+    }
+#endif
+#endif
 }
 
 
@@ -3165,6 +3197,16 @@ void QAbstractItemViewPrivate::_q_rowsInserted(const QModelIndex &index, int sta
     Q_UNUSED(index)
     Q_UNUSED(start)
     Q_UNUSED(end)
+
+#ifndef QT_NO_ACCESSIBILITY
+#ifdef Q_WS_X11
+    Q_Q(QAbstractItemView);
+    if (QAccessible::isActive()) {
+        QAccessible::queryAccessibleInterface(q)->table2Interface()->rowsInserted(index, start, end);
+        QAccessible::updateAccessibility(q, 0, QAccessible::TableModelChanged);
+    }
+#endif
+#endif
 }
 
 /*!
@@ -3181,6 +3223,14 @@ void QAbstractItemViewPrivate::_q_columnsInserted(const QModelIndex &index, int 
     Q_Q(QAbstractItemView);
     if (q->isVisible())
         q->updateEditorGeometries();
+#ifndef QT_NO_ACCESSIBILITY
+#ifdef Q_WS_X11
+    if (QAccessible::isActive()) {
+        QAccessible::queryAccessibleInterface(q)->table2Interface()->columnsInserted(index, start, end);
+        QAccessible::updateAccessibility(q, 0, QAccessible::TableModelChanged);
+    }
+#endif
+#endif
 }
 
 /*!
@@ -3200,6 +3250,15 @@ void QAbstractItemViewPrivate::_q_modelDestroyed()
 void QAbstractItemViewPrivate::_q_layoutChanged()
 {
     doDelayedItemsLayout();
+#ifndef QT_NO_ACCESSIBILITY
+#ifdef Q_WS_X11
+    Q_Q(QAbstractItemView);
+    if (QAccessible::isActive()) {
+        QAccessible::queryAccessibleInterface(q)->table2Interface()->modelReset();
+        QAccessible::updateAccessibility(q, 0, QAccessible::TableModelChanged);
+    }
+#endif
+#endif
 }
 
 /*!

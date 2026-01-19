@@ -8,6 +8,9 @@ qscript [script-file]
 
 =head1 OPTIONS
 
+    -d
+        Attach a debugger.
+
     -i
         Run interactive.
 

@@ -867,7 +867,7 @@ QScriptEnginePrivate::QScriptEnginePrivate()
     qMetaTypeId<QList<int> >();
     qMetaTypeId<QObjectList>();
 
-    if (Q_UNLIKELY(!QCoreApplication::instance())) {
+    if (!QCoreApplication::instance()) {
         qFatal("QScriptEngine: Must construct a Q(Core)Application before a QScriptEngine");
         return;
     }
@@ -1671,7 +1671,7 @@ JSC::JSValue QScriptEnginePrivate::newVariant(JSC::JSValue objectValue,
     if (!isObject(objectValue))
         return newVariant(value);
     JSC::JSObject *jscObject = JSC::asObject(objectValue);
-    if (Q_UNLIKELY(!jscObject->inherits(&QScriptObject::info))) {
+    if (!jscObject->inherits(&QScriptObject::info)) {
         qWarning("QScriptEngine::newVariant(): changing class of non-QScriptObject not supported");
         return JSC::JSValue();
     }
@@ -1781,7 +1781,7 @@ void QScriptEnginePrivate::setProperty(JSC::ExecState *exec, JSC::JSValue object
         } else {
             if (value.isObject()) { // ### should check if it has callData()
                 // defining getter/setter
-                if (Q_UNLIKELY(id == exec->propertyNames().underscoreProto)) {
+                if (id == exec->propertyNames().underscoreProto) {
                     qWarning("QScriptValue::setProperty() failed: "
                              "cannot set getter or setter of native property `__proto__'");
                 } else {
@@ -1796,7 +1796,7 @@ void QScriptEnginePrivate::setProperty(JSC::ExecState *exec, JSC::JSValue object
         }
     } else {
         // setting the value
-        if (Q_UNLIKELY(getter && getter.isObject() && !(setter && setter.isObject()))) {
+        if (getter && getter.isObject() && !(setter && setter.isObject())) {
             qWarning("QScriptValue::setProperty() failed: "
                      "property '%s' has a getter but no setter",
                      qPrintable(QString(id.ustring())));
@@ -2164,7 +2164,7 @@ QScriptValue QScriptEngine::newQObject(const QScriptValue &scriptObject,
         return newQObject(qtObject, ownership, options);
     QScript::APIShim shim(d);
     JSC::JSObject *jscObject = JSC::asObject(QScriptValuePrivate::get(scriptObject)->jscValue);
-    if (Q_UNLIKELY(!jscObject->inherits(&QScriptObject::info))) {
+    if (!jscObject->inherits(&QScriptObject::info)) {
         qWarning("QScriptEngine::newQObject(): changing class of non-QScriptObject not supported");
         return QScriptValue();
     }
@@ -2692,8 +2692,8 @@ void QScriptEngine::popContext()
         agent()->contextPop();
     Q_D(QScriptEngine);
     QScript::APIShim shim(d);
-    if (Q_UNLIKELY(d->currentFrame->returnPC() != 0 || d->currentFrame->codeBlock() != 0
-        || !currentContext()->parentContext())) {
+    if (d->currentFrame->returnPC() != 0 || d->currentFrame->codeBlock() != 0
+        || !currentContext()->parentContext()) {
         qWarning("QScriptEngine::popContext() doesn't match with pushContext()");
         return;
     }
@@ -2885,7 +2885,7 @@ QScriptValue QScriptEngine::create(int type, const void *ptr)
 
 JSC::JSValue QScriptEnginePrivate::create(JSC::ExecState *exec, int type, const void *ptr)
 {
-    Q_ASSERT(ptr != 0 || type == 0);
+    Q_ASSERT(ptr != 0);
     JSC::JSValue result;
     QScriptEnginePrivate *eng = exec ? QScript::scriptEngineFromExec(exec) : 0;
     QScriptTypeInfo *info = eng ? eng->m_typeInfos.value(type) : 0;
@@ -3160,7 +3160,7 @@ bool QScriptEnginePrivate::convertValue(JSC::ExecState *exec, JSC::JSValue value
     }
 
 #if 0
-    if (Q_UNLIKELY(!name.isEmpty())) {
+    if (!name.isEmpty()) {
         qWarning("QScriptEngine::convert: unable to convert value to type `%s'",
                  name.constData());
     }
@@ -3673,7 +3673,9 @@ QStringList QScriptEngine::importedExtensions() const
 
     This function is equivalent to QScriptEngine::toScriptValue().
 
-    \note It is advised to use the other form in new code.
+    \note This function was provided as a workaround for MSVC 6
+    which did not support member template functions. It is advised
+    to use the other form in new code.
 
     \sa QScriptEngine::toScriptValue(), qscriptvalue_cast()
 */
@@ -3688,7 +3690,9 @@ QStringList QScriptEngine::importedExtensions() const
 
     This function is equivalent to QScriptEngine::fromScriptValue().
 
-    \note It is advised to use the other form in new code.
+    \note This function was provided as a workaround for MSVC 6
+    which did not support member template functions. It is advised
+    to use the other form in new code.
 
     \sa QScriptEngine::fromScriptValue()
 */
@@ -4057,6 +4061,11 @@ bool qScriptDisconnect(QObject *sender, const char *signal,
     \sa qScriptConnect()
 */
 
+QT_BEGIN_INCLUDE_NAMESPACE
+#include "moc_qscriptengine.h"
+QT_END_INCLUDE_NAMESPACE
+
+
 /*!
   \since 4.4
 
@@ -4075,7 +4084,7 @@ bool qScriptDisconnect(QObject *sender, const char *signal,
 void QScriptEngine::setAgent(QScriptEngineAgent *agent)
 {
     Q_D(QScriptEngine);
-    if (Q_UNLIKELY(agent && (agent->engine() != this))) {
+    if (agent && (agent->engine() != this)) {
         qWarning("QScriptEngine::setAgent(): "
                  "cannot set agent belonging to different engine");
         return;
@@ -4284,5 +4293,3 @@ QScriptSyntaxCheckResult &QScriptSyntaxCheckResult::operator=(const QScriptSynta
 }
 
 QT_END_NAMESPACE
-
-#include "moc_qscriptengine.h"

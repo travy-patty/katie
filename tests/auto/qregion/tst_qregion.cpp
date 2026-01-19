@@ -300,6 +300,33 @@ void tst_QRegion::emptyPolygonRegion()
     QTEST(r.rects(), "rects");
 }
 
+
+static const char *circle_xpm[] = {
+    "20 20 2 1",
+    "	c #FFFFFF",
+    ".	c #000000",
+    "       ......       ",
+    "     ..........     ",
+    "   ..............   ",
+    "  ................  ",
+    "  ................  ",
+    " .................. ",
+    " .................. ",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    " .................. ",
+    " .................. ",
+    "  ................  ",
+    "  ................  ",
+    "   ..............   ",
+    "     ..........     ",
+    "       ......       "
+};
+
 void tst_QRegion::bitmapRegion()
 {
     QBitmap circle;
@@ -308,8 +335,7 @@ void tst_QRegion::bitmapRegion()
         QVERIFY( region.isEmpty() );
     }
     {
-        circle = QPixmap( SRCDIR "/circle.png", "PNG" );
-        QVERIFY( !circle.isNull() );
+        circle = QPixmap( circle_xpm );
         QRegion region( circle );
 
         //// These should not be inside the circe

@@ -42,7 +42,9 @@ class Q_GUI_EXPORT QTextItem {
 public:
     enum RenderFlag {
         RightToLeft = 0x1,
-        Underline = 0x2,
+        Overline = 0x10,
+        Underline = 0x20,
+        StrikeOut = 0x40,
 
         Dummy = 0xffffffff
     };
@@ -72,6 +74,8 @@ public:
         ConstantOpacity             = 0x00000040, // Can render at constant opacity
         PerspectiveTransform        = 0x00000080, // Can do perspective transformations
         BlendModes                  = 0x00000100, // Can do extended Porter&Duff composition
+        RasterOpModes               = 0x00000200, // Can do logical raster operations
+        PaintOutsidePaintEvent      = 0x00000400, // Engine is capable of painting outside paint events
 
         AllFeatures                 = 0xffffffff  // For convenience
     };
@@ -149,7 +153,12 @@ public:
     enum Type {
         X11,
         PostScript,
-        Raster
+        SVG,
+        Raster,
+        Pdf,
+
+        User = 50,    // first user type id
+        MaxUser = 100 // last user type id
     };
     virtual Type type() const = 0;
 

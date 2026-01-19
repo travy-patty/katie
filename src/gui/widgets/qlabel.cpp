@@ -34,40 +34,12 @@
 #include "qstylesheetstyle_p.h"
 #include "qmath.h"
 
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
+
+
 QT_BEGIN_NAMESPACE
-
-QLabelPrivate::QLabelPrivate()
-    : valid_hints(false),
-    margin(0),
-    pixmap(nullptr),
-    scaledpixmap(nullptr),
-    cachedimage(nullptr),
-    align(Qt::AlignLeft | Qt::AlignVCenter),
-    indent(-1),
-    scaledcontents(false),
-    textLayoutDirty(false),
-    textDirty(false),
-    isRichText(false),
-    isTextLabel(false),
-    hasShortcut(false),
-    textformat(Qt::AutoText),
-    control(nullptr),
-    textInteractionFlags(Qt::LinksAccessibleByMouse),
-    openExternalLinks(false)
-{
-#ifndef QT_NO_MOVIE
-    movie = nullptr;
-#endif
-
-#ifndef QT_NO_SHORTCUT
-    shortcutId = 0;
-#endif
-
-#ifndef QT_NO_CURSOR
-    validCursor = false;
-    onAnchor = false;
-#endif
-}
 
 /*!
     \class QLabel
@@ -112,8 +84,8 @@ QLabelPrivate::QLabelPrivate()
 
     By default, labels display \l{alignment}{left-aligned, vertically-centered}
     text and images, where any tabs in the text to be displayed are
-    \l{automatically expanded}. However, the look of a QLabel can be adjusted
-    and fine-tuned in several ways.
+    \l{Qt::TextExpandTabs}{automatically expanded}. However, the look
+    of a QLabel can be adjusted and fine-tuned in several ways.
 
     The positioning of the content within the QLabel widget area can
     be tuned with setAlignment() and setIndent(). Text content can
@@ -186,6 +158,8 @@ QLabel::QLabel(const QString &text, QWidget *parent, Qt::WindowFlags f)
     setText(text);
 }
 
+
+
 /*!
     Destroys the label.
 */
@@ -200,8 +174,37 @@ void QLabelPrivate::init()
 {
     Q_Q(QLabel);
 
+    valid_hints = false;
+    margin = 0;
+#ifndef QT_NO_MOVIE
+    movie = 0;
+#endif
+#ifndef QT_NO_SHORTCUT
+    shortcutId = 0;
+#endif
+    pixmap = 0;
+    scaledpixmap = 0;
+    cachedimage = 0;
+    align = Qt::AlignLeft | Qt::AlignVCenter | Qt::TextExpandTabs;
+    indent = -1;
+    scaledcontents = false;
+    textLayoutDirty = false;
+    textDirty = false;
+    textformat = Qt::AutoText;
+    control = 0;
+    textInteractionFlags = Qt::LinksAccessibleByMouse;
+    isRichText = false;
+    isTextLabel = false;
+
     q->setSizePolicy(QSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred,
                                  QSizePolicy::Label));
+
+#ifndef QT_NO_CURSOR
+    validCursor = false;
+    onAnchor = false;
+#endif
+
+    openExternalLinks = false;
 
     setLayoutItemMargins(QStyle::SE_LabelLayoutItem);
 }
@@ -272,6 +275,11 @@ void QLabel::setText(const QString &text)
 #endif
 
     d->updateLabel();
+
+#ifndef QT_NO_ACCESSIBILITY
+    if (accessibleName().isEmpty())
+        QAccessible::updateAccessibility(this, 0, QAccessible::NameChanged);
+#endif
 }
 
 QString QLabel::text() const
@@ -546,11 +554,11 @@ QSize QLabelPrivate::sizeForWidth(int w) const
             else if (w < 0)
                 w = 2000;
             w -= (hextra + contentsMargin.width());
-            br = fm.boundingRect(QRect(0, 0, w , 2000), flags, text);
+            br = fm.boundingRect(0, 0, w ,2000, flags, text);
             if (tryWidth && br.height() < 4*fm.lineSpacing() && br.width() > w/2)
-                br = fm.boundingRect(QRect(0, 0, w/2, 2000), flags, text);
+                br = fm.boundingRect(0, 0, w/2, 2000, flags, text);
             if (tryWidth && br.height() < 2*fm.lineSpacing() && br.width() > w/4)
-                br = fm.boundingRect(QRect(0, 0, w/4, 2000), flags, text);
+                br = fm.boundingRect(0, 0, w/4, 2000, flags, text);
         }
     } else {
         br = QRect(QPoint(0, 0), QSize(fm.averageCharWidth(), fm.lineSpacing()));
@@ -1412,7 +1420,7 @@ void QLabelPrivate::ensureTextLayouted() const
         if (this->align & Qt::TextWordWrap)
             opt.setWrapMode(QTextOption::WordWrap);
         else
-            opt.setWrapMode(QTextOption::NoWrap);
+            opt.setWrapMode(QTextOption::ManualWrap);
 
         doc->setDefaultTextOption(opt);
 

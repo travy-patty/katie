@@ -26,8 +26,6 @@
 #include "qpainter.h"
 #include "qtablewidget_p.h"
 
-#include <limits.h>
-
 QT_BEGIN_NAMESPACE
 
 QTableModel::QTableModel(int rows, int columns, QTableWidget *parent)
@@ -2171,6 +2169,22 @@ void QTableWidget::sortItems(int column, Qt::SortOrder order)
 }
 
 /*!
+    \internal
+*/
+void QTableWidget::setSortingEnabled(bool enable)
+{
+    QTableView::setSortingEnabled(enable);
+}
+
+/*!
+    \internal
+*/
+bool QTableWidget::isSortingEnabled() const
+{
+    return QTableView::isSortingEnabled();
+}
+
+/*!
   Starts editing the \a item if it is editable.
 */
 
@@ -2602,6 +2616,12 @@ QTableWidgetItem *QTableWidget::itemFromIndex(const QModelIndex &index) const
 void QTableWidget::setModel(QAbstractItemModel * /*model*/)
 {
     Q_ASSERT(!"QTableWidget::setModel() - Changing the model of the QTableWidget is not allowed.");
+}
+
+/*! \reimp */
+bool QTableWidget::event(QEvent *e)
+{
+    return QTableView::event(e);
 }
 
 #ifndef QT_NO_DRAGANDDROP

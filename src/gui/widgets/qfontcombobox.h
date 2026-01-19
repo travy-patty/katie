@@ -23,11 +23,13 @@
 #define QFONTCOMBOBOX_H
 
 #include <QtGui/qcombobox.h>
-#include <QtGui/qfont.h>
+#include <QtGui/qfontdatabase.h>
 
 #ifndef QT_NO_FONTCOMBOBOX
 
+
 QT_BEGIN_NAMESPACE
+
 
 class QFontComboBoxPrivate;
 

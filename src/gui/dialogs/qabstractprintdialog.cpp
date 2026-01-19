@@ -65,7 +65,8 @@ QT_BEGIN_NAMESPACE
 
     Used to specify which parts of the print dialog should be visible.
 
-    \value PrintNone None of the options are enabled.
+    \value None None of the options are enabled.
+    \value PrintToFile The print to file option is enabled.
     \value PrintSelection The print selection option is enabled.
     \value PrintPageRange The page range selection option is enabled.
     \value PrintShowPageSize  Show the page size + margins page only if this is enabled.

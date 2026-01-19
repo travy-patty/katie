@@ -83,12 +83,8 @@ QDBusViewer::QDBusViewer(const QDBusConnection &connection, QWidget *parent)  :
     QSplitter *topSplitter = new QSplitter(Qt::Vertical, this);
     layout->addWidget(topSplitter);
 
-#ifndef QT_NO_TEXTBROWSER
     log = new QTextBrowser;
     connect(log, SIGNAL(anchorClicked(QUrl)), this, SLOT(anchorClicked(QUrl)));
-#else // QT_NO_TEXTBROWSER
-    log = new QTextEdit;
-#endif // QT_NO_TEXTBROWSER
 
     QSplitter *splitter = new QSplitter(topSplitter);
     splitter->addWidget(servicesView);
@@ -473,19 +469,18 @@ void QDBusViewer::about()
 {
     QMessageBox box(this);
 
-    box.setText(QString::fromLatin1("<center><img src=\"%1\">"
-                "<h3>%2</h3>"
-                "<p>Version %3</p></center>"
+    box.setText(QString::fromLatin1("<center><img src=\":/trolltech/qdbusviewer/qdbusviewer.png\">"
+                "<h3>%1</h3>"
+                "<p>Version %2</p></center>"
                 "<p>Copyright (C) 2015 The Qt Company Ltd.</p>"
                 "<p>Copyright (C) 2016 Ivailo Monev</p>")
-            .arg(QDBusViewerPixmap()).arg(tr("D-Bus Viewer")).arg(QLatin1String(QT_VERSION_STR)));
+            .arg(tr("D-Bus Viewer")).arg(QLatin1String(QT_VERSION_STR)));
     box.setWindowTitle(tr("D-Bus Viewer"));
     box.exec();
 }
 
 void QDBusViewer::anchorClicked(const QUrl &url)
 {
-#ifndef QT_NO_TEXTBROWSER
     if (url.scheme() != QLatin1String("qdbus"))
         // not ours
         return;
@@ -503,7 +498,6 @@ void QDBusViewer::anchorClicked(const QUrl &url)
 
     tree->scrollTo(idx);
     tree->setCurrentIndex(idx);
-#endif // QT_NO_TEXTBROWSER
 }
 
 /*!

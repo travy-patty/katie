@@ -38,7 +38,6 @@ private slots:
     void to_from_hex();
     void bench_qstrcmp();
     void bench_qstrncmp();
-    void bench_qchecksum();
 };
 
 
@@ -71,6 +70,7 @@ void tst_qbytearray::append()
 void tst_qbytearray::compress_uncompress_data()
 {
     QTest::addColumn<int>("level");
+    QTest::newRow("-1") << int(-1);
     QTest::newRow("0")  << int(0);
     QTest::newRow("1")  << int(1);
     QTest::newRow("2")  << int(2);
@@ -95,8 +95,7 @@ void tst_qbytearray::compress_uncompress()
     }
 }
 
-void tst_qbytearray::to_from_base64()
-{
+void tst_qbytearray::to_from_base64() {
     QBENCHMARK {
         QByteArray base64 = lorem.toBase64();
         QVERIFY(!base64.isEmpty());
@@ -105,8 +104,7 @@ void tst_qbytearray::to_from_base64()
     }
 }
 
-void tst_qbytearray::to_from_hex()
-{
+void tst_qbytearray::to_from_hex() {
     QBENCHMARK {
         QByteArray hex = lorem.toHex();
         QVERIFY(!hex.isEmpty());
@@ -115,35 +113,20 @@ void tst_qbytearray::to_from_hex()
     }
 }
 
-void tst_qbytearray::bench_qstrcmp()
-{
-    static const char* const loremdata = lorem.constData();
+void tst_qbytearray::bench_qstrcmp() {
     QBENCHMARK {
-        const int result = qstrcmp(loremdata, loremdata);
+        const int result = qstrcmp(lorem.constData(), lorem.constData());
         Q_UNUSED(result);
     }
 }
 
-void tst_qbytearray::bench_qstrncmp()
-{
+void tst_qbytearray::bench_qstrncmp() {
     static const int loremsize = lorem.size();
-    static const char* const loremdata = lorem.constData();
     QBENCHMARK {
-        const int result = qstrncmp(loremdata, loremdata, loremsize);
+        const int result = qstrncmp(lorem.constData(), lorem.constData(), loremsize);
         Q_UNUSED(result);
     }
 }
-
-void tst_qbytearray::bench_qchecksum()
-{
-    static const int loremsize = lorem.size();
-    static const char* const loremdata = lorem.constData();
-    QBENCHMARK {
-        const int result = qChecksum(loremdata, loremsize);
-        Q_UNUSED(result);
-    }
-}
-
 
 QTEST_MAIN(tst_qbytearray)
 

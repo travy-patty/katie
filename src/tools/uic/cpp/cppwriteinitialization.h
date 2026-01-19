@@ -79,13 +79,14 @@ struct WriteInitialization : public TreeWalker
     typedef QList<DomProperty*> DomPropertyList;
     typedef QHash<QString, DomProperty*> DomPropertyMap;
 
-    WriteInitialization(Uic *uic);
+    WriteInitialization(Uic *uic, bool activateScripts);
 
 //
 // widgets
 //
     void acceptUI(DomUI *node);
     void acceptWidget(DomWidget *node);
+    void acceptWidgetScripts(const DomScripts &, DomWidget *node, const  DomWidgets &childWidgets);
 
     void acceptLayout(DomLayout *node);
     void acceptSpacer(DomSpacer *node);
@@ -119,6 +120,11 @@ struct WriteInitialization : public TreeWalker
 // signal/slot connections
 //
     void acceptConnection(DomConnection *connection);
+
+//
+// images
+//
+    void acceptImage(DomImage *image);
 
     enum {
         Use43UiFile = 0,
@@ -212,6 +218,7 @@ private:
     void enableSorting(DomWidget *w, const QString &varName, const QString &tempName);
 
     QString findDeclaration(const QString &name);
+    bool hasImage(const QString &name) const;
 
     bool isValidObject(const QString &name) const;
 
@@ -246,6 +253,7 @@ private:
 
     QSet<QString> m_buttonGroups;
     QHash<QString, DomWidget*> m_registeredWidgets;
+    QHash<QString, DomImage*> m_registeredImages;
     QHash<QString, DomAction*> m_registeredActions;
     typedef QHash<uint, QString> ColorBrushHash;
     ColorBrushHash m_colorBrushHash;
@@ -296,6 +304,7 @@ private:
 
     QString m_delayedActionInitialization;
     QTextStream m_actionOut;
+    const bool m_activateScripts;
 
     bool m_layoutWidget;
     bool m_firstThemeIcon;

@@ -145,6 +145,7 @@ protected:
     bool event(QEvent *e);
 
 private:
+    QPixmap background;
     QSystemTrayIcon *q;
     Colormap colormap;
 };

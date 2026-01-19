@@ -43,6 +43,7 @@ class Q_GUI_EXPORT QItemDelegate : public QAbstractItemDelegate
 
 public:
     explicit QItemDelegate(QObject *parent = nullptr);
+    ~QItemDelegate();
 
     bool hasClipping() const;
     void setClipping(bool clip);

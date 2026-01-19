@@ -64,20 +64,56 @@
     this option is expected to read the size of the image from the
     image metadata, and return this size from option() as a QSize.
 
+    \value ClipRect The clip rect, or ROI (Region Of Interest). A
+    handler that supports this option is expected to only read the
+    provided QRect area from the original image in read(), before any
+    other transformation is applied.
+
     \value ScaledSize The scaled size of the image. A handler that
     supports this option is expected to scale the image to the
-    provided size (a QSize). If the handler does not support this
+    provided size (a QSize), after applying any clip rect
+    transformation (ClipRect). If the handler does not support this
     option, QImageReader will perform the scaling after the image has
     been read.
 
-    \value CompressionLevel The compression level of the image data.
-    A handler that supports this option is expected to set its
-    compression level depending on the value of this option (an int)
-    when writing. The value is usually in the 0-9 range.
+    \value ScaledClipRect The scaled clip rect (or ROI, Region Of
+    Interest) of the image. A handler that supports this option is
+    expected to apply the provided clip rect (a QRect), after applying
+    any scaling (ScaleSize) or regular clipping (ClipRect). If the
+    handler does not support this option, QImageReader will apply the
+    scaled clip rect after the image has been read.
+
+    \value CompressionRatio The compression ratio of the image data. A
+    handler that supports this option is expected to set its
+    compression rate depending on the value of this option (an int)
+    when writing.
+
+    \value Gamma The gamma level of the image. A handler that supports
+    this option is expected to set the image gamma level depending on
+    the value of this option (a float) when writing.
 
     \value Quality The quality level of the image. A handler that
     supports this option is expected to set the image quality level
     depending on the value of this option (an int) when writing.
+
+    \value Name The name of the image. A handler that supports this
+    option is expected to read the name from the image metadata and
+    return this as a QString, or when writing an image it is expected
+    to store the name in the image metadata.
+
+    \value SubType The subtype of the image. A handler that supports
+    this option can use the subtype value to help when reading and
+    writing images. For example, a PPM handler may have a subtype
+    value of "ppm" or "ppmraw".
+
+    \value IncrementalReading A handler that supports this option is
+    expected to read the image in several passes, as if it was an
+    animation. QImageReader will treat the image as an animation.
+
+    \value Endianness The endianness of the image. Certain image
+    formats can be stored as BigEndian or LittleEndian. A handler that
+    supports Endianness uses the value of this option to determine how
+    the image should be stored.
 
     \value Animation Image formats that support animation return
     true for this value in supportsOption(); otherwise, false is returned.
@@ -86,6 +122,9 @@
     background color to be specified. A handler that supports
     BackgroundColor initializes the background color to this option
     (a QColor) when reading an image.
+
+    \value ImageFormat The image's data format returned by the handler.
+    This can be any of the formats listed in QImage::Format.
 */
 
 /*!
@@ -101,20 +140,22 @@
     support for different image formats to Qt.
 
     Writing an image I/O plugin is achieved by subclassing this
-    base class, reimplementing the pure virtual functions capabilities()
-    and create(), and exporting the class with the Q_EXPORT_PLUGIN()
-    macro.
+    base class, reimplementing the pure virtual functions capabilities(),
+    create(), and keys(), and exporting the class with the
+    Q_EXPORT_PLUGIN2() macro. See \l{How to Create Qt Plugins} for details.
 
     An image format plugin can support three capabilities: reading (\l
-    CanRead) and writing (\l CanWrite). Reimplement capabilities() in your
-    subclass to expose the capabilities of your image format.
+    CanRead), writing (\l CanWrite) and \e incremental reading (\l
+    CanReadIncremental). Reimplement capabilities() in you subclass to
+    expose the capabilities of your image format.
 
     create() should create an instance of your QImageIOHandler
     subclass, with the provided device and format properly set, and
-    return this handler.
+    return this handler. You must also reimplement keys() so that Qt
+    knows which image formats your plugin supports.
 
     Different plugins can support different capabilities. For example,
-    you may have one plugin that supports reading the SVG format, and
+    you may have one plugin that supports reading the GIF format, and
     another that supports writing. Qt will select the correct plugin
     for the job, depending on the return value of capabilities(). If
     several plugins support the same capability, Qt will select one
@@ -130,14 +171,29 @@
 
     \value CanRead The plugin can read images.
     \value CanWrite The plugin can write images.
+    \value CanReadIncremental The plugin can read images incrementally.
+*/
+
+/*!
+    \class QImageIOHandlerFactoryInterface
+    \brief The QImageIOHandlerFactoryInterface class provides the factory
+    interface for QImageIOPlugin.
+    \reentrant
+
+    \internal
+
+    \sa QImageIOPlugin
 */
 
 #include "qimageiohandler.h"
+
 #include "qbytearray.h"
 #include "qimage.h"
 #include "qvariant.h"
 
 QT_BEGIN_NAMESPACE
+
+class QIODevice;
 
 class QImageIOHandlerPrivate
 {
@@ -242,8 +298,9 @@ QByteArray QImageIOHandler::format() const
     Returns true if the image is successfully read; otherwise returns
     false.
 
-    For animation formats, the image handler can assume that \a image
-    points to the previous frame.
+    For image formats that support incremental loading, and for animation
+    formats, the image handler can assume that \a image points to the
+    previous frame.
 
     \sa canRead()
 */
@@ -340,6 +397,18 @@ int QImageIOHandler::currentImageNumber() const
 }
 
 /*!
+    Returns the rect of the current image. If no rect is defined for the
+    image, and empty QRect() is returned.
+
+    This function is useful for animations, where only parts of the frame
+    may be updated at a time.
+*/
+QRect QImageIOHandler::currentImageRect() const
+{
+    return QRect();
+}
+
+/*!
     For image formats that support animation, this function returns
     the number of images in the animation. If the image format does
     not support animation, or if it is unable to determine the number
@@ -400,7 +469,7 @@ int QImageIOHandler::nextImageDelay() const
 
 /*!
     Constructs an image plugin with the given \a parent. This is
-    invoked automatically by the Q_EXPORT_PLUGIN() macro.
+    invoked automatically by the Q_EXPORT_PLUGIN2() macro.
 */
 QImageIOPlugin::QImageIOPlugin(QObject *parent)
     : QObject(parent)
@@ -421,20 +490,20 @@ QImageIOPlugin::~QImageIOPlugin()
 
     Returns the capabilities on the plugin, based on the data in \a
     device and the format \a format. For example, if the
-    QImageIOHandler supports the PNG format, and the data in the
-    device starts with the magick bits for that format, this function
-    should return \l CanRead. If \a format is "png" and the handler
-    supports both reading and writing, this function should return
-    \l CanRead | \l CanWrite.
+    QImageIOHandler supports the BMP format, and the data in the
+    device starts with the characters "BM", this function should
+    return \l CanRead. If \a format is "bmp" and the handler supports
+    both reading and writing, this function should return \l CanRead |
+    \l CanWrite.
 */
 
 /*!
-    \fn QImageIOPlugin::mimeTypes() const
+    \fn QImageIOPlugin::keys() const
 
-    Returns the list of image MIME types this plugin supports.
+    Returns the list of image keys this plugin supports.
 
-    These MIME types are usually the names of the image formats that are implemented
-    in the plugin prefixed with "image/" (e.g., "image/png").
+    These keys are usually the names of the image formats that are implemented
+    in the plugin (e.g., "jpg" or "gif").
 
     \sa capabilities()
 */
@@ -443,7 +512,10 @@ QImageIOPlugin::~QImageIOPlugin()
     \fn QImageIOHandler *QImageIOPlugin::create(QIODevice *device, const QByteArray &format) const
 
     Creates and returns a QImageIOHandler subclass, with \a device
-    and \a format set. The \a format is a hint. Format names are case sensitive.
+    and \a format set. The \a format must come from the list returned by keys().
+    Format names are case sensitive.
+
+    \sa keys()
 */
 
 QT_END_NAMESPACE

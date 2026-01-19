@@ -33,7 +33,6 @@
 #include "qstringmatcher.h"
 #include "qvector.h"
 #include "qscopedpointer.h"
-#include "qdebug.h"
 
 #include <limits.h>
 
@@ -3416,7 +3415,12 @@ static void derefEngine(QRegExpEngine *eng, const QRegExpEngineKey &key)
 #if !defined(QT_NO_REGEXP_OPTIM)
         if (globalEngineCache()) {
             QMutexLocker locker(regexpMutex());
-            globalEngineCache()->insert(key, eng, 4 + key.pattern.length() / 4);
+            QT_TRY {
+                globalEngineCache()->insert(key, eng, 4 + key.pattern.length() / 4);
+            } QT_CATCH(const std::bad_alloc &) {
+                // in case of an exception (e.g. oom), just delete the engine
+                delete eng;
+            }
         } else {
             delete eng;
         }
@@ -4117,28 +4121,13 @@ QDataStream &operator>>(QDataStream &in, QRegExp &regExp)
 
     in >> pattern >> cs >> patternSyntax >> isMinimal;
 
-    regExp = QRegExp(pattern, Qt::CaseSensitivity(cs),
+    QRegExp newRegExp(pattern, Qt::CaseSensitivity(cs),
                       QRegExp::PatternSyntax(patternSyntax));
-    regExp.setMinimal(isMinimal);
 
+    newRegExp.setMinimal(isMinimal);
+    regExp = newRegExp;
     return in;
 }
 #endif // QT_NO_DATASTREAM
-
-#ifndef QT_NO_DEBUG_STREAM
-QDebug operator<<(QDebug dbg, const QRegExp &r)
-{
-    static const char *regExpSyntaxTbl[] = {
-        "RegExp",
-        "Wildcard",
-        "FixedString",
-        "RegExp2",
-        "WildcardUnix"
-    };
-
-    dbg.nospace() << "QRegExp(" << r.pattern() << ',' << r.caseSensitivity() << ',' << regExpSyntaxTbl[r.patternSyntax()] << ')';
-    return dbg.space();
-}
-#endif
 
 QT_END_NAMESPACE

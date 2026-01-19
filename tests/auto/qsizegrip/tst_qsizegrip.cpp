@@ -27,10 +27,6 @@
 #include <QVBoxLayout>
 #include <QLabel>
 
-// TESTED_CLASS=
-// TESTED_FILES=
-
-#ifndef QT_NO_SIZEGRIP
 static inline Qt::Corner sizeGripCorner(QWidget *parent, QSizeGrip *sizeGrip)
 {
     if (!parent || !sizeGrip)
@@ -45,6 +41,9 @@ static inline Qt::Corner sizeGripCorner(QWidget *parent, QSizeGrip *sizeGrip)
         return isAtBottom ? Qt::BottomRightCorner : Qt::TopRightCorner;
 
 }
+
+//TESTED_CLASS=
+//TESTED_FILES=
 
 Q_DECLARE_METATYPE(Qt::WindowType);
 
@@ -177,8 +176,3 @@ QTEST_MAIN(tst_QSizeGrip)
 
 #include "moc_tst_qsizegrip.cpp"
 
-#else // QT_NO_SIZEGRIP
-
-QTEST_NOOP_MAIN
-
-#endif // QT_NO_SIZEGRIP

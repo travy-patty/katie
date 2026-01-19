@@ -25,7 +25,6 @@
 #include "qmatrix.h"
 #include "qregion.h"
 #include "qpainterpath.h"
-#include "qpainterpath_p.h"
 #include "qvariant.h"
 #include "qmath.h"
 #include "qnumeric.h"
@@ -390,7 +389,7 @@ QTransform &QTransform::translate(qreal dx, qreal dy)
     if (dx == 0 && dy == 0)
         return *this;
 #ifndef QT_NO_DEBUG
-    if (qIsNaN(dx) || qIsNaN(dy)) {
+    if (qIsNaN(dx) | qIsNaN(dy)) {
         qWarning() << "QTransform::translate with NaN called";
         return *this;
     }
@@ -433,7 +432,7 @@ QTransform &QTransform::translate(qreal dx, qreal dy)
 QTransform QTransform::fromTranslate(qreal dx, qreal dy)
 {
 #ifndef QT_NO_DEBUG
-    if (qIsNaN(dx) || qIsNaN(dy)) {
+    if (qIsNaN(dx) | qIsNaN(dy)) {
         qWarning() << "QTransform::fromTranslate with NaN called";
         return QTransform();
 }
@@ -458,7 +457,7 @@ QTransform & QTransform::scale(qreal sx, qreal sy)
     if (sx == 1 && sy == 1)
         return *this;
 #ifndef QT_NO_DEBUG
-    if (qIsNaN(sx) || qIsNaN(sy)) {
+    if (qIsNaN(sx) | qIsNaN(sy)) {
         qWarning() << "QTransform::scale with NaN called";
         return *this;
     }
@@ -499,7 +498,7 @@ QTransform & QTransform::scale(qreal sx, qreal sy)
 QTransform QTransform::fromScale(qreal sx, qreal sy)
 {
 #ifndef QT_NO_DEBUG
-    if (qIsNaN(sx) || qIsNaN(sy)) {
+    if (qIsNaN(sx) | qIsNaN(sy)) {
         qWarning() << "QTransform::fromScale with NaN called";
         return QTransform();
 }
@@ -524,7 +523,7 @@ QTransform & QTransform::shear(qreal sh, qreal sv)
     if (sh == 0 && sv == 0)
         return *this;
 #ifndef QT_NO_DEBUG
-    if (qIsNaN(sh) || qIsNaN(sv)) {
+    if (qIsNaN(sh) | qIsNaN(sv)) {
         qWarning() << "QTransform::shear with NaN called";
         return *this;
     }
@@ -1007,15 +1006,15 @@ void QTransform::reset()
 */
 QDataStream & operator<<(QDataStream &s, const QTransform &m)
 {
-    s << (qreal)m.m11()
-      << (qreal)m.m12()
-      << (qreal)m.m13()
-      << (qreal)m.m21()
-      << (qreal)m.m22()
-      << (qreal)m.m23()
-      << (qreal)m.m31()
-      << (qreal)m.m32()
-      << (qreal)m.m33();
+    s << double(m.m11())
+      << double(m.m12())
+      << double(m.m13())
+      << double(m.m21())
+      << double(m.m22())
+      << double(m.m23())
+      << double(m.m31())
+      << double(m.m32())
+      << double(m.m33());
     return s;
 }
 
@@ -1031,7 +1030,7 @@ QDataStream & operator<<(QDataStream &s, const QTransform &m)
 */
 QDataStream & operator>>(QDataStream &s, QTransform &t)
 {
-     qreal m11, m12, m13,
+     double m11, m12, m13,
          m21, m22, m23,
          m31, m32, m33;
 
@@ -1343,7 +1342,6 @@ static QPolygonF mapProjective(const QTransform &transform, const QPolygonF &pol
     path = transform.map(path);
 
     QPolygonF result;
-    result.reserve(path.elementCount());
     for (int i = 0; i < path.elementCount(); ++i)
         result << path.elementAt(i);
     return result;

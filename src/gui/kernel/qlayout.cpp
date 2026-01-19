@@ -125,7 +125,12 @@ QLayout::QLayout(QLayoutPrivate &dd, QLayout *lay, QWidget *w)
         } else {
             d->topLevel = true;
             w->d_func()->layout = this;
-            invalidate();
+            QT_TRY {
+                invalidate();
+            } QT_CATCH(...) {
+                w->d_func()->layout = 0;
+                QT_RETHROW;
+            }
         }
     }
 }
@@ -164,7 +169,7 @@ QWidgetItem *QLayoutPrivate::createWidgetItem(const QLayout *layout, QWidget *wi
     if (widgetItemFactoryMethod)
         if (QWidgetItem *wi = (*widgetItemFactoryMethod)(layout, widget))
             return wi;
-    return new QWidgetItem(widget);
+    return new QWidgetItemV2(widget);
 }
 
 QSpacerItem *QLayoutPrivate::createSpacerItem(const QLayout *layout, int w, int h, QSizePolicy::Policy hPolicy, QSizePolicy::Policy vPolicy)

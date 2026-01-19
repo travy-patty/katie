@@ -23,6 +23,9 @@
 #include "chip.h"
 
 #include <QtGui>
+#ifndef QT_NO_OPENGL
+#include <QtOpenGL>
+#endif
 
 ChipTester::ChipTester(QWidget *parent)
     : QGraphicsView(parent),
@@ -45,6 +48,13 @@ void ChipTester::setAntialias(bool enabled)
     setRenderHint(QPainter::Antialiasing, enabled);
 }
 
+void ChipTester::setOpenGL(bool enabled)
+{
+#ifndef QT_NO_OPENGL
+    setViewport(enabled ? new QGLWidget(QGLFormat(QGL::SampleBuffers)) : 0);
+#endif
+}
+
 void ChipTester::setOperation(Operation operation)
 {
     this->operation = operation;
@@ -63,26 +73,26 @@ void ChipTester::paintEvent(QPaintEvent *event)
 {
     QGraphicsView::paintEvent(event);
     if (++npaints == 50)
-        eventLoop.quit();
+	eventLoop.quit();
 }
 
 void ChipTester::timerEvent(QTimerEvent *)
 {
     switch (operation) {
-        case Rotate360:
-            rotate(1);
-            break;
-        case ZoomInOut: {
-            qreal s = 0.05 + (npaints / 20.0);
-            setTransform(QTransform().scale(s, s));
-            break;
-        }
-        case Translate: {
-            int offset = horizontalScrollBar()->minimum()
-                + (npaints % (horizontalScrollBar()->maximum() - horizontalScrollBar()->minimum()));
-            horizontalScrollBar()->setValue(offset);
-            break;
-        }
+    case Rotate360:
+	rotate(1);
+	break;
+    case ZoomInOut: {
+	qreal s = 0.05 + (npaints / 20.0);
+	setTransform(QTransform().scale(s, s));
+	break;
+    }
+    case Translate: {
+	int offset = horizontalScrollBar()->minimum()
+	    + (npaints % (horizontalScrollBar()->maximum() - horizontalScrollBar()->minimum()));
+	horizontalScrollBar()->setValue(offset);
+	break;
+    }
     }
 }
 
@@ -90,7 +100,7 @@ void ChipTester::populateScene()
 {
     scene = new QGraphicsScene;
 
-    QImage image(SRCDIR "/chiptester/qt4logo.png");
+    QImage image(":/qt4logo.png");
 
     // Populate scene
     int xx = 0;

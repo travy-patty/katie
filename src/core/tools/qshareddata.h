@@ -87,9 +87,11 @@ public:
         }
         return *this;
     }
+#ifdef Q_COMPILER_RVALUE_REFS
     QSharedDataPointer(QSharedDataPointer &&o) : d(o.d) { o.d = nullptr; }
     inline QSharedDataPointer<T> &operator=(QSharedDataPointer<T> &&other)
     { qSwap(d, other.d); return *this; }
+#endif
 
     inline bool operator!() const { return !d; }
 
@@ -169,9 +171,11 @@ public:
         }
         return *this;
     }
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QExplicitlySharedDataPointer(QExplicitlySharedDataPointer &&o) : d(o.d) { o.d = nullptr; }
     inline QExplicitlySharedDataPointer<T> &operator=(QExplicitlySharedDataPointer<T> &&other)
     { qSwap(d, other.d); return *this; }
+#endif
 
     inline bool operator!() const { return !d; }
 

@@ -24,6 +24,8 @@
 
 #include "qdeclarativeimagebase_p.h"
 
+#include <QtNetwork/qnetworkreply.h>
+
 QT_BEGIN_NAMESPACE
 
 

@@ -55,7 +55,8 @@ public:
         QCursor = 74, QSizePolicy = 75, QKeySequence = 76, QPen = 77,
         QTextLength = 78, QTextFormat = 79, QMatrix = 80, QTransform = 81,
         QMatrix4x4 = 82, QVector2D = 83, QVector3D = 84, QVector4D = 85,
-        LastGuiType = QVector4D,
+        QQuaternion = 86,
+        LastGuiType = QQuaternion,
 
         FirstCoreExtType = 128 /* VoidStar */,
         VoidStar = 128, Long = 129, Short = 130, Char = 131, ULong = 132,
@@ -63,6 +64,7 @@ public:
         QVariant = 137,
         LastCoreExtType = QVariant,
 
+// This logic must match the one in qglobal.h
 #if defined(QT_NO_FPU)
         QReal = Float,
 #else
@@ -229,11 +231,13 @@ inline int qRegisterMetaTypeStreamOperators()
     QT_END_NAMESPACE
 
 #define Q_DECLARE_BUILTIN_METATYPE(TYPE, NAME) \
+    QT_BEGIN_NAMESPACE \
     template<> struct QMetaTypeId2<TYPE> \
     { \
         enum { Defined = 1 }; \
         static inline int qt_metatype_id() { return QMetaType::NAME; } \
-    };
+    }; \
+    QT_END_NAMESPACE
 
 class QString;
 class QByteArray;
@@ -283,7 +287,10 @@ class QMatrix4x4;
 class QVector2D;
 class QVector3D;
 class QVector4D;
+class QQuaternion;
 class QVariant;
+
+QT_END_NAMESPACE
 
 // Void
 Q_DECLARE_BUILTIN_METATYPE(bool, Bool)
@@ -342,6 +349,7 @@ Q_DECLARE_BUILTIN_METATYPE(QMatrix4x4, QMatrix4x4)
 Q_DECLARE_BUILTIN_METATYPE(QVector2D, QVector2D)
 Q_DECLARE_BUILTIN_METATYPE(QVector3D, QVector3D)
 Q_DECLARE_BUILTIN_METATYPE(QVector4D, QVector4D)
+Q_DECLARE_BUILTIN_METATYPE(QQuaternion, QQuaternion)
 
 Q_DECLARE_BUILTIN_METATYPE(void *, VoidStar)
 Q_DECLARE_BUILTIN_METATYPE(long, Long)
@@ -355,6 +363,6 @@ Q_DECLARE_BUILTIN_METATYPE(QObject *, QObjectStar)
 Q_DECLARE_BUILTIN_METATYPE(QWidget *, QWidgetStar)
 Q_DECLARE_BUILTIN_METATYPE(QVariant, QVariant)
 
-QT_END_NAMESPACE
+
 
 #endif // QMETATYPE_H

@@ -611,7 +611,7 @@ void QTextHtmlParser::parseTag()
             parser.parse(&sheet, Qt::CaseInsensitive);
             inlineStyleSheets.append(sheet);
             resolveStyleSheetImports(sheet);
-#endif // QT_NO_CSSPARSER
+#endif
         }
         parseCloseTag();
         return;
@@ -1085,7 +1085,7 @@ void QTextHtmlParserNode::initializeProperties(const QTextHtmlParserNode *parent
         case Html_tt:
         case Html_kbd:
         case Html_samp:
-            charFormat.setFontFamily(QString::fromLatin1("FreeMono"));
+            charFormat.setFontFamily(QString::fromLatin1("Courier New,courier"));
             // <tt> uses a fixed font, so set the property
             charFormat.setFontFixedPitch(true);
             break;
@@ -1095,7 +1095,7 @@ void QTextHtmlParserNode::initializeProperties(const QTextHtmlParserNode *parent
             break;
         // ##### sub / sup
         case Html_pre:
-            charFormat.setFontFamily(QString::fromLatin1("FreeMono"));
+            charFormat.setFontFamily(QString::fromLatin1("Courier New,courier"));
             wsm = WhiteSpacePre;
             margin[QTextHtmlParser::MarginTop] = 12;
             margin[QTextHtmlParser::MarginBottom] = 12;
@@ -1323,6 +1323,9 @@ void QTextHtmlParserNode::applyCssDeclarations(const QVector<QCss::Declaration> 
     if (f.resolve() & QFont::StrikeOutResolved)
         charFormat.setFontStrikeOut(f.strikeOut());
 
+    if (f.resolve() & QFont::CapitalizationResolved)
+        charFormat.setFontCapitalization(f.capitalization());
+
     if (adjustment >= -1)
         charFormat.setProperty(QTextFormat::FontSizeAdjustment, adjustment);
 
@@ -1343,19 +1346,33 @@ void QTextHtmlParserNode::applyCssDeclarations(const QVector<QCss::Declaration> 
         }
     }
 }
+
 #endif // QT_NO_CSSPARSER
 
 void QTextHtmlParserNode::applyBackgroundImage(const QString &url, const QTextDocument *resourceProvider)
 {
     if (!url.isEmpty() && resourceProvider) {
         QVariant val = resourceProvider->resource(QTextDocument::ImageResource, url);
-        if (val.type() == QVariant::Image || val.type() == QVariant::Pixmap) {
-            QImage image = qvariant_cast<QImage>(val);
-            charFormat.setBackground(image);
-        } else if (val.type() == QVariant::ByteArray) {
-            QImage image = QImage::fromData(val.toByteArray());
-            if (!image.isNull()) {
+
+        if (qApp->thread() != QThread::currentThread()) {
+            // must use images in non-GUI threads
+            if (val.type() == QVariant::Image) {
+                QImage image = qvariant_cast<QImage>(val);
                 charFormat.setBackground(image);
+            } else if (val.type() == QVariant::ByteArray) {
+                QImage image = QImage::fromData(val.toByteArray());
+                if (!image.isNull()) {
+                    charFormat.setBackground(image);
+                }
+            }
+        } else {
+            if (val.type() == QVariant::Image || val.type() == QVariant::Pixmap) {
+                charFormat.setBackground(qvariant_cast<QPixmap>(val));
+            } else if (val.type() == QVariant::ByteArray) {
+                QPixmap pm;
+                if (pm.loadFromData(val.toByteArray())) {
+                    charFormat.setBackground(pm);
+                }
             }
         }
     }
@@ -1420,7 +1437,7 @@ void QTextHtmlParserNode::parseStyleAttribute(const QString &value, const QTextD
     if (sheet.styleRules.count() != 1) return;
     applyCssDeclarations(sheet.styleRules.at(0).declarations, resourceProvider);
 }
-#endif // QT_NO_CSSPARSER
+#endif
 
 QStringList QTextHtmlParser::parseAttributes()
 {
@@ -1683,6 +1700,8 @@ QStringList QTextHtmlStyleSelector::nodeNames(NodePtr node) const
     return QStringList(parser->at(node.id).tag.toLower());
 }
 
+#endif // QT_NO_CSSPARSER
+
 static inline int findAttribute(const QStringList &attributes, const QString &name)
 {
     int idx = -1;
@@ -1691,6 +1710,8 @@ static inline int findAttribute(const QStringList &attributes, const QString &na
     } while (idx != -1 && (idx % 2 == 1));
     return idx;
 }
+
+#ifndef QT_NO_CSSPARSER
 
 QString QTextHtmlStyleSelector::attribute(NodePtr node, const QString &name) const
 {
@@ -1818,9 +1839,9 @@ bool QTextHtmlParser::nodeIsChildOf(int i, QTextHTMLElements id) const
     }
     return false;
 }
-#endif // QT_NO_CSSPARSER
 
 QT_END_NAMESPACE
+#endif // QT_NO_CSSPARSER
 
 #endif // QT_NO_TEXTHTMLPARSER
 

@@ -26,6 +26,9 @@
 #include "qstylepainter.h"
 #include "qstyleoption.h"
 #include "qwidget_p.h"
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
 
 #include <limits.h>
 
@@ -165,7 +168,10 @@ bool QProgressBarPrivate::repaintRequired() const
     beginning with reset().
 
     If minimum and maximum both are set to 0, the bar shows a busy
-    indicator instead of a percentage of steps.
+    indicator instead of a percentage of steps. This is useful, for
+    example, when using QFtp or QNetworkAccessManager to download
+    items when they are unable to determine the size of the item being
+    downloaded.
 
     \table
     \row \o \inlineimage macintosh-progressbar.png Screenshot of a Macintosh style progress bar
@@ -285,6 +291,10 @@ void QProgressBar::setValue(int value)
         return;
     d->value = value;
     emit valueChanged(value);
+#ifndef QT_NO_ACCESSIBILITY
+    if (isVisible())
+        QAccessible::updateAccessibility(this, 0, QAccessible::ValueChanged);
+#endif
     if (d->repaintRequired())
         repaint();
 }

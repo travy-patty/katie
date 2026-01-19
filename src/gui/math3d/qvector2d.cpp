@@ -45,7 +45,7 @@ QT_BEGIN_NAMESPACE
     functions are represented by \c double values, it is possible to
     lose precision.
 
-    \sa QVector3D, QVector4D
+    \sa QVector3D, QVector4D, QQuaternion
 */
 
 /*!
@@ -424,7 +424,7 @@ QDebug operator<<(QDebug dbg, const QVector2D &vector)
 
 QDataStream &operator<<(QDataStream &stream, const QVector2D &vector)
 {
-    stream << (qreal)vector.x() << (qreal)vector.y();
+    stream << double(vector.x()) << double(vector.y());
     return stream;
 }
 
@@ -440,12 +440,11 @@ QDataStream &operator<<(QDataStream &stream, const QVector2D &vector)
 
 QDataStream &operator>>(QDataStream &stream, QVector2D &vector)
 {
-    qreal x = 0.0;
-    qreal y = 0.0;
+    double x, y;
     stream >> x;
     stream >> y;
-    vector.setX(x);
-    vector.setY(y);
+    vector.setX(qreal(x));
+    vector.setY(qreal(y));
     return stream;
 }
 

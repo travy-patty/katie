@@ -28,7 +28,9 @@
 
 #ifndef QT_NO_NETWORKINTERFACE
 
+
 QT_BEGIN_NAMESPACE
+
 
 template<typename T> class QList;
 
@@ -82,6 +84,7 @@ public:
 
     int index() const;
     QString name() const;
+    QString humanReadableName() const;
     InterfaceFlags flags() const;
     QString hardwareAddress() const;
     QList<QNetworkAddressEntry> addressEntries() const;

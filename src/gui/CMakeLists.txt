@@ -1,10 +1,9 @@
 add_definitions(${PNG_DEFINITIONS})
 set(EXTRA_GUI_LIBS
-    KtCore
+    KtCore KtXml
     ${FREETYPE_LIBRARIES}
     ${X11_X11_LIB}
     ${PNG_LIBRARIES}
-    ${DEFLATE_LIBRARIES}
 )
 
 set(GUI_PUBLIC_HEADERS
@@ -25,6 +24,11 @@ set(GUI_PUBLIC_HEADERS
     QAbstractSlider
     QAbstractSpinBox
     QAbstractTextDocumentLayout
+    QAccessible
+    QAccessibleBridge
+    QAccessibleObject
+    QAccessiblePlugin
+    QAccessibleWidget
     QAction
     QActionGroup
     QApplication
@@ -38,6 +42,7 @@ set(GUI_PUBLIC_HEADERS
     QClipboard
     QColor
     QColorDialog
+    QColormap
     QColumnView
     QComboBox
     QCommandLinkButton
@@ -53,6 +58,7 @@ set(GUI_PUBLIC_HEADERS
     QDirModel
     QDockWidget
     QDrag
+    QErrorMessage
     QFileDialog
     QFileIconProvider
     QFileSystemModel
@@ -61,11 +67,13 @@ set(GUI_PUBLIC_HEADERS
     QFontComboBox
     QFontDatabase
     QFontDialog
+    QFontInfo
     QFontMetrics
     QFormLayout
     QFrame
     QGenericMatrix
     QGraphicsAnchorLayout
+    QGraphicsEffect
     QGraphicsGridLayout
     QGraphicsItem
     QGraphicsItemAnimation
@@ -82,6 +90,7 @@ set(GUI_PUBLIC_HEADERS
     QHeaderView
     QIcon
     QIconEngine
+    QIconEnginePlugin
     QIdentityProxyModel
     QImage
     QImageIOHandler
@@ -102,8 +111,11 @@ set(GUI_PUBLIC_HEADERS
     QMainWindow
     QMatrix
     QMatrix4x4
+    QMdiArea
+    QMdiSubWindow
     QMenu
     QMenuBar
+    QMotifStyle
     QMovie
     QPageSetupDialog
     QPaintDevice
@@ -115,6 +127,7 @@ set(GUI_PUBLIC_HEADERS
     QPixmap
     QPixmapCache
     QPlainTextEdit
+    QPlastiqueStyle
     QPolygon
     QPrintDialog
     QPrintEngine
@@ -127,6 +140,7 @@ set(GUI_PUBLIC_HEADERS
     QProxyModel
     QProxyStyle
     QPushButton
+    QQuaternion
     QRadioButton
     QRegion
     QRgb
@@ -145,6 +159,7 @@ set(GUI_PUBLIC_HEADERS
     QStackedLayout
     QStackedWidget
     QStandardItemModel
+    QStaticText
     QStatusBar
     QStringListModel
     QStyle
@@ -192,6 +207,7 @@ set(GUI_PUBLIC_HEADERS
     QWidgetAction
     QWindowsStyle
     QWizard
+    QWorkspace
     QGuiPlatformPlugin
 )
 
@@ -199,11 +215,12 @@ include_directories(
     ${CMAKE_BINARY_DIR}/include
     ${CMAKE_BINARY_DIR}/privateinclude
     ${CMAKE_BINARY_DIR}/include/QtCore
+    ${CMAKE_BINARY_DIR}/include/QtXml
     ${CMAKE_BINARY_DIR}/include/QtGui
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src
     ${FREETYPE_INCLUDE_DIRS}
     ${X11_INCLUDE_DIR}
     ${PNG_INCLUDE_DIRS}
-    ${DEFLATE_INCLUDES}
 )
 
 set(GUI_HEADERS
@@ -229,6 +246,7 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qfscompleter_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qdialog.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qdialog_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qerrormessage.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qfiledialog.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qfiledialog_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qfontdialog.h
@@ -247,6 +265,8 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qfileinfogatherer_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qwizard.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qprintpreviewdialog.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/effects/qgraphicseffect.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/effects/qgraphicseffect_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/graphicsview/qgraphicsgridlayout.h
     ${CMAKE_CURRENT_SOURCE_DIR}/graphicsview/qgraphicsitem.h
     ${CMAKE_CURRENT_SOURCE_DIR}/graphicsview/qgraphicsitem_p.h
@@ -281,6 +301,7 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qicon_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qiconloader_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qiconengine.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qiconengineplugin.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qimage.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qimage_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qimageiohandler.h
@@ -288,12 +309,16 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qimagewriter.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qmovie.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmap.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmap_raster_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmap_x11_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmapcache.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmapdata_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmapfilter_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qbmphandler_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qppmhandler_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qxbmhandler_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qxpmhandler_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qpnghandler_p.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/image/qkathandler_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/itemviews/qabstractitemview.h
     ${CMAKE_CURRENT_SOURCE_DIR}/itemviews/qabstractitemview_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/itemviews/qheaderview.h
@@ -379,6 +404,7 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qeventdispatcher_x11_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qgenericmatrix.h
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qmatrix4x4.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qquaternion.h
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qvector2d.h
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qvector3d.h
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qvector4d.h
@@ -386,6 +412,7 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qbrush.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qcolor.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qcolor_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qcolormap.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qcssutil_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qdrawutil.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qmatrix.h
@@ -406,7 +433,9 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpdf_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpen.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpolygon.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpolygonclipper_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprintengine.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprintengine_pdf_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprintengine_ps_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprinter.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprinter_p.h
@@ -416,6 +445,8 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qregion.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qstroker_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qstylepainter.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qtessellator_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qtextureglyphcache_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qtransform.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qwindowsurface_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpaintengine_raster_p.h
@@ -425,6 +456,7 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qdatabuffer_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpen_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qfixed_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qwindowsurface_raster_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qrgb.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprinterinfo_unix_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpaintengine_x11_p.h
@@ -439,13 +471,16 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qproxystyle.h
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qproxystyle_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qstylesheetstyle_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/styles/qplastiquestyle.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/styles/qmotifstyle.h
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qwindowsstyle.h
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qcleanlooksstyle.h
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qcleanlooksstyle_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfont.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontdatabase.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontdatabase_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontengine_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontengineglyphcache_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontinfo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontmetrics.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfont_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontsubset_p.h
@@ -476,8 +511,12 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qtextdocumentwriter.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qcssparser_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qtexttable_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/qstatictext_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/qstatictext.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qharfbuzz_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontengine_ft_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontengine_x11_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontdatabase_x11_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qunicodetables_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/util/qsystemtrayicon.h
     ${CMAKE_CURRENT_SOURCE_DIR}/util/qcompleter.h
@@ -520,6 +559,10 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qlinecontrol_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmainwindow.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmainwindowlayout_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmdiarea.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmdiarea_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmdisubwindow.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmdisubwindow_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmenu.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmenu_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmenubar.h
@@ -558,16 +601,17 @@ set(GUI_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qwidgetresizehandler_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qfocusframe.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qscrollarea.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qworkspace.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qwidgetanimator_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qtoolbararealayout_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qplaintextedit.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qplaintextedit_p.h
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qprintpreviewwidget.h
     ${CMAKE_CURRENT_SOURCE_DIR}/qguicommon_p.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/qguiimages_p.h
 )
 
 set(GUI_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/animation/qguivariantanimation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/animation/qabstractanimation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/animation/qvariantanimation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/animation/qpropertyanimation.cpp
@@ -579,6 +623,7 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qabstractpagesetupdialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qcolordialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qdialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qerrormessage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qfiledialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qfontdialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qinputdialog.cpp
@@ -597,6 +642,9 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qprintsettingsoutput.ui
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qprintwidget.ui
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qprintpropertieswidget.ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qprintdialog.qrc
+    ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qmessagebox.qrc
+    ${CMAKE_CURRENT_SOURCE_DIR}/effects/qgraphicseffect.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/graphicsview/qgraphicsgridlayout.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/graphicsview/qgraphicsitem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/graphicsview/qgraphicsitemanimation.cpp
@@ -629,13 +677,18 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmap.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmapcache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmapdata.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmapfilter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qiconengine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qiconengineplugin.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qmovie.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmap_raster.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmap_x11.cpp
     # Built-in image format support
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qbmphandler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qppmhandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qxbmhandler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qxpmhandler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qpnghandler.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/image/qkathandler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/itemviews/qabstractitemview.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/itemviews/qheaderview.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/itemviews/qidentityproxymodel.cpp
@@ -699,9 +752,9 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qx11info_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qkeymapper_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qeventdispatcher_x11.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qt_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qgenericmatrix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qmatrix4x4.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qquaternion.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qvector2d.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qvector3d.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/math3d/qvector4d.cpp
@@ -724,6 +777,7 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpdf.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpen.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpolygon.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprintengine_pdf.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprintengine_ps.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprinter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprinterinfo.cpp
@@ -731,13 +785,17 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qregion.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qstroker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qstylepainter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qtessellator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qtextureglyphcache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qtransform.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qwindowsurface.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpaintengine_raster.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qdrawhelper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qbackingstore.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qwindowsurface_raster.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qprinterinfo_unix.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qgrayraster.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qcolormap_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpaintengine_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qstyle.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qstylefactory.cpp
@@ -748,8 +806,11 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qproxystyle.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qstylesheetstyle.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qstylesheetstyle_default.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/styles/qplastiquestyle.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/styles/qmotifstyle.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qwindowsstyle.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/styles/qcleanlooksstyle.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/styles/qstyle.qrc
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfont.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontengine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontengine_ft.cpp
@@ -775,8 +836,9 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qtextdocumentwriter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qsyntaxhighlighter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qcssparser.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/text/qharfbuzz.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/qstatictext.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfont_x11.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontengine_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qunicodetables.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/util/qsystemtrayicon.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/util/qcompleter.cpp
@@ -807,6 +869,8 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qlinecontrol.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmainwindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmainwindowlayout.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmdiarea.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmdisubwindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmenu.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qmenubar.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qprogressbar.cpp
@@ -836,10 +900,20 @@ set(GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qwidgetresizehandler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qfocusframe.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qscrollarea.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qworkspace.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qwidgetanimator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qtoolbararealayout.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qplaintextedit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qprintpreviewwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src/harfbuzz-buffer.c
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src/harfbuzz-gdef.c
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src/harfbuzz-gsub.c
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src/harfbuzz-gpos.c
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src/harfbuzz-impl.c
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src/harfbuzz-open.c
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src/harfbuzz-stream.c
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src/harfbuzz-shaper-all.cpp
+    ${CMAKE_SOURCE_DIR}/src/gui/text/qharfbuzz.cpp
 )
 
 # keep in sync with the top-level CMake file, only libraries setup is needed here
@@ -877,6 +951,29 @@ if(WITH_FONTCONFIG AND FONTCONFIG_FOUND)
     add_definitions(${FONTCONFIG_DEFINITIONS})
 endif()
 
+if(WITH_ACCESSIBILITY)
+    set(GUI_HEADERS
+        ${GUI_HEADERS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessible.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessible2.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessibleobject.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessiblewidget.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessibleplugin.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessiblebridge.h
+    )
+
+    set(GUI_SOURCES
+        ${GUI_SOURCES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessible.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessible2.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessibleobject.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessiblewidget.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessibleplugin.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessible_unix.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/accessible/qaccessiblebridge.cpp
+    )
+endif()
+
 # anything that includes qt_x11_p.h is known to break unity build
 katie_unity_exclude(
     ${CMAKE_CURRENT_SOURCE_DIR}/dialogs/qdialog.cpp
@@ -885,7 +982,10 @@ katie_unity_exclude(
     ${CMAKE_CURRENT_SOURCE_DIR}/graphicsview/qgraphicsitem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/graphicsview/qgraphicsscene.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/graphicsview/qgraphicsview.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qbitmap.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmap.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmap_x11.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/qpixmapfilter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/itemviews/qitemeditorfactory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qapplication.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qapplication_x11.cpp
@@ -899,22 +999,25 @@ katie_unity_exclude(
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qwidget_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qx11embed_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qx11info_x11.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/qt_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qbackingstore.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qcolor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qcolormap_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/painting/qpaintengine_x11.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qregion.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qwindowsurface.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qregion_x11.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/painting/qwindowsurface_raster.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfont.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/qfontengine_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qfont_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/text/qtextformat.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/util/qsystemtrayicon_x11.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qsizegrip.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets/qtextedit.cpp
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/harfbuzz/src/harfbuzz-shaper-all.cpp
 )
 
 katie_generate_misc("${GUI_HEADERS}" QtGui)
 katie_generate_public("${GUI_PUBLIC_HEADERS}" QtGui)
-katie_generate_package(KtGui "KtCore")
+katie_generate_package(KtGui "KtCore KtXml")
 katie_setup_target(KtGui ${GUI_SOURCES} ${GUI_HEADERS})
 
 add_library(KtGui ${KATIE_TYPE} ${KtGui_SOURCES})
@@ -927,7 +1030,7 @@ set_target_properties(KtGui PROPERTIES
 
 install(
     TARGETS KtGui
-    EXPORT KatieTargets
+    EXPORT KatieTargets ${INSTALL_TARGETS_DEFAULT_ARGS}
     DESTINATION ${KATIE_LIBRARIES_PATH}
     COMPONENT Runtime
 )

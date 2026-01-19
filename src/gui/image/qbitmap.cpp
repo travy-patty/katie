@@ -21,6 +21,7 @@
 
 #include "qbitmap.h"
 #include "qpixmapdata_p.h"
+#include "qpixmap_raster_p.h"
 #include "qimage.h"
 #include "qvariant.h"
 #include "qpainter.h"
@@ -236,7 +237,7 @@ QBitmap QBitmap::fromImage(const QImage &image, Qt::ImageConversionFlags flags)
         img.setColor(1, qt_blackrgb);
     }
 
-    QScopedPointer<QPixmapData> data(new QPixmapData(QPixmapData::BitmapType));
+    QScopedPointer<QPixmapData> data(new QRasterPixmapData(QPixmapData::BitmapType));
 
     data->fromImage(img, flags | Qt::MonoOnly);
     return QPixmap(data.take());
@@ -248,7 +249,8 @@ QBitmap QBitmap::fromImage(const QImage &image, Qt::ImageConversionFlags flags)
 
     The bitmap data has to be byte aligned and provided in in the bit
     order specified by \a monoFormat. The mono format must be either
-    QImage::Format_Mono or QImage::Format_MonoLSB.
+    QImage::Format_Mono or QImage::Format_MonoLSB. Use
+    QImage::Format_Mono to specify data on the XBM format.
 
     \sa fromImage()
 

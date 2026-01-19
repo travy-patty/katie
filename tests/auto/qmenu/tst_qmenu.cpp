@@ -125,7 +125,7 @@ void tst_QMenu::getSetCheck()
 
 tst_QMenu::tst_QMenu()
 {
-    QApplication::setEffectEnabled(Qt::UI_FadeMenu, false);
+    QApplication::setEffectEnabled(Qt::UI_AnimateMenu, false);
 }
 
 tst_QMenu::~tst_QMenu()
@@ -412,8 +412,7 @@ void tst_QMenu::overrideMenuAction()
 
 void tst_QMenu::statusTip()
 {
-#ifndef QT_NO_STATUSBAR
-    // check that the statustip of actions inserted into the menu are displayed
+    //check that the statustip of actions inserted into the menu are displayed
     QMainWindow w;
     connect(w.statusBar(), SIGNAL(messageChanged(const QString &)), SLOT(onStatusMessageChanged(const QString &)));; //creates the status bar
     QToolBar tb;
@@ -440,9 +439,6 @@ void tst_QMenu::statusTip()
     QTimer::singleShot(200,this, SLOT(onStatusTipTimer()));
     btn->showMenu();
     QVERIFY(statustip.isEmpty());
-#else // QT_NO_STATUSBAR
-    QSKIP("Katie compiled without statusbar support (QT_NO_STATUSBAR)", SkipAll);
-#endif // QT_NO_STATUSBAR
 }
 
 //2nd part of the test
@@ -568,14 +564,10 @@ void tst_QMenu::layoutDirection()
 
 void tst_QMenu::task208001_stylesheet()
 {
-#ifndef QT_NO_STYLE_STYLESHEET
-    // test if it crash
+    //test if it crash
     QMainWindow main;
     main.setStyleSheet("QMenu [title =\"File\"] { color: red;}");
     main.menuBar()->addMenu("File");
-#else // QT_NO_STYLE_STYLESHEET
-    QSKIP("Katie compiled without stylesheet support (QT_NO_STYLE_STYLESHEET)", SkipAll);
-#endif // QT_NO_STYLE_STYLESHEET
 }
 
 void tst_QMenu::activeSubMenuPosition()

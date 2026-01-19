@@ -33,9 +33,10 @@
 // We mean it.
 //
 
-#include "qpainterpath.h"
-#include "qlist.h"
-#include "qstdcontainers_p.h"
+#include "QtGui/qpainterpath.h"
+#include "QtCore/qlist.h"
+#include "QtCore/qvarlengtharray.h"
+
 #include "qvectorpath_p.h"
 #include "qstroker_p.h"
 
@@ -47,7 +48,7 @@ public:
     QPainterPathStrokerPrivate();
 
     QStroker stroker;
-    QVector<qreal> dashPattern;
+    QVector<qfixed> dashPattern;
     qreal dashOffset;
 };
 
@@ -99,8 +100,8 @@ public:
             }
 
         }
-        QStdVector<QPainterPath::ElementType> elements;
-        QStdVector<qreal> points;
+        QVarLengthArray<QPainterPath::ElementType> elements;
+        QVarLengthArray<qreal> points;
         uint flags;
     };
 
@@ -111,35 +112,36 @@ private:
     Q_DISABLE_COPY(QVectorPathConverter)
 };
 
-class QPainterPathPrivate
+class QPainterPathData : public QPainterPathPrivate
 {
 public:
-    QPainterPathPrivate() :
-        ref(1),
+    QPainterPathData() :
         cStart(0),
         fillRule(Qt::OddEvenFill),
-        require_moveTo(false),
         dirtyBounds(false),
         dirtyControlBounds(false),
-        convex(false),
         pathConverter(0)
     {
+        ref = 1;
+        require_moveTo = false;
+        convex = false;
     }
 
-    QPainterPathPrivate(const QPainterPathPrivate &other) :
-        ref(1), elements(other.elements),
-        cStart(other.cStart), fillRule(other.fillRule),
+    QPainterPathData(const QPainterPathData &other) :
+        QPainterPathPrivate(), cStart(other.cStart), fillRule(other.fillRule),
         bounds(other.bounds),
         controlBounds(other.controlBounds),
-        require_moveTo(false),
         dirtyBounds(other.dirtyBounds),
         dirtyControlBounds(other.dirtyControlBounds),
         convex(other.convex),
         pathConverter(0)
     {
+        ref = 1;
+        require_moveTo = false;
+        elements = other.elements;
     }
 
-    ~QPainterPathPrivate() {
+    ~QPainterPathData() {
         delete pathConverter;
     }
 
@@ -152,9 +154,6 @@ public:
             pathConverter = new QVectorPathConverter(elements, fillRule, convex);
         return pathConverter->path;
     }
-
-    QAtomicInt ref;
-    QVector<QPainterPath::Element> elements;
 
     int cStart;
     Qt::FillRule fillRule;
@@ -175,7 +174,7 @@ inline const QPainterPath QVectorPath::convertToPainterPath() const
 {
         QPainterPath path;
         path.ensureData();
-        QPainterPathPrivate *data = path.d_func();
+        QPainterPathData *data = path.d_func();
         data->elements.reserve(m_count);
         int index = 0;
         data->elements[0].x = m_points[index++];
@@ -211,14 +210,14 @@ inline const QPainterPath QVectorPath::convertToPainterPath() const
 void Q_GUI_EXPORT qt_find_ellipse_coords(const QRectF &r, qreal angle, qreal length,
                                          QPointF* startPoint, QPointF *endPoint);
 
-inline bool QPainterPathPrivate::isClosed() const
+inline bool QPainterPathData::isClosed() const
 {
     const QPainterPath::Element &first = elements.at(cStart);
     const QPainterPath::Element &last = elements.last();
     return first.x == last.x && first.y == last.y;
 }
 
-inline void QPainterPathPrivate::close()
+inline void QPainterPathData::close()
 {
     Q_ASSERT(ref == 1);
     require_moveTo = true;
@@ -235,7 +234,7 @@ inline void QPainterPathPrivate::close()
     }
 }
 
-inline void QPainterPathPrivate::maybeMoveTo()
+inline void QPainterPathData::maybeMoveTo()
 {
     if (require_moveTo) {
         QPainterPath::Element e = elements.last();
@@ -244,6 +243,11 @@ inline void QPainterPathPrivate::maybeMoveTo()
         require_moveTo = false;
     }
 }
+
+// This value is used to determine the length of control point vectors
+// when approximating arc segments as curves. The factor is multiplied
+// with the radius of the circle.
+#define KAPPA qreal(0.5522847498)
 
 QT_END_NAMESPACE
 

@@ -89,19 +89,26 @@ int QVectorData::grow(int sizeofTypedData, int size, int sizeofT, bool excessive
     stores its items in adjacent memory locations and provides fast
     index-based access.
 
-    QList\<T\> provides similar functionality.
-    Here's an overview:
+    QList\<T\>, QLinkedList\<T\>, and QVarLengthArray\<T\> provide
+    similar functionality. Here's an overview:
 
     \list
     \i For most purposes, QList is the right class to use. Operations
        like prepend() and insert() are usually faster than with
        QVector because of the way QList stores its items in memory
-       (see \l{Algorithmic Complexity} for details). It also expands
-       to less code in your executable.
+       (see \l{Algorithmic Complexity} for details),
+       and its index-based API is more convenient than QLinkedList's
+       iterator-based API. It also expands to less code in your
+       executable.
+    \i If you need a real linked list, with guarantees of \l{constant
+       time} insertions in the middle of the list and iterators to
+       items rather than indexes, use QLinkedList.
     \i If you want the items to occupy adjacent memory positions, or
        if your items are larger than a pointer and you want to avoid
        the overhead of allocating them on the heap individually at
        insertion time, then use QVector.
+    \i If you want a low-level variable-size array, QVarLengthArray
+       may be sufficient.
     \endlist
 
     Here's an example of a QVector that stores integers and a QVector
@@ -164,7 +171,7 @@ int QVectorData::grow(int sizeofTypedData, int size, int sizeofT, bool excessive
     (\l{linear time}) for large vectors, because they require moving many
     items in the vector by one position in memory. If you want a container
     class that provides fast insertion/removal in the middle, use
-    QList instead.
+    QList or QLinkedList instead.
 
     Unlike plain C++ arrays, QVectors can be resized at any time by
     calling resize(). If the new size is larger than the old size,
@@ -195,11 +202,15 @@ int QVectorData::grow(int sizeofTypedData, int size, int sizeofT, bool excessive
     QVector::iterator). In practice, these are rarely used, because
     you can use indexes into the QVector.
 
+    In addition to QVector, Qt also provides QVarLengthArray, a very
+    low-level class with little functionality that is optimized for
+    speed.
+
     QVector does \e not support inserting, prepending, appending or replacing
     with references to its own values. Doing so will cause your application to
     abort with an error message.
 
-    \sa QVectorIterator, QMutableVectorIterator, QList
+    \sa QVectorIterator, QMutableVectorIterator, QList, QLinkedList
 */
 
 /*!
@@ -475,7 +486,8 @@ int QVectorData::grow(int sizeofTypedData, int size, int sizeofT, bool excessive
     For large vectors, this operation can be slow (\l{linear time}),
     because it requires moving all the items in the vector by one
     position further in memory. If you want a container class that
-    provides a fast prepend() function, use QList instead.
+    provides a fast prepend() function, use QList or QLinkedList
+    instead.
 
     \sa append(), insert()
 */
@@ -491,7 +503,9 @@ int QVectorData::grow(int sizeofTypedData, int size, int sizeofT, bool excessive
 
     For large vectors, this operation can be slow (\l{linear time}),
     because it requires moving all the items at indexes \a i and
-    above by one position further in memory.
+    above by one position further in memory. If you want a container
+    class that provides a fast insert() function, use QLinkedList
+    instead.
 
     \sa append(), prepend(), remove()
 */
@@ -928,6 +942,28 @@ int QVectorData::grow(int sizeofTypedData, int size, int sizeofT, bool excessive
     \snippet doc/src/snippets/code/src_corelib_tools_qvector.cpp 15
 
     \sa toList(), QList::toVector()
+*/
+
+/*! \fn QVector<T> QVector<T>::fromStdVector(const std::vector<T> &vector)
+
+    Returns a QVector object with the data contained in \a vector. The
+    order of the elements in the QVector is the same as in \a vector.
+
+    Example:
+
+    \snippet doc/src/snippets/code/src_corelib_tools_qvector.cpp 16
+
+    \sa toStdVector(), QList::fromStdList()
+*/
+
+/*! \fn std::vector<T> QVector<T>::toStdVector() const
+
+    Returns a std::vector object with the data contained in this QVector.
+    Example:
+
+    \snippet doc/src/snippets/code/src_corelib_tools_qvector.cpp 17
+
+    \sa fromStdVector(), QList::toStdList()
 */
 
 /*! \fn QDataStream &operator<<(QDataStream &out, const QVector<T> &vector)

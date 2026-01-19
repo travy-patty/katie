@@ -38,14 +38,15 @@
 #include "qimagereader.h"
 #include "qimagewriter.h"
 #include "qdebug.h"
-#include "qapplication_p.h"
-#include "qguicommon_p.h"
-
 #include <ctype.h>
+
+#include "qapplication_p.h"
 
 #ifndef QT_NO_DRAGANDDROP
 
 QT_BEGIN_NAMESPACE
+
+#ifndef QT_NO_DRAGANDDROP
 
 //#define QDND_DEBUG
 
@@ -92,7 +93,7 @@ static QString KeyboardModifiersToString(Qt::KeyboardModifiers moderfies)
     }
     return str;
 }
-#endif // QDND_DEBUG
+#endif
 
 
 // the universe's only drag manager
@@ -201,6 +202,7 @@ QWidget *QDragManager::currentTarget()
 {
     return currentDropTarget;
 }
+#endif
 
 QDropData::QDropData()
     : QInternalMimeData()
@@ -210,19 +212,22 @@ QDropData::QDropData()
 QDropData::~QDropData()
 {
 }
+#endif // QT_NO_DRAGANDDROP
 
 #if !(defined(QT_NO_DRAGANDDROP) && defined(QT_NO_CLIPBOARD))
 static QStringList imageReadMimeFormats()
 {
     QStringList formats;
-    foreach (const QByteArray &it, QImageReader::supportedMimeTypes()) {
-        formats.append(QString::fromLatin1(it.toLower()));
+    foreach (const QByteArray &it, QImageReader::supportedImageFormats()) {
+        QString format = QLatin1String("image/");
+        format += QString::fromLatin1(it.toLower());
+        formats.append(format);
     }
 
-    // put the best in front
-    int bestIndex = formats.indexOf(QLatin1String(qt_imagemime));
-    if (bestIndex > 0)
-        formats.move(bestIndex, 0);
+    //put png at the front because it is best
+    int pngIndex = formats.indexOf(QLatin1String("image/png"));
+    if (pngIndex != -1 && pngIndex != 0)
+        formats.move(pngIndex, 0);
 
     return formats;
 }
@@ -231,14 +236,16 @@ static QStringList imageReadMimeFormats()
 static QStringList imageWriteMimeFormats()
 {
     QStringList formats;
-    foreach (const QByteArray &it, QImageWriter::supportedMimeTypes()) {
-        formats.append(QString::fromLatin1(it.toLower()));
+    foreach (const QByteArray &it, QImageWriter::supportedImageFormats()) {
+        QString format = QLatin1String("image/");
+        format += QString::fromLatin1(it.toLower());
+        formats.append(format);
     }
 
-    // put the best in front
-    int bestIndex = formats.indexOf(QLatin1String(qt_imagemime));
-    if (bestIndex > 0)
-        formats.move(bestIndex, 0);
+    //put png at the front because it is best
+    int pngIndex = formats.indexOf(QLatin1String("image/png"));
+    if (pngIndex != -1 && pngIndex != 0)
+        formats.move(pngIndex, 0);
 
     return formats;
 }
@@ -297,13 +304,15 @@ QVariant QInternalMimeData::retrieveData(const QString &mimeType, QVariant::Type
             data = QImage::fromData(data.toByteArray());
 
     } else if (mimeType == QLatin1String("application/x-color") && data.type() == QVariant::ByteArray) {
+        QColor c;
         QByteArray ba = data.toByteArray();
         if (ba.size() == 8) {
             ushort * colBuf = (ushort *)ba.data();
-            data = QColor::fromRgbF(qreal(colBuf[0]) / qreal(0xFFFF),
-                                    qreal(colBuf[1]) / qreal(0xFFFF),
-                                    qreal(colBuf[2]) / qreal(0xFFFF),
-                                    qreal(colBuf[3]) / qreal(0xFFFF));
+            c.setRgbF(qreal(colBuf[0]) / qreal(0xFFFF),
+                      qreal(colBuf[1]) / qreal(0xFFFF),
+                      qreal(colBuf[2]) / qreal(0xFFFF),
+                      qreal(colBuf[3]) / qreal(0xFFFF));
+            data = c;
         } else {
             qWarning("Qt: Invalid color format");
         }
@@ -336,7 +345,7 @@ bool QInternalMimeData::hasFormatHelper(const QString &mimeType, const QMimeData
 
     bool foundFormat = data->hasFormat(mimeType);
     if (!foundFormat) {
-        const QStringList imageFormats = imageWriteMimeFormats();
+        QStringList imageFormats = imageWriteMimeFormats();
         if (mimeType == QLatin1String("application/x-qt-image")) {
             // check all supported image formats
             foreach (const QString &it, imageFormats) {
@@ -379,12 +388,13 @@ QByteArray QInternalMimeData::renderDataHelper(const QString &mimeType, const QM
                 QImage image = qvariant_cast<QImage>(data->imageData());
                 QBuffer buf(&ba);
                 buf.open(QBuffer::WriteOnly);
-                image.save(&buf, qt_imageformat);
+                // would there not be PNG ??
+                image.save(&buf, "PNG");
             } else if (mimeType.startsWith(QLatin1String("image/")) && data->hasImage()) {
                 QImage image = qvariant_cast<QImage>(data->imageData());
                 QBuffer buf(&ba);
                 buf.open(QBuffer::WriteOnly);
-                image.save(&buf, QImageWriter::formatForMimeType(mimeType.toLatin1()));
+                image.save(&buf, mimeType.mid(mimeType.indexOf(QLatin1Char('/')) + 1).toLatin1().toUpper());
             }
         }
     }
@@ -395,7 +405,6 @@ QByteArray QInternalMimeData::renderDataHelper(const QString &mimeType, const QM
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_DRAGANDDROP
 
 #include "moc_qdnd_p.h"
 

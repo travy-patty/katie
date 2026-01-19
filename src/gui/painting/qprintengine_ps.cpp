@@ -38,6 +38,8 @@
 #include "qstring.h"
 #include "qbytearray.h"
 #include "qhash.h"
+#include "qbuffer.h"
+#include "qsettings.h"
 #include "qmap.h"
 #include "qbitmap.h"
 #include "qregion.h"
@@ -53,6 +55,13 @@
 #include <limits.h>
 
 QT_BEGIN_NAMESPACE
+
+static bool qt_gen_epsf = false;
+
+void qt_generate_epsf(bool b)
+{
+    qt_gen_epsf = b;
+}
 
 static const char *const ps_header =
 "/BD{bind def}bind def/d2{dup dup}BD/ED{exch def}BD/D0{0 ED}BD/F{setfont}BD\n"
@@ -141,14 +150,17 @@ static QByteArray wrapDSC(const QByteArray &str)
 
 // ----------------------------- Internal class declarations -----------------------------
 
-QPSPrintEnginePrivate::QPSPrintEnginePrivate()
-    : QPdfBaseEnginePrivate(),
+QPSPrintEnginePrivate::QPSPrintEnginePrivate(QPrinter::PrinterMode m)
+    : QPdfBaseEnginePrivate(m),
       printerState(QPrinter::Idle), hugeDocument(false), headerDone(false)
 {
     useAlphaEngine = false;
     postscript = true;
 
     firstPage = true;
+
+    QSettings *settings = QCoreApplicationPrivate::staticConf();
+    embedFonts = settings->value(QLatin1String("Qt/embedFonts"), true).toBool();
 }
 
 QPSPrintEnginePrivate::~QPSPrintEnginePrivate()
@@ -198,6 +210,7 @@ static QByteArray runlengthEncode(const QByteArray &input)
     State state = Undef;
 
     int i = 1;
+    int written = 0;
     while (1) {
         bool flush = (i == input.size());
         if (!flush) {
@@ -221,10 +234,12 @@ static QByteArray runlengthEncode(const QByteArray &input)
             if (state == Equal) {
                 out.append((char)(uchar)(257-size));
                 out.append(last);
+                written += size;
             } else {
                 out.append((char)(uchar)size-1);
                 while (start < i)
                     out.append(data[start++]);
+                written += size;
             }
             state = Undef;
             start = i;
@@ -257,57 +272,80 @@ static QByteArray compressHelper(const QImage &image, bool gray, int *format)
 
     Q_ASSERT(image.format() != QImage::Format_ARGB32_Premultiplied);
 
-
-    int width = image.width();
-    int height = image.height();
-    int size = width*height;
-
-    if (depth == 1)
-        size = (width+7)/8*height;
-    else if (!gray)
-        size = size*3;
-
-    pixelData.resize(size);
-    uchar *pixel = (uchar *)pixelData.data();
-    int i = 0;
-    if (depth == 1) {
-        QImage::Format format = image.format();
-        memset(pixel, 0xff, size);
-        for(int y=0; y < height; y++) {
-            const uchar * s = image.scanLine(y);
-            for(int x=0; x < width; x++) {
-                // need to copy bit for bit...
-                bool b = (format == QImage::Format_MonoLSB) ?
-                            (*(s + (x >> 3)) >> (x & 7)) & 1 :
-                            (*(s + (x >> 3)) << (x & 7)) & 0x80 ;
-                if (b)
-                    pixel[i >> 3] ^= (0x80 >> (i & 7));
-                i++;
-            }
-            // we need to align to 8 bit here
-            i = (i+7) & 0xffffff8;
-        }
+    if (depth != 1 && !gray && QImageWriter::supportedImageFormats().contains("jpeg")) {
+        QBuffer buffer(&pixelData);
+        QImageWriter writer(&buffer, "jpeg");
+        writer.setQuality(94);
+        writer.write(image);
+        *format = DCT;
     } else {
-        for(int y=0; y < height; y++) {
-            QRgb * s = (QRgb*)(image.scanLine(y));
-            for(int x=0; x < width; x++) {
-                QRgb rgb = (*s++);
-                if (gray) {
-                    pixel[i] = (unsigned char) qGray(rgb);
+        int width = image.width();
+        int height = image.height();
+        int size = width*height;
+
+        if (depth == 1)
+            size = (width+7)/8*height;
+        else if (!gray)
+            size = size*3;
+
+        pixelData.resize(size);
+        uchar *pixel = (uchar *)pixelData.data();
+        int i = 0;
+        if (depth == 1) {
+            QImage::Format format = image.format();
+            memset(pixel, 0xff, size);
+            for(int y=0; y < height; y++) {
+                const uchar * s = image.scanLine(y);
+                for(int x=0; x < width; x++) {
+                    // need to copy bit for bit...
+                    bool b = (format == QImage::Format_MonoLSB) ?
+                             (*(s + (x >> 3)) >> (x & 7)) & 1 :
+                             (*(s + (x >> 3)) << (x & 7)) & 0x80 ;
+                    if (b)
+                        pixel[i >> 3] ^= (0x80 >> (i & 7));
                     i++;
-                } else {
-                    pixel[i] = (unsigned char) qRed(rgb);
-                    pixel[i+1] = (unsigned char) qGreen(rgb);
-                    pixel[i+2] = (unsigned char) qBlue(rgb);
-                    i += 3;
+                }
+                // we need to align to 8 bit here
+                i = (i+7) & 0xffffff8;
+            }
+        } else if (depth == 8) {
+            for(int y=0; y < height; y++) {
+                const uchar * s = image.scanLine(y);
+                for(int x=0; x < width; x++) {
+                    QRgb rgb = image.color(s[x]);
+                    if (gray) {
+                        pixel[i] = (unsigned char) qGray(rgb);
+                        i++;
+                    } else {
+                        pixel[i] = (unsigned char) qRed(rgb);
+                        pixel[i+1] = (unsigned char) qGreen(rgb);
+                        pixel[i+2] = (unsigned char) qBlue(rgb);
+                        i += 3;
+                    }
+                }
+            }
+        } else {
+            for(int y=0; y < height; y++) {
+                QRgb * s = (QRgb*)(image.scanLine(y));
+                for(int x=0; x < width; x++) {
+                    QRgb rgb = (*s++);
+                    if (gray) {
+                        pixel[i] = (unsigned char) qGray(rgb);
+                        i++;
+                    } else {
+                        pixel[i] = (unsigned char) qRed(rgb);
+                        pixel[i+1] = (unsigned char) qGreen(rgb);
+                        pixel[i+2] = (unsigned char) qBlue(rgb);
+                        i += 3;
+                    }
                 }
             }
         }
-    }
-    *format = Raw;
-    if (depth == 1) {
-        pixelData = runlengthEncode(pixelData);
-        *format = Runlength;
+        *format = Raw;
+        if (depth == 1) {
+            pixelData = runlengthEncode(pixelData);
+            *format = Runlength;
+        }
     }
     return QPdf::ascii85Encode(pixelData);
 }
@@ -425,16 +463,43 @@ void QPSPrintEnginePrivate::emitHeader(bool finished)
     int mright = paperRect.right() - pageRect.right();
     int width = pageRect.width();
     int height = pageRect.height();
-    s << "%!PS-Adobe-1.0";
-    int w = width + (fullPage ? 0 : mleft + mright);
-    int h = height + (fullPage ? 0 : mtop + mbottom);
-    w = (int)(w*scale);
-    h = (int)(h*scale);
-    // set a bounding box according to the DSC
-    if (orientation == QPrinter::Landscape)
-        s << "\n%%BoundingBox: 0 0 " << h << w;
-    else
-        s << "\n%%BoundingBox: 0 0 " << w << h;
+    if (finished && pageCount == 1 && copies == 1 &&
+        ((fullPage && qt_gen_epsf) || (outputFileName.endsWith(QLatin1String(".eps")))))
+    {
+        // According to the EPSF 3.0 spec it is required that the PS
+        // version is PS-Adobe-3.0
+        s << "%!PS-Adobe-3.0";
+        if (!boundingBox.isValid())
+            boundingBox.setRect(0, 0, width, height);
+        if (orientation == QPrinter::Landscape) {
+            if (!fullPage)
+                boundingBox.translate(-mleft, -mtop);
+            s << " EPSF-3.0\n%%BoundingBox: "
+              << int((printer->height() - boundingBox.bottom())*scale) // llx
+              << int((printer->width() - boundingBox.right())*scale - 1) // lly
+              << int((printer->height() - boundingBox.top())*scale + 1) // urx
+              << int((printer->width() - boundingBox.left())*scale); // ury
+        } else {
+            if (!fullPage)
+                boundingBox.translate(mleft, -mtop);
+            s << " EPSF-3.0\n%%BoundingBox: "
+              << int((boundingBox.left())*scale)
+              << int((printer->height() - boundingBox.bottom())*scale - 1)
+              << int((boundingBox.right())*scale + 1)
+              << int((printer->height() - boundingBox.top())*scale);
+        }
+    } else {
+        s << "%!PS-Adobe-1.0";
+        int w = width + (fullPage ? 0 : mleft + mright);
+        int h = height + (fullPage ? 0 : mtop + mbottom);
+        w = (int)(w*scale);
+        h = (int)(h*scale);
+        // set a bounding box according to the DSC
+        if (orientation == QPrinter::Landscape)
+            s << "\n%%BoundingBox: 0 0 " << h << w;
+        else
+            s << "\n%%BoundingBox: 0 0 " << w << h;
+    }
     s << '\n' << wrapDSC("%%Creator: " + creator.toUtf8());
     if (!title.isEmpty())
         s << wrapDSC("%%Title: " + title.toUtf8());
@@ -558,8 +623,8 @@ void QPSPrintEnginePrivate::flushPage(bool last)
 
 // ================ PSPrinter class ========================
 
-QPSPrintEngine::QPSPrintEngine()
-    : QPdfBaseEngine(*(new QPSPrintEnginePrivate()),
+QPSPrintEngine::QPSPrintEngine(QPrinter::PrinterMode m)
+    : QPdfBaseEngine(*(new QPSPrintEnginePrivate(m)),
                      PatternTransform
                      | PixmapTransform
                      | PainterPaths
@@ -601,6 +666,7 @@ bool QPSPrintEngine::begin(QPaintDevice *pdev)
     d->clipEnabled = false;
     d->allClipped = false;
     d->boundingBox = QRect();
+    d->fontsUsed = "";
     d->hugeDocument = false;
     d->simplePen = false;
 
@@ -627,7 +693,7 @@ bool QPSPrintEngine::end()
     QPdf::ByteStream s(&trailer);
     s << "%%Trailer\n"
          "%%Pages: " << d->pageCount - 1 << '\n' <<
-        wrapDSC("%%DocumentFonts: ");
+        wrapDSC("%%DocumentFonts: " + d->fontsUsed);
     s << "%%EOF\n";
     d->outDevice->write(trailer);
 
@@ -687,7 +753,7 @@ void QPSPrintEngine::drawImageInternal(const QRectF &r, QImage image, bool bitma
     // engine
     if (!d->useAlphaEngine && !bitmap) {
         if (image.format() == QImage::Format_Mono || image.format() == QImage::Format_MonoLSB)
-            image = image.convertToFormat(QImage::Format_ARGB32);
+            image = image.convertToFormat(QImage::Format_Indexed8);
         if (image.hasAlphaChannel()) {
             // get better alpha dithering
             int xscale = image.width();
@@ -811,3 +877,7 @@ QPrinter::PrinterState QPSPrintEngine::printerState() const
 QT_END_NAMESPACE
 
 #endif // QT_NO_PRINTER
+
+
+
+

@@ -61,6 +61,10 @@ public:
     {
     }
 
+    ~QLineEditPrivate()
+    {
+    }
+
     QLineControl *control;
 
 #ifndef QT_NO_CONTEXTMENU

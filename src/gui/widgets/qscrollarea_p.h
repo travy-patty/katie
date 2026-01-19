@@ -53,8 +53,8 @@ public:
     Qt::Alignment alignment;
 };
 
+#endif
+
 QT_END_NAMESPACE
 
-#endif // QT_NO_SCROLLAREA
-
-#endif // QSCROLLAREA_P_H
+#endif

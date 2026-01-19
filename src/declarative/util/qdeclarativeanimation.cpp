@@ -807,7 +807,7 @@ void QDeclarativeScriptActionPrivate::execute()
             expr.setSourceLocation(ddata->outerContext->url.toString(), ddata->lineNumber);
         expr.evaluate();
         if (expr.hasError())
-            qmlInfo(q) << expr.error().toString();
+            qmlInfo(q) << expr.error();
     }
 }
 
@@ -1669,7 +1669,7 @@ void QDeclarativeParallelAnimation::transition(QDeclarativeStateActions &actions
 
 
 
-// convert a variant from string type to another animatable type
+//convert a variant from string type to another animatable type
 void QDeclarativePropertyAnimationPrivate::convertVariant(QVariant &variant, int type)
 {
     if (variant.userType() != QVariant::String) {

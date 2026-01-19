@@ -19,8 +19,12 @@
 **
 ****************************************************************************/
 
+#include "qplatformdefs.h"
+
 #include "qfile.h"
+#include "qstringlist.h"
 #include "qlibrary_p.h"
+#include "qcoreapplication.h"
 
 #ifndef QT_NO_LIBRARY
 
@@ -47,8 +51,7 @@ bool QLibraryPrivate::load_sys()
         dlFlags |= RTLD_LOCAL;
     }
 
-    const QByteArray fileNameBytes = QFile::encodeName(fileName);
-    pHnd = ::dlopen(fileNameBytes.constData(), dlFlags);
+    pHnd = ::dlopen(QFile::encodeName(fileName).constData(), dlFlags);
     if (!pHnd) {
         errorString = QLibrary::tr("Cannot load library %1: %2").arg(fileName).arg(qdlerror());
     } else {

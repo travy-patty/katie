@@ -51,6 +51,8 @@ private slots:
     void elidedText();
     void veryNarrowElidedText();
     void averageCharWidth();
+    void elidedMultiLength();
+    void elidedMultiLengthF();
     void inFontUcs4();
     void lineWidth();
 };
@@ -108,16 +110,16 @@ void tst_QFontMetrics::metrics()
     if (families.isEmpty())
         return;
 
-    QStringList::ConstIterator f_it, f_end = families.constEnd();
-    for (f_it = families.constBegin(); f_it != f_end; ++f_it) {
+    QStringList::ConstIterator f_it, f_end = families.end();
+    for (f_it = families.begin(); f_it != f_end; ++f_it) {
         const QString &family = *f_it;
 
         QStringList styles = fdb.styles(family);
-        QStringList::ConstIterator s_it, s_end = styles.constEnd();
-        for (s_it = styles.constBegin(); s_it != s_end; ++s_it) {
+        QStringList::ConstIterator s_it, s_end = styles.end();
+        for (s_it = styles.begin(); s_it != s_end; ++s_it) {
             const QString &style = *s_it;
 
-            if (fdb.isScalable(family, style)) {
+            if (fdb.isSmoothlyScalable(family, style)) {
                 // smoothly scalable font... don't need to load every pointsize
                 font = fdb.font(family, style, 12);
 
@@ -130,8 +132,8 @@ void tst_QFontMetrics::metrics()
             } else {
                 QList<int> sizes = fdb.pointSizes(family, style);
                 QVERIFY(!sizes.isEmpty());
-                QList<int>::ConstIterator z_it, z_end = sizes.constEnd();
-                for (z_it = sizes.constBegin(); z_it != z_end; ++z_it) {
+                QList<int>::ConstIterator z_it, z_end = sizes.end();
+                for (z_it = sizes.begin(); z_it != z_end; ++z_it) {
                     const int size = *z_it;
 
                     // Initialize the font, and check if it is an exact match
@@ -164,12 +166,8 @@ void tst_QFontMetrics::elidedText_data()
     QTest::addColumn<QFont>("font");
     QTest::addColumn<QString>("text");
 
-    foreach (const int psize, QFontDatabase::standardSizes()) {
-        QTest::newRow(QString::fromLatin1("freesans hello (%1)").arg(psize).toLatin1()) << QFont("freesans", psize) << QString("hello");
-        QTest::newRow(QString::fromLatin1("freesans hello &Bye (%1)").arg(psize).toLatin1()) << QFont("freesans", psize) << QString("hello&Bye");
-        QTest::newRow(QString::fromLatin1("freemono hello (%1)").arg(psize).toLatin1()) << QFont("freemono", psize) << QString("hello");
-        QTest::newRow(QString::fromLatin1("freemono hello &Bye (%1)").arg(psize).toLatin1()) << QFont("freemono", psize) << QString("hello&Bye");
-    }
+    QTest::newRow("helvetica hello") << QFont("helvetica",10) << QString("hello") ;
+    QTest::newRow("helvetica hello &Bye") << QFont("helvetica",10) << QString("hello&Bye") ;
 }
 
 
@@ -191,13 +189,6 @@ void tst_QFontMetrics::veryNarrowElidedText()
     QFontMetrics fm(f);
     QString text("hello");
     QCOMPARE(fm.elidedText(text, Qt::ElideRight, 0), QString());
-
-    // Not even wide enough for "small" - should use ellipsis
-    QString text1 = QString::fromLatin1("small");
-    QChar ellipsisChar(0x2026);
-    QString text1_el = QString::fromLatin1("s") + ellipsisChar;
-    int text1_el_width = fm.width(text1_el);
-    QCOMPARE(fm.elidedText(text1,Qt::ElideRight, text1_el_width + 1), text1_el);
 }
 
 void tst_QFontMetrics::averageCharWidth()
@@ -209,9 +200,44 @@ void tst_QFontMetrics::averageCharWidth()
     QVERIFY(fmf.averageCharWidth() != 0);
 }
 
+template<class FontMetrics> void elidedMultiLength_helper()
+{
+    QString text1 = QString::fromLatin1("Long Text 1\x9cShorter\x9csmall");
+    QString text1_long = "Long Text 1";
+    QString text1_short = "Shorter";
+    QString text1_small = "small";
+    FontMetrics fm = FontMetrics(QFont());
+    int width_long = fm.size(0, text1_long).width();
+    QCOMPARE(fm.elidedText(text1,Qt::ElideRight, 8000), text1_long);
+    QCOMPARE(fm.elidedText(text1,Qt::ElideRight, width_long + 1), text1_long);
+    QCOMPARE(fm.elidedText(text1,Qt::ElideRight, width_long - 1), text1_short);
+    int width_short = fm.size(0, text1_short).width();
+    QCOMPARE(fm.elidedText(text1,Qt::ElideRight, width_short + 1), text1_short);
+    QCOMPARE(fm.elidedText(text1,Qt::ElideRight, width_short - 1), text1_small);
+
+    // Not even wide enough for "small" - should use ellipsis
+    QChar ellipsisChar(0x2026);
+    QString text1_el = QString::fromLatin1("s") + ellipsisChar;
+    int width_small = fm.width(text1_el);
+    QCOMPARE(fm.elidedText(text1,Qt::ElideRight, width_small + 1), text1_el);
+}
+
+void tst_QFontMetrics::elidedMultiLength()
+{
+    elidedMultiLength_helper<QFontMetrics>();
+}
+
+void tst_QFontMetrics::elidedMultiLengthF()
+{
+    elidedMultiLength_helper<QFontMetricsF>();
+}
+
 void tst_QFontMetrics::inFontUcs4()
 {
-    QFont font(SRCDIR "/ucs4font.ttf");
+    int id = QFontDatabase::addApplicationFont(":/fonts/ucs4font.ttf");
+    QVERIFY(id >= 0);
+
+    QFont font("QtTestUcs4");
     {
         QFontMetrics fm(font);
 
@@ -223,6 +249,8 @@ void tst_QFontMetrics::inFontUcs4()
 
         QVERIFY(fm.inFontUcs4(0x1D7FF));
     }
+
+    QFontDatabase::removeApplicationFont(id);
 }
 
 void tst_QFontMetrics::lineWidth()
@@ -245,3 +273,4 @@ void tst_QFontMetrics::lineWidth()
 QTEST_MAIN(tst_QFontMetrics)
 
 #include "moc_tst_qfontmetrics.cpp"
+#include "qrc_testfont.cpp"

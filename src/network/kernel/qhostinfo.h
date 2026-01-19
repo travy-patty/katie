@@ -23,12 +23,14 @@
 #define QHOSTINFO_H
 
 #include <QtCore/qlist.h>
+#include <QtCore/qscopedpointer.h>
 #include <QtNetwork/qhostaddress.h>
 
 
 QT_BEGIN_NAMESPACE
 
 
+class QObject;
 class QHostInfoPrivate;
 
 class Q_NETWORK_EXPORT QHostInfo
@@ -40,26 +42,35 @@ public:
         UnknownError
     };
 
-    QHostInfo();
+    QHostInfo(int lookupId = -1);
     QHostInfo(const QHostInfo &d);
     QHostInfo &operator=(const QHostInfo &d);
     ~QHostInfo();
 
     QString hostName() const;
+    void setHostName(const QString &name);
+
     QList<QHostAddress> addresses() const;
+    void setAddresses(const QList<QHostAddress> &addresses);
 
     HostInfoError error() const;
+    void setError(HostInfoError error);
 
     QString errorString() const;
+    void setErrorString(const QString &errorString);
+
+    void setLookupId(int id);
+    int lookupId() const;
+
+    static int lookupHost(const QString &name, QObject *receiver, const char *member);
+    static void abortHostLookup(int lookupId);
 
     static QHostInfo fromName(const QString &name);
     static QString localHostName();
     static QString localDomainName();
 
 private:
-    friend class QHostInfoPrivate;
-    friend class QAbstractSocket;
-    QHostInfoPrivate* d;
+    QScopedPointer<QHostInfoPrivate> d;
 };
 
 QT_END_NAMESPACE

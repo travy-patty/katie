@@ -175,6 +175,8 @@ static const int QGRAPHICSVIEW_PREALLOC_STYLE_OPTIONS = 503; // largest prime < 
     Note that setting a flag usually imposes a side effect, and this effect
     can vary between paint devices and platforms.
 
+    \value DontClipPainter This value is obsolete and has no effect.
+
     \value DontSavePainterState When rendering, QGraphicsView protects the
     painter state (see QPainter::save()) when rendering the background or
     foreground, and when rendering each item. This allows you to leave the
@@ -1213,7 +1215,7 @@ void QGraphicsView::setTransformationAnchor(ViewportAnchor anchor)
     whole scene fits in the view, QGraphicsScene uses the view \l alignment to
     position the scene in the view.
 
-    \sa alignment, transformationAnchor
+    \sa alignment, transformationAnchor, Qt::WA_StaticContents
 */
 QGraphicsView::ViewportAnchor QGraphicsView::resizeAnchor() const
 {
@@ -2274,7 +2276,6 @@ QPolygonF QGraphicsView::mapToScene(const QRect &rect) const
 QPolygonF QGraphicsView::mapToScene(const QPolygon &polygon) const
 {
     QPolygonF poly;
-    poly.reserve(polygon.size());
     foreach (const QPoint &point, polygon)
         poly << mapToScene(point);
     return poly;
@@ -2887,6 +2888,14 @@ void QGraphicsView::focusInEvent(QFocusEvent *event)
 /*!
     \reimp
 */
+bool QGraphicsView::focusNextPrevChild(bool next)
+{
+    return QAbstractScrollArea::focusNextPrevChild(next);
+}
+
+/*!
+    \reimp
+*/
 void QGraphicsView::focusOutEvent(QFocusEvent *event)
 {
     Q_D(QGraphicsView);
@@ -3340,7 +3349,7 @@ void QGraphicsView::paintEvent(QPaintEvent *event)
                 // (QGraphicsScene::drawItems) is not called. If it is, we'll do this
                 // operation twice, but that's the price one has to pay for using indirect
                 // painting :-/.
-                const QRectF brect = adjustedItemBoundingRect(item);
+                const QRectF brect = adjustedItemEffectiveBoundingRect(item);
                 if (!itemd->itemIsUntransformable()) {
                     transform = item->sceneTransform();
                     if (viewTransformed)

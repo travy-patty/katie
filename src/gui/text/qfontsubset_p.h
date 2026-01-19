@@ -46,9 +46,11 @@ public:
         : object_id(obj_id), noEmbed(false), fontEngine(fe), downloaded_glyphs(0), standard_font(false)
         { fontEngine->ref.ref(); addGlyph(0); }
     ~QFontSubset() {
-        fontEngine->ref.deref();
+        if (!fontEngine->ref.deref() && fontEngine->cache_count == 0)
+            delete fontEngine;
     }
 
+    QByteArray toTruetype() const;
     QByteArray toType1() const;
     QByteArray type1AddedGlyphs() const;
     QByteArray widthArray() const;

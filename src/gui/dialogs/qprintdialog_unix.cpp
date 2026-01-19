@@ -19,11 +19,10 @@
 **
 ****************************************************************************/
 
-#include "qglobal.h"
+#include "qplatformdefs.h"
 
 #ifndef QT_NO_PRINTDIALOG
 
-#include "qplatformdefs.h"
 #include "qabstractprintdialog_p.h"
 #include "qprintdialog.h"
 #include "qprintdialog_p.h"
@@ -37,7 +36,6 @@
 #include <QtGui/qprinter.h>
 #include "qprinterinfo_unix_p.h"
 #include "qcore_unix_p.h"
-#include "qguiimages_p.h"
 
 #include "ui_qprintpropertieswidget.h"
 #include "ui_qprintsettingsoutput.h"
@@ -45,6 +43,7 @@
 
 #if !defined(QT_NO_CUPS)
 #  include "qcups_p.h"
+#  include <cups/cups.h>
 #  include "qpdf_p.h"
 #endif
 
@@ -67,6 +66,7 @@ public:
 #endif
 
     void selectPrinter();
+    void selectPdfPsPrinter(const QPrinter *p);
 
     /// copy printer properties to the widget
     void applyPrinterProperties(QPrinter *p);
@@ -92,6 +92,7 @@ public:
 
     /// copy printer properties to the widget
     void applyPrinterProperties(QPrinter *p);
+    bool checkFields();
     void setupPrinter();
     void setOptionsPane(QPrintDialogPrivate *pane);
 #if !defined(QT_NO_CUPS)
@@ -101,6 +102,7 @@ public:
 // slots
     void _q_printerChanged(int index);
     void _q_btnPropertiesClicked();
+    void _q_btnBrowseClicked();
 
     QUnixPrintWidget * const parent;
     QPrintPropertiesDialog *propertiesDialog;
@@ -111,6 +113,7 @@ public:
 
 private:
     QPrintDialogPrivate *optionsPane;
+    bool filePrintersAdded;
 #if !defined(QT_NO_CUPS)
     QCUPSSupport* cups;
     int cupsPrinterCount;
@@ -132,6 +135,7 @@ private:
     friend class QUnixPrintWidgetPrivate;
     QUnixPrintWidgetPrivate *d;
     Q_PRIVATE_SLOT(d, void _q_printerChanged(int))
+    Q_PRIVATE_SLOT(d, void _q_btnBrowseClicked())
     Q_PRIVATE_SLOT(d, void _q_btnPropertiesClicked())
 };
 
@@ -293,6 +297,13 @@ void QPrintPropertiesDialog::selectPrinter()
     }
 }
 
+void QPrintPropertiesDialog::selectPdfPsPrinter(const QPrinter *p)
+{
+    widget.treeView->setModel(0);
+    widget.pageSetup->selectPdfPsPrinter(p);
+    widget.tabs->setTabEnabled(1, false); // disable the advanced tab
+}
+
 void QPrintPropertiesDialog::showEvent(QShowEvent* event)
 {
     widget.treeView->resizeColumnToContents(0);
@@ -334,12 +345,9 @@ void QPrintDialogPrivate::init()
     bottom = new QWidget(q);
     options.setupUi(bottom);
     options.color->setIconSize(QSize(32, 32));
-    QPixmap pix;
-    pix.loadFromData(qprintdialog_status_color_png, qprintdialog_status_color_png_len, qt_images_format);
-    options.color->setIcon(QIcon(pix));
+    options.color->setIcon(QIcon(QLatin1String(":/trolltech/dialogs/qprintdialog/images/status-color.png")));
     options.grayscale->setIconSize(QSize(32, 32));
-    pix.loadFromData(qprintdialog_status_gray_scale_png, qprintdialog_status_gray_scale_png_len, qt_images_format);
-    options.grayscale->setIcon(QIcon(pix));
+    options.grayscale->setIcon(QIcon(QLatin1String(":/trolltech/dialogs/qprintdialog/images/status-gray-scale.png")));
     top->d->setOptionsPane(this);
 
     buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, q);
@@ -350,11 +358,6 @@ void QPrintDialogPrivate::init()
     QPushButton *printButton = buttons->button(QDialogButtonBox::Ok);
     printButton->setText(QPrintDialog::tr("&Print"));
     printButton->setDefault(true);
-#ifndef QT_NO_CUPS
-    printButton->setEnabled(QCUPSSupport::isAvailable());
-#else // QT_NO_CUPS
-    printButton->setEnabled(false);
-#endif // QT_NO_CUPS
 
     QVBoxLayout *lay = new QVBoxLayout(q);
     q->setLayout(lay);
@@ -366,7 +369,11 @@ void QPrintDialogPrivate::init()
 
     applyPrinterProperties(p);
 
+#ifdef QT_NO_MESSAGEBOX
     QObject::connect(buttons, SIGNAL(accepted()), q, SLOT(accept()));
+#else
+    QObject::connect(buttons, SIGNAL(accepted()), q, SLOT(_q_checkFields()));
+#endif
     QObject::connect(buttons, SIGNAL(rejected()), q, SLOT(reject()));
 
     QObject::connect(options.reverse, SIGNAL(toggled(bool)),
@@ -423,6 +430,15 @@ void QPrintDialogPrivate::_q_collapseOrExpandDialog()
         q->resize( QSize(q->width(), q->height() - collapseHeight) );
     }
 }
+
+#ifndef QT_NO_MESSAGEBOX
+void QPrintDialogPrivate::_q_checkFields()
+{
+    Q_Q(QPrintDialog);
+    if (top->d->checkFields())
+        q->accept();
+}
+#endif // QT_NO_MESSAGEBOX
 
 void QPrintDialogPrivate::setupPrinter()
 {
@@ -573,7 +589,7 @@ void QPrintDialog::accept()
 /*! \internal
 */
 QUnixPrintWidgetPrivate::QUnixPrintWidgetPrivate(QUnixPrintWidget *p)
-    : parent(p), propertiesDialog(0), printer(0), optionsPane(0)
+    : parent(p), propertiesDialog(0), printer(0), optionsPane(0), filePrintersAdded(false)
 #if !defined(QT_NO_CUPS)
     , cups(0), cupsPrinterCount(0), cupsPrinters(0), cupsPPD(0)
 #endif
@@ -610,10 +626,16 @@ QUnixPrintWidgetPrivate::QUnixPrintWidgetPrivate(QUnixPrintWidget *p)
     }
 #endif
 
+#if !defined(QT_NO_FILESYSTEMMODEL) && !defined(QT_NO_COMPLETER)
+    QFileSystemModel *fsm = new QFileSystemModel(widget.filename);
+    fsm->setRootPath(QDir::homePath());
+    widget.filename->setCompleter(new QCompleter(fsm, widget.filename));
+#endif
     _q_printerChanged(currentPrinterIndex);
 
     QObject::connect(widget.printers, SIGNAL(currentIndexChanged(int)),
                      parent, SLOT(_q_printerChanged(int)));
+    QObject::connect(widget.fileBrowser, SIGNAL(clicked()), parent, SLOT(_q_btnBrowseClicked()));
     QObject::connect(widget.properties, SIGNAL(clicked()), parent, SLOT(_q_btnPropertiesClicked()));
 
     // disable features that QPrinter does not yet support.
@@ -622,6 +644,36 @@ QUnixPrintWidgetPrivate::QUnixPrintWidgetPrivate(QUnixPrintWidget *p)
 
 void QUnixPrintWidgetPrivate::updateWidget()
 {
+    const bool printToFile = q == 0 || q->isOptionEnabled(QPrintDialog::PrintToFile);
+    if (printToFile && !filePrintersAdded) {
+        if (widget.printers->count())
+            widget.printers->insertSeparator(widget.printers->count());
+        widget.printers->addItem(QPrintDialog::tr("Print to File (PDF)"));
+        widget.printers->addItem(QPrintDialog::tr("Print to File (Postscript)"));
+        filePrintersAdded = true;
+    }
+    if (!printToFile && filePrintersAdded) {
+        widget.printers->removeItem(widget.printers->count()-1);
+        widget.printers->removeItem(widget.printers->count()-1);
+        if (widget.printers->count())
+            widget.printers->removeItem(widget.printers->count()-1); // remove separator
+        filePrintersAdded = false;
+    }
+    if (printer && filePrintersAdded && (printer->outputFormat() != QPrinter::NativeFormat
+                                         || printer->printerName().isEmpty()))
+    {
+        if (printer->outputFormat() == QPrinter::PdfFormat)
+            widget.printers->setCurrentIndex(widget.printers->count() - 2);
+        else if (printer->outputFormat() == QPrinter::PostScriptFormat)
+            widget.printers->setCurrentIndex(widget.printers->count() - 1);
+        widget.filename->setEnabled(true);
+        widget.lOutput->setEnabled(true);
+    }
+
+    widget.filename->setVisible(printToFile);
+    widget.lOutput->setVisible(printToFile);
+    widget.fileBrowser->setVisible(printToFile);
+
     if (q)
         widget.properties->setVisible(q->isOptionEnabled(QAbstractPrintDialog::PrintShowPageSize));
 }
@@ -637,6 +689,36 @@ void QUnixPrintWidgetPrivate::_q_printerChanged(int index)
 {
     if (index < 0)
         return;
+    const int printerCount = widget.printers->count();
+    widget.filename->setEnabled(false);
+    widget.lOutput->setEnabled(false);
+
+    if (filePrintersAdded) {
+        Q_ASSERT(index != printerCount - 3); // separator
+        if (index > printerCount - 3) { // PDF or postscript
+            bool pdfPrinter = (index == printerCount - 2);
+            widget.location->setText(QPrintDialog::tr("Local file"));
+            widget.type->setText(QPrintDialog::tr("Write %1 file").arg(pdfPrinter ? QString::fromLatin1("PDF")
+                                                                       : QString::fromLatin1("PostScript")));
+            widget.properties->setEnabled(true);
+            widget.filename->setEnabled(true);
+            QString filename = widget.filename->text();
+            QString suffix = QFileInfo(filename).suffix();
+            if (pdfPrinter && suffix == QLatin1String("ps"))
+                filename = filename.replace(QLatin1String(".ps"), QLatin1String(".pdf"));
+            if (!pdfPrinter && suffix == QLatin1String("pdf"))
+                filename = filename.replace(QLatin1String(".pdf"), QLatin1String(".ps"));
+            widget.filename->setText(filename);
+            widget.lOutput->setEnabled(true);
+            if (propertiesDialog)
+                propertiesDialog->selectPdfPsPrinter(printer);
+#if !defined(QT_NO_CUPS)
+            if (optionsPane)
+                optionsPane->selectPrinter(0);
+#endif
+            return;
+        }
+    }
 
     widget.location->setText(QString());
 #if !defined(QT_NO_CUPS)
@@ -673,24 +755,112 @@ void QUnixPrintWidgetPrivate::setOptionsPane(QPrintDialogPrivate *pane)
         _q_printerChanged(widget.printers->currentIndex());
 }
 
+void QUnixPrintWidgetPrivate::_q_btnBrowseClicked()
+{
+    QString filename = widget.filename->text();
+#ifndef QT_NO_FILEDIALOG
+    filename = QFileDialog::getSaveFileName(parent, QPrintDialog::tr("Print To File ..."), filename,
+                                            QString(), 0, QFileDialog::DontConfirmOverwrite);
+#else
+    filename.clear();
+#endif
+    if (!filename.isEmpty()) {
+        widget.filename->setText(filename);
+        if (filename.endsWith(QString::fromLatin1(".ps"), Qt::CaseInsensitive))
+            widget.printers->setCurrentIndex(widget.printers->count() - 1); // the postscript one
+        else if (filename.endsWith(QString::fromLatin1(".pdf"), Qt::CaseInsensitive))
+            widget.printers->setCurrentIndex(widget.printers->count() - 2); // the pdf one
+        else if (widget.printers->currentIndex() != widget.printers->count() - 1) // if ps is not selected, pdf is default
+            widget.printers->setCurrentIndex(widget.printers->count() - 2); // the pdf one
+    }
+}
+
 void QUnixPrintWidgetPrivate::applyPrinterProperties(QPrinter *p)
 {
     if (p == 0)
         return;
     printer = p;
-    const QString printername = p->printerName();
-    if (!printername.isEmpty()) {
+    if (p->outputFileName().isEmpty()) {
+        QString home = QDir::homePath();
+        QString cur = QDir::currentPath();
+        if (home.at(home.length()-1) != QLatin1Char('/'))
+            home += QLatin1Char('/');
+        if (cur.at(cur.length()-1) != QLatin1Char('/'))
+            cur += QLatin1Char('/');
+        if (cur.left(home.length()) != home)
+            cur = home;
+#ifdef Q_WS_X11
+        if (p->docName().isEmpty()) {
+            if (p->outputFormat() == QPrinter::PostScriptFormat)
+                cur += QLatin1String("print.ps");
+            else
+                cur += QLatin1String("print.pdf");
+        } else {
+            QRegExp re(QString::fromLatin1("(.*)\\.\\S+"));
+            if (re.exactMatch(p->docName()))
+                cur += re.cap(1);
+            else
+                cur += p->docName();
+            if (p->outputFormat() == QPrinter::PostScriptFormat)
+                cur += QLatin1String(".ps");
+            else
+                cur += QLatin1String(".pdf");
+        }
+#endif
+        widget.filename->setText(cur);
+    }
+    else
+        widget.filename->setText( p->outputFileName() );
+    QString printer = p->printerName();
+    if (!printer.isEmpty()) {
         for (int i = 0; i < widget.printers->count(); ++i) {
-            if (widget.printers->itemText(i) == printername) {
+            if (widget.printers->itemText(i) == printer) {
                 widget.printers->setCurrentIndex(i);
                 break;
             }
         }
     }
+    // PDF and PS printers are not added to the dialog yet, we'll handle those cases in QUnixPrintWidgetPrivate::updateWidget
 
     if (propertiesDialog)
         propertiesDialog->applyPrinterProperties(p);
 }
+
+#ifndef QT_NO_MESSAGEBOX
+bool QUnixPrintWidgetPrivate::checkFields()
+{
+    if (widget.filename->isEnabled()) {
+        QString file = widget.filename->text();
+        QFile f(file);
+        QStatInfo si(file);
+        bool exists = si.exists();
+        bool opened = false;
+        if (exists && si.isDir()) {
+            QMessageBox::warning(q, q->windowTitle(),
+                            QPrintDialog::tr("%1 is a directory.\nPlease choose a different file name.").arg(file));
+            return false;
+        } else if ((exists && !si.isWritable()) || !(opened = f.open(QFile::Append))) {
+            QMessageBox::warning(q, q->windowTitle(),
+                            QPrintDialog::tr("File %1 is not writable.\nPlease choose a different file name.").arg(file));
+            return false;
+        } else if (exists) {
+            int ret = QMessageBox::question(q, q->windowTitle(),
+                                            QPrintDialog::tr("%1 already exists.\nDo you want to overwrite it?").arg(file),
+                                            QMessageBox::Yes|QMessageBox::No, QMessageBox::No);
+            if (ret == QMessageBox::No)
+                return false;
+        }
+        if (opened) {
+            f.close();
+            if (!exists)
+                f.remove();
+        }
+    }
+
+    // Every test passed. Accept the dialog.
+    return true;
+}
+#endif // QT_NO_MESSAGEBOX
 
 void QUnixPrintWidgetPrivate::_q_btnPropertiesClicked()
 {
@@ -705,7 +875,11 @@ void QUnixPrintWidgetPrivate::_q_btnPropertiesClicked()
 #endif
         propertiesDialog->applyPrinterProperties(q->printer());
 
-        propertiesDialog->selectPrinter();
+        if (q->isOptionEnabled(QPrintDialog::PrintToFile)
+            && (widget.printers->currentIndex() > widget.printers->count() - 3)) // PDF or postscript
+            propertiesDialog->selectPdfPsPrinter(q->printer());
+        else
+            propertiesDialog->selectPrinter();
     }
     propertiesDialog->exec();
 }
@@ -741,7 +915,25 @@ void QUnixPrintWidgetPrivate::setCupsProperties()
 
 void QUnixPrintWidgetPrivate::setupPrinter()
 {
-    printer->setPrinterName(widget.printers->currentText());
+    const int printerCount = widget.printers->count();
+    const int index = widget.printers->currentIndex();
+
+    if (filePrintersAdded && index > printerCount - 3) { // PDF or postscript
+        printer->setPrinterName(QString());
+        Q_ASSERT(index != printerCount - 3); // separator
+        if (index == printerCount - 2)
+            printer->setOutputFormat(QPrinter::PdfFormat);
+        else
+            printer->setOutputFormat(QPrinter::PostScriptFormat);
+        QString path = widget.filename->text();
+        if (QDir::isRelativePath(path))
+            path = QDir::homePath() + QDir::separator() + path;
+        printer->setOutputFileName(path);
+    }
+    else {
+        printer->setPrinterName(widget.printers->currentText());
+        printer->setOutputFileName(QString());
+    }
 
     if (propertiesDialog && propertiesDialog->result() == QDialog::Accepted)
         propertiesDialog->setupPrinter();
@@ -1010,6 +1202,7 @@ QT_END_NAMESPACE
 
 #include "moc_qprintdialog.h"
 #include "moc_qprintdialog_unix.cpp"
+#include "qrc_qprintdialog.cpp"
 
 #endif // QT_NO_PRINTDIALOG
 

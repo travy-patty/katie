@@ -1,14 +1,15 @@
-# Try to find International Components for Unicode, once done this will define:
+# - Try to find International Components for Unicode
+# Once done this will define
 #
 #  ICU_FOUND - system has ICU
 #  ICU_INCLUDES - the ICU include directory
 #  ICU_LIBRARIES - the libraries needed to use ICU
 #
-# Copyright (C) 2015 Ivailo Monev <xakepa10@gmail.com>
+# Copyright (C) 2015, Ivailo Monev, <xakepa10@gmail.com>
 #
 # Redistribution and use is allowed according to the terms of the BSD license.
 
-find_package(PkgConfig REQUIRED)
+include(FindPkgConfig)
 include(FindPackageHandleStandardArgs)
 
 pkg_check_modules(PC_ICU QUIET icu-i18n)

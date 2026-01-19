@@ -44,7 +44,7 @@ class Q_DECLARATIVE_EXPORT QDeclarativeComponent : public QObject
     Q_DECLARE_PRIVATE(QDeclarativeComponent)
 
     Q_PROPERTY(qreal progress READ progress NOTIFY progressChanged)
-    Q_PROPERTY(ComponentStatus status READ status NOTIFY statusChanged)
+    Q_PROPERTY(Status status READ status NOTIFY statusChanged)
     Q_PROPERTY(QUrl url READ url CONSTANT)
 
 public:
@@ -54,18 +54,18 @@ public:
     QDeclarativeComponent(QDeclarativeEngine *, const QUrl &url, QObject *parent = nullptr);
     virtual ~QDeclarativeComponent();
 
-    Q_ENUMS(ComponentStatus)
-    enum ComponentStatus { Null, Ready, Loading, Error };
-    ComponentStatus status() const;
+    Q_ENUMS(Status)
+    enum Status { Null, Ready, Loading, Error };
+    Status status() const;
 
     inline bool isNull() const
-        { return status() == ComponentStatus::Null; }
+        { return status() == Null; }
     inline bool isReady() const
-        { return status() == ComponentStatus::Ready; }
+        { return status() == Ready; }
     inline bool isError() const
-        { return status() == ComponentStatus::Error; }
+        { return status() == Error; }
     inline bool isLoading() const
-        { return status() == ComponentStatus::Loading; }
+        { return status() == Loading; }
 
     QList<QDeclarativeError> errors() const;
     Q_INVOKABLE QString errorString() const;
@@ -86,7 +86,7 @@ public:
     static QDeclarativeComponentAttached *qmlAttachedProperties(QObject *);
 
 Q_SIGNALS:
-    void statusChanged(QDeclarativeComponent::ComponentStatus);
+    void statusChanged(QDeclarativeComponent::Status);
     void progressChanged(qreal);
 
 protected:
@@ -105,7 +105,7 @@ private:
 
 QT_END_NAMESPACE
 
-Q_DECLARE_METATYPE(QDeclarativeComponent::ComponentStatus)
+Q_DECLARE_METATYPE(QDeclarativeComponent::Status)
 QML_DECLARE_TYPE(QDeclarativeComponent)
 QML_DECLARE_TYPEINFO(QDeclarativeComponent, QML_HAS_ATTACHED_PROPERTIES)
 

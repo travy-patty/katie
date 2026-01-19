@@ -34,6 +34,9 @@
 //
 
 #include "qsvgstyle_p.h"
+
+#ifndef QT_NO_SVG
+
 #include "QtCore/qstring.h"
 #include "QtCore/qhash.h"
 
@@ -51,6 +54,7 @@ public:
         G,
         DEFS,
         SWITCH,
+        ANIMATION,
         ARC,
         CIRCLE,
         ELLIPSE,
@@ -63,7 +67,8 @@ public:
         TEXT,
         TEXTAREA,
         TSPAN,
-        USE
+        USE,
+        VIDEO
     };
     enum DisplayMode {
         InlineMode,
@@ -177,4 +182,5 @@ inline QString QSvgNode::xmlClass() const
 
 QT_END_NAMESPACE
 
+#endif // QT_NO_SVG
 #endif // QSVGNODE_P_H

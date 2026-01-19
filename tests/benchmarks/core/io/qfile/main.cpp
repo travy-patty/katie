@@ -21,6 +21,7 @@
 
 #include <QDebug>
 #include <QTemporaryFile>
+#include <QFSFileEngine>
 #include <QString>
 #include <QDirIterator>
 #include <qtest.h>
@@ -31,8 +32,6 @@ QT_USE_NAMESPACE
 #define QFILE_BENCH_BUFSIZE 1024*512
 #define QFILE_BENCH_FACTOR 1024*512
 #define QFILE_BENCH_TF_SIZE QFILE_BENCH_FACTOR*81
-
-#ifndef QT_NO_TEMPORARYFILE
 
 // 10 predefined (but random() seek positions
 // hardcoded to be comparable over several runs
@@ -51,11 +50,12 @@ const int sp_size = sizeof(seekpos)/sizeof(int);
 
 class tst_qfile: public QObject
 {
-    Q_ENUMS(BenchmarkType)
-    Q_OBJECT
+Q_ENUMS(BenchmarkType)
+Q_OBJECT
 public:
     enum BenchmarkType {
         QFileBenchmark = 1,
+        QFSFileEngineBenchmark,
         PosixBenchmark,
         QFileFromPosixBenchmark
     };
@@ -69,15 +69,19 @@ private slots:
     void seek();
 
     void readSmallFiles_QFile();
+    void readSmallFiles_QFSFileEngine();
     void readSmallFiles_posix();
 
     void readSmallFiles_QFile_data();
+    void readSmallFiles_QFSFileEngine_data();
     void readSmallFiles_posix_data();
 
     void readBigFile_QFile_data();
+    void readBigFile_QFSFileEngine_data();
     void readBigFile_posix_data();
 
     void readBigFile_QFile();
+    void readBigFile_QFSFileEngine();
     void readBigFile_posix();
 
     void writeFileSequential_data();
@@ -147,6 +151,7 @@ void tst_qfile::cleanupTestCase()
 }
 
 void tst_qfile::readBigFile_QFile() { readBigFile(); }
+void tst_qfile::readBigFile_QFSFileEngine() { readBigFile(); }
 void tst_qfile::readBigFile_posix() 
 { 
     readBigFile(); 
@@ -159,6 +164,14 @@ void tst_qfile::readBigFile_QFile_data()
     readBigFile_data(QFileBenchmark, QIODevice::Text, QIODevice::NotOpen);
     readBigFile_data(QFileBenchmark, QIODevice::Text, QIODevice::Unbuffered);
 
+}
+
+void tst_qfile::readBigFile_QFSFileEngine_data()
+{
+    readBigFile_data(QFSFileEngineBenchmark, QIODevice::NotOpen, QIODevice::NotOpen);
+    readBigFile_data(QFSFileEngineBenchmark, QIODevice::NotOpen, QIODevice::Unbuffered);
+    readBigFile_data(QFSFileEngineBenchmark, QIODevice::Text, QIODevice::NotOpen);
+    readBigFile_data(QFSFileEngineBenchmark, QIODevice::Text, QIODevice::Unbuffered);
 }
 
 void tst_qfile::readBigFile_posix_data()
@@ -206,8 +219,19 @@ void tst_qfile::readBigFile()
                 file.reset();
             }
             file.close();
-            break;
         }
+        break;
+        case(QFSFileEngineBenchmark): {
+            QFSFileEngine fse(filename);
+            fse.open(QIODevice::ReadOnly|textMode|bufferedMode);
+            QBENCHMARK {
+                //qWarning() << fse.supportsExtension(QAbstractFileEngine::MapExtension);
+                while(fse.read(buffer, blockSize));
+                fse.seek(0);
+            }
+            fse.close();
+        }
+        break;
         case(PosixBenchmark): {
             QByteArray data = filename.toLocal8Bit();
             const char* cfilename = data.constData();
@@ -218,12 +242,12 @@ void tst_qfile::readBigFile()
                 QT_FSEEK(cfile, 0, SEEK_SET);
             }
             ::fclose(cfile);
-            break;
         }
+        break;
         case(QFileFromPosixBenchmark): {
             // No gain in benchmarking this case
-            break;
         }
+        break;
     }
 
     removeFile();
@@ -234,6 +258,7 @@ void tst_qfile::seek_data()
 {
     QTest::addColumn<tst_qfile::BenchmarkType>("testType");
     QTest::newRow("QFile") << QFileBenchmark;
+    QTest::newRow("QFSFileEngine") << QFSFileEngineBenchmark;
     QTest::newRow("Posix FILE*") << PosixBenchmark;
 }
 
@@ -254,8 +279,18 @@ void tst_qfile::seek()
                 file.seek(seekpos[i]);
             }
             file.close();
-            break;
         }
+        break;
+        case(QFSFileEngineBenchmark): {
+            QFSFileEngine fse(filename);
+            fse.open(QIODevice::ReadOnly);
+            QBENCHMARK {
+                i=(i+1)%sp_size;
+                fse.seek(seekpos[i]);
+            }
+            fse.close();
+        }
+        break;
         case(PosixBenchmark): {
             QByteArray data = filename.toLocal8Bit();
             const char* cfilename = data.constData();
@@ -265,12 +300,12 @@ void tst_qfile::seek()
                 QT_FSEEK(cfile, seekpos[i], SEEK_SET);
             }
             ::fclose(cfile);
-            break;
         }
+        break;
         case(QFileFromPosixBenchmark): {
             // No gain in benchmarking this case
-            break;
         }
+        break;
     }
 
     removeFile();
@@ -280,6 +315,7 @@ void tst_qfile::open_data()
 {
     QTest::addColumn<tst_qfile::BenchmarkType>("testType");
     QTest::newRow("QFile") << QFileBenchmark;
+    QTest::newRow("QFSFileEngine") << QFSFileEngineBenchmark;
     QTest::newRow("Posix FILE*") << PosixBenchmark;
     QTest::newRow("QFile from FILE*") << QFileFromPosixBenchmark;
 }
@@ -297,8 +333,17 @@ void tst_qfile::open()
                 file.open( QIODevice::ReadOnly );
                 file.close();
             }
-            break;
         }
+        break;
+        case(QFSFileEngineBenchmark): {
+            QBENCHMARK {
+                QFSFileEngine fse(filename);
+                fse.open(QIODevice::ReadOnly);
+                fse.close();
+            }
+        }
+        break;
+
         case(PosixBenchmark): {
             // ensure we don't account toLocal8Bit()
             QByteArray data = filename.toLocal8Bit();
@@ -308,8 +353,8 @@ void tst_qfile::open()
                 FILE* cfile = QT_FOPEN(cfilename, "rb");
                 ::fclose(cfile);
             }
-            break;
         }
+        break;
         case(QFileFromPosixBenchmark): {
             // ensure we don't account toLocal8Bit()
             QByteArray data = filename.toLocal8Bit();
@@ -322,8 +367,8 @@ void tst_qfile::open()
                 file.close();
             }
             ::fclose(cfile);
-            break;
         }
+        break;
     }
 
     removeFile();
@@ -331,6 +376,7 @@ void tst_qfile::open()
 
 
 void tst_qfile::readSmallFiles_QFile() { readSmallFiles(); }
+void tst_qfile::readSmallFiles_QFSFileEngine() { readSmallFiles(); }
 void tst_qfile::readSmallFiles_posix() 
 {
     readSmallFiles(); 
@@ -343,6 +389,14 @@ void tst_qfile::readSmallFiles_QFile_data()
     readSmallFiles_data(QFileBenchmark, QIODevice::Text, QIODevice::NotOpen);
     readSmallFiles_data(QFileBenchmark, QIODevice::Text, QIODevice::Unbuffered);
 
+}
+
+void tst_qfile::readSmallFiles_QFSFileEngine_data()
+{
+    readSmallFiles_data(QFSFileEngineBenchmark, QIODevice::NotOpen, QIODevice::NotOpen);
+    readSmallFiles_data(QFSFileEngineBenchmark, QIODevice::NotOpen, QIODevice::Unbuffered);
+    readSmallFiles_data(QFSFileEngineBenchmark, QIODevice::Text, QIODevice::NotOpen);
+    readSmallFiles_data(QFSFileEngineBenchmark, QIODevice::Text, QIODevice::Unbuffered);
 }
 
 void tst_qfile::readSmallFiles_posix_data()
@@ -430,8 +484,28 @@ void tst_qfile::readSmallFiles()
                 file->close();
                 delete file;
             }
-            break;
         }
+        break;
+        case(QFSFileEngineBenchmark): {
+            QList<QFSFileEngine*> fileList;
+            Q_FOREACH(QString file, files) {
+                QFSFileEngine *fse = new QFSFileEngine(tmpDirName + QLatin1Char('/') + file);
+                fse->open(QIODevice::ReadOnly|textMode|bufferedMode);
+                fileList.append(fse);
+            }
+
+            QBENCHMARK {
+                Q_FOREACH(QFSFileEngine *fse, fileList) {
+                    while (fse->read(buffer, blockSize));
+                }
+            }
+
+            Q_FOREACH(QFSFileEngine *fse, fileList) {
+                fse->close();
+                delete fse;
+            }
+        }
+        break;
         case(PosixBenchmark): {
             QList<FILE*> fileList;
             Q_FOREACH(QString file, files) {
@@ -449,12 +523,12 @@ void tst_qfile::readSmallFiles()
             Q_FOREACH(FILE* cfile, fileList) {
                 ::fclose(cfile);
             }
-            break;
         }
+        break;
         case(QFileFromPosixBenchmark): {
             // No gain in benchmarking this case
-            break;
         }
+        break;
     }
 
     removeSmallFiles();
@@ -541,9 +615,3 @@ void tst_qfile::writeFileSequentialWithSeeks()
 QTEST_MAIN(tst_qfile)
 
 #include "moc_main.cpp"
-
-#else // QT_NO_TEMPORARYFILE
-
-QTEST_NOOP_MAIN
-
-#endif // QT_NO_TEMPORARYFILE

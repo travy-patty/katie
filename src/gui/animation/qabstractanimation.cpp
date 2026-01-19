@@ -138,22 +138,23 @@
 
 QT_BEGIN_NAMESPACE
 
-thread_local std::unique_ptr<QUnifiedTimer> unifiedTimer(nullptr);
+QTHREADLOCAL(QUnifiedTimer, unifiedTimer);
 
 QUnifiedTimer::QUnifiedTimer() :
     QObject(), lastTick(0), currentAnimationIdx(0), insideTick(false),
     isPauseTimerActive(false), runningLeafAnimations(0)
 {
     time.invalidate();
+    driver = &defaultDriver;
 }
 
 
 QUnifiedTimer *QUnifiedTimer::instance()
 {
     if (!unifiedTimer) {
-        unifiedTimer = std::make_unique<QUnifiedTimer>();
+        unifiedTimer = new QUnifiedTimer;
     }
-    return unifiedTimer.get();
+    return unifiedTimer;
 }
 
 void QUnifiedTimer::ensureTimerUpdate()
@@ -203,15 +204,14 @@ void QUnifiedTimer::restartAnimationTimer()
             qDebug() << runningPauseAnimations;
             qDebug() << closestPauseAnimationTimeToFinish();
         }
-        driver.stop();
+        driver->stop();
         animationTimer.start(closestTimeToFinish, this);
         isPauseTimerActive = true;
-    } else if (!driver.isRunning() || isPauseTimerActive) {
-        driver.start();
+    } else if (!driver->isRunning() || isPauseTimerActive) {
+        driver->start();
         isPauseTimerActive = false;
-    } else if (runningLeafAnimations == 0) {
-        driver.stop();
-    }
+    } else if (runningLeafAnimations == 0)
+        driver->stop();
 }
 
 void QUnifiedTimer::timerEvent(QTimerEvent *event)
@@ -273,7 +273,7 @@ void QUnifiedTimer::unregisterAnimation(QAbstractAnimation *animation)
                 --unifiedTimer->currentAnimationIdx;
 
             if (unifiedTimer->animations.isEmpty() && !unifiedTimer->startStopAnimationTimer.isActive())
-                unifiedTimer->startStopAnimationTimer.start(STARTSTOP_TIMER_DELAY, unifiedTimer.get());
+                unifiedTimer->startStopAnimationTimer.start(STARTSTOP_TIMER_DELAY, unifiedTimer);
         } else {
             unifiedTimer->animationsToStart.removeOne(animation);
         }
@@ -322,48 +322,142 @@ int QUnifiedTimer::closestPauseAnimationTimeToFinish()
     return closestTimeToFinish;
 }
 
-bool QAnimationDriver::isRunning() const
+void QUnifiedTimer::installAnimationDriver(QAnimationDriver *d)
 {
-    return m_running;
-}
+    if (driver) {
 
-void QAnimationDriver::start()
-{
-    if (!m_running) {
-        m_timer.start(DEFAULT_TIMER_INTERVAL, this);
-        m_running = true;
+        if (driver->isRunning()) {
+            qWarning("QUnifiedTimer: Cannot change animation driver while animations are running");
+            return;
+        }
+
+        if (driver != &defaultDriver)
+            delete driver;
     }
-}
 
-
-void QAnimationDriver::stop()
-{
-    if (m_running) {
-        m_timer.stop();
-        m_running = false;
-    }
+    driver = d;
 }
 
 /*!
-   The default animation driver just spins the timer...
+   \class QAnimationDriver
+
+   \brief The QAnimationDriver class is used to exchange the mechanism that drives animations.
+
+   The default animation system is driven by a timer that fires at regular intervals.
+   In some scenarios, it is better to drive the animation based on other synchronization
+   mechanisms, such as the vertical refresh rate of the screen.
+
+   \internal
  */
-QAnimationDriver::QAnimationDriver()
-    : QObject(0),
-    m_running(false)
+
+QAnimationDriver::QAnimationDriver(QObject *parent)
+    : QObject(*(new QAnimationDriverPrivate), parent)
 {
 }
 
-void QAnimationDriver::timerEvent(QTimerEvent *e)
+QAnimationDriver::QAnimationDriver(QAnimationDriverPrivate &dd, QObject *parent)
+    : QObject(dd, parent)
 {
-    Q_ASSERT(e->timerId() == m_timer.timerId());
-    Q_UNUSED(e); // if the assertions are disabled
+}
 
+
+/*!
+    Advances the animation based on the current time. This function should
+    be continuously called by the driver while the animation is running.
+
+    \internal
+ */
+void QAnimationDriver::advance()
+{
     QUnifiedTimer *instance = QUnifiedTimer::instance();
 
     // update current time on all top level animations
     instance->updateAnimationsTime();
     instance->restartAnimationTimer();
 }
+
+
+/*!
+    Installs this animation driver. The animation driver is thread local and
+    will only apply for the thread its installed in.
+
+    \internal
+ */
+void QAnimationDriver::install()
+{
+    QUnifiedTimer *timer = QUnifiedTimer::instance();
+    timer->installAnimationDriver(this);
+}
+
+bool QAnimationDriver::isRunning() const
+{
+    return d_func()->running;
+}
+
+
+void QAnimationDriver::start()
+{
+    Q_D(QAnimationDriver);
+    if (!d->running) {
+        started();
+        d->running = true;
+    }
+}
+
+
+void QAnimationDriver::stop()
+{
+    Q_D(QAnimationDriver);
+    if (d->running) {
+        stopped();
+        d->running = false;
+    }
+}
+
+/*!
+    \fn QAnimationDriver::started()
+
+    This function is called by the animation framework to notify the driver
+    that it should start running.
+
+    \internal
+ */
+
+/*!
+    \fn QAnimationDriver::stopped()
+
+    This function is called by the animation framework to notify the driver
+    that it should stop running.
+
+    \internal
+ */
+
+/*!
+   The default animation driver just spins the timer...
+ */
+QDefaultAnimationDriver::QDefaultAnimationDriver()
+    : QAnimationDriver(0)
+{
+}
+
+void QDefaultAnimationDriver::timerEvent(QTimerEvent *e)
+{
+    Q_ASSERT(e->timerId() == m_timer.timerId());
+    Q_UNUSED(e); // if the assertions are disabled
+    advance();
+}
+
+void QDefaultAnimationDriver::started()
+{
+    m_timer.start(DEFAULT_TIMER_INTERVAL, this);
+}
+
+void QDefaultAnimationDriver::stopped()
+{
+    m_timer.stop();
+}
+
+
 
 void QAbstractAnimationPrivate::setState(QAbstractAnimation::State newState)
 {
@@ -770,10 +864,10 @@ void QAbstractAnimation::setCurrentTime(int msecs)
 void QAbstractAnimation::start(DeletionPolicy policy)
 {
     Q_D(QAbstractAnimation);
-    if (d->state == QAbstractAnimation::Running)
+    if (d->state == Running)
         return;
     d->deleteWhenStopped = bool(policy);
-    d->setState(QAbstractAnimation::Running);
+    d->setState(Running);
 }
 
 /*!
@@ -790,10 +884,10 @@ void QAbstractAnimation::stop()
 {
     Q_D(QAbstractAnimation);
 
-    if (d->state == QAbstractAnimation::Stopped)
+    if (d->state == Stopped)
         return;
 
-    d->setState(QAbstractAnimation::Stopped);
+    d->setState(Stopped);
 }
 
 /*!
@@ -806,12 +900,12 @@ void QAbstractAnimation::stop()
 void QAbstractAnimation::pause()
 {
     Q_D(QAbstractAnimation);
-    if (Q_UNLIKELY(d->state == QAbstractAnimation::Stopped)) {
+    if (d->state == Stopped) {
         qWarning("QAbstractAnimation::pause: Cannot pause a stopped animation");
         return;
     }
 
-    d->setState(QAbstractAnimation::Paused);
+    d->setState(Paused);
 }
 
 /*!
@@ -824,13 +918,13 @@ void QAbstractAnimation::pause()
 void QAbstractAnimation::resume()
 {
     Q_D(QAbstractAnimation);
-    if (Q_UNLIKELY(d->state != QAbstractAnimation::Paused)) {
+    if (d->state != Paused) {
         qWarning("QAbstractAnimation::resume: "
                  "Cannot resume an animation that is not paused");
         return;
     }
 
-    d->setState(QAbstractAnimation::Running);
+    d->setState(Running);
 }
 
 /*!
@@ -845,6 +939,14 @@ void QAbstractAnimation::setPaused(bool paused)
         pause();
     else
         resume();
+}
+
+/*!
+    \reimp
+*/
+bool QAbstractAnimation::event(QEvent *event)
+{
+    return QObject::event(event);
 }
 
 /*!

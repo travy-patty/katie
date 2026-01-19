@@ -23,7 +23,6 @@
 #include "qstring.h"
 #include "qlist.h"
 #include "qcorecommon_p.h"
-#include "qstdcontainers_p.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,7 +79,7 @@ QT_BEGIN_NAMESPACE
     \ingroup tools
 
     The QFlags<Enum> class is a template class, where Enum is an enum
-    type. QFlags is used throughout Katie for storing combinations of
+    type. QFlags is used throughout Qt for storing combinations of
     enum values.
 
     The traditional C++ approach for storing OR-combinations of enum
@@ -89,7 +88,7 @@ QT_BEGIN_NAMESPACE
     enum value can be OR'd with any other enum value and passed on to
     a function that takes an \c int or \c uint.
 
-    Katie uses QFlags to provide type safety. For example, the
+    Qt uses QFlags to provide type safety. For example, the
     Qt::Alignment type is simply a typedef for
     QFlags<Qt::AlignmentFlag>. QLabel::setAlignment() takes a
     Qt::Alignment parameter, which means that any combination of
@@ -115,7 +114,7 @@ QT_BEGIN_NAMESPACE
     \section1 Flags and the Meta-Object System
 
     The Q_DECLARE_FLAGS() macro does not expose the flags to the meta-object
-    system, so they cannot be used by Katie Script or edited in Katie Designer.
+    system, so they cannot be used by Qt Script or edited in Katie Designer.
     To make the flags available for these purposes, the Q_FLAGS() macro must
     be used:
 
@@ -319,7 +318,7 @@ QT_BEGIN_NAMESPACE
   to do), your compiler will thoughtfully create it for you. You must
   do more.
 
-  The curious user will have seen that the Katie classes derived
+  The curious user will have seen that the Qt classes derived
   from QObject typically include this macro in a private section:
 
   \snippet doc/src/snippets/code/src_corelib_global_qglobal.cpp 43
@@ -375,19 +374,19 @@ QT_BEGIN_NAMESPACE
 
 /*!
     \headerfile <QtGlobal>
-    \title Global Katie Declarations
+    \title Global Qt Declarations
     \ingroup funclists
 
     \brief The <QtGlobal> header file includes the fundamental global
-    declarations. It is included by most other Katie header files.
+    declarations. It is included by most other Qt header files.
 
     The global declarations include \l{types}, \l{functions} and
     \l{macros}.
 
     The type definitions are partly convenience definitions for basic
     types (some of which guarantee certain bit-sizes on all platforms
-    supported by Katie), partly types related to Katie message handling. The
-    functions are related to generating messages, Katie version handling
+    supported by Qt), partly types related to Qt message handling. The
+    functions are related to generating messages, Qt version handling
     and comparing and adjusting object values. And finally, some of
     the declared macros enable programmers to add compiler or platform
     specific code to their applications, while others are convenience
@@ -396,11 +395,11 @@ QT_BEGIN_NAMESPACE
     \section1 Types
 
     The header file declares several type definitions that guarantee a
-    specified bit-size on all platforms supported by Katie for various
+    specified bit-size on all platforms supported by Qt for various
     basic types, for example \l qint8 which is a signed char
-    guaranteed to be 8-bit on all platforms supported by Katie. The
+    guaranteed to be 8-bit on all platforms supported by Qt. The
     header file also declares the \l qlonglong type definition for \c
-    {long long int }.
+    {long long int } (\c __int64 on Windows).
 
     Several convenience type definitions are declared: \l qreal for \c
     double, \l uchar for \c unsigned char, \l uint for \c unsigned
@@ -408,7 +407,7 @@ QT_BEGIN_NAMESPACE
     short.
 
     Finally, the QtMsgType definition identifies the various messages
-    that can be generated and sent to a Katie message handler;
+    that can be generated and sent to a Qt message handler;
     QtMsgHandler is a type definition for a pointer to a function with
     the signature \c {void myMsgHandler(QtMsgType, const char *)}.
 
@@ -439,7 +438,7 @@ QT_BEGIN_NAMESPACE
 
     qInstallMsgHandler() function which installs the given
     QtMsgHandler, and the qVersion() function which returns the
-    version number of Katie at run-time as a string.
+    version number of Qt at run-time as a string.
 
     \section1 Macros
 
@@ -460,7 +459,7 @@ QT_BEGIN_NAMESPACE
     i.e. translation without changing the stored source text. The
     Q_ASSERT() and Q_ASSERT_X() enables warning messages of various
     level of refinement. The Q_FOREACH() and foreach() macros
-    implement Katie's foreach loop.
+    implement Qt's foreach loop.
 
     The Q_INT64_C() and Q_UINT64_C() macros wrap signed and unsigned
     64-bit integer literals in a platform-independent way. The
@@ -472,7 +471,7 @@ QT_BEGIN_NAMESPACE
     Finally, the QT_POINTER_SIZE macro expands to the size of a
     pointer in bytes, and the QT_VERSION and QT_VERSION_STR macros
     expand to a numeric value or a string, respectively, specifying
-    Katie's version number, i.e the version the application is compiled
+    Qt's version number, i.e the version the application is compiled
     against.
 
     \sa <QtAlgorithms>
@@ -516,7 +515,7 @@ QT_BEGIN_NAMESPACE
     \relates <QtGlobal>
 
     Typedef for \c{signed char}. This type is guaranteed to be 8-bit
-    on all platforms supported by Katie.
+    on all platforms supported by Qt.
 */
 
 /*!
@@ -524,14 +523,14 @@ QT_BEGIN_NAMESPACE
     \relates <QtGlobal>
 
     Typedef for \c{unsigned char}. This type is guaranteed to
-    be 8-bit on all platforms supported by Katie.
+    be 8-bit on all platforms supported by Qt.
 */
 
 /*! \typedef qint16
     \relates <QtGlobal>
 
     Typedef for \c{signed short}. This type is guaranteed to be
-    16-bit on all platforms supported by Katie.
+    16-bit on all platforms supported by Qt.
 */
 
 /*!
@@ -539,14 +538,14 @@ QT_BEGIN_NAMESPACE
     \relates <QtGlobal>
 
     Typedef for \c{unsigned short}. This type is guaranteed to
-    be 16-bit on all platforms supported by Katie.
+    be 16-bit on all platforms supported by Qt.
 */
 
 /*! \typedef qint32
     \relates <QtGlobal>
 
     Typedef for \c{signed int}. This type is guaranteed to be 32-bit
-    on all platforms supported by Katie.
+    on all platforms supported by Qt.
 */
 
 /*!
@@ -554,14 +553,14 @@ QT_BEGIN_NAMESPACE
     \relates <QtGlobal>
 
     Typedef for \c{unsigned int}. This type is guaranteed to
-    be 32-bit on all platforms supported by Katie.
+    be 32-bit on all platforms supported by Qt.
 */
 
 /*! \typedef qint64
     \relates <QtGlobal>
 
-    Typedef for \c{long long int}. This type is guaranteed to be
-    64-bit on all platforms supported by Katie.
+    Typedef for \c{long long int} (\c __int64 on Windows). This type
+    is guaranteed to be 64-bit on all platforms supported by Qt.
 
     Literals of this type can be created using the Q_INT64_C() macro:
 
@@ -576,7 +575,7 @@ QT_BEGIN_NAMESPACE
 
     Typedef for \c{unsigned long long int} (\c{unsigned __int64} on
     Windows). This type is guaranteed to be 64-bit on all platforms
-    supported by Katie.
+    supported by Qt.
 
     Literals of this type can be created using the Q_UINT64_C()
     macro:
@@ -594,8 +593,8 @@ QT_BEGIN_NAMESPACE
     etc.).
 
     Typedef for either quint32 or quint64. This type is guaranteed to
-    be the same size as a pointer on all platforms supported by Katie.
-    On a system with 32-bit pointers, quintptr is a typedef for quint32;
+    be the same size as a pointer on all platforms supported by Qt. On
+    a system with 32-bit pointers, quintptr is a typedef for quint32;
     on a system with 64-bit pointers, quintptr is a typedef for
     quint64.
 
@@ -611,7 +610,7 @@ QT_BEGIN_NAMESPACE
     Integral type for representing pointer differences.
 
     Typedef for either qint32 or qint64. This type is guaranteed to be
-    the same size as a pointer on all platforms supported by Katie. On a
+    the same size as a pointer on all platforms supported by Qt. On a
     system with 32-bit pointers, quintptr is a typedef for quint32; on
     a system with 64-bit pointers, quintptr is a typedef for quint64.
 
@@ -763,11 +762,11 @@ QT_BEGIN_NAMESPACE
     \relates <QtGlobal>
 
     This macro expands a numeric value of the form 0xMMNNPP (MM =
-    major, NN = minor, PP = patch) that specifies Katie's version
+    major, NN = minor, PP = patch) that specifies Qt's version
     number. For example, if you compile your application against Qt
     4.1.2, the QT_VERSION macro will expand to 0x040102.
 
-    You can use QT_VERSION to use the latest Katie features where
+    You can use QT_VERSION to use the latest Qt features where
     available.
 
     Example:
@@ -781,7 +780,7 @@ QT_BEGIN_NAMESPACE
     \macro QT_VERSION_STR
     \relates <QtGlobal>
 
-    This macro expands to a string that specifies Katie's version number
+    This macro expands to a string that specifies Qt's version number
     (for example, "4.1.2"). This is the version against which the
     application is compiled.
 
@@ -791,7 +790,7 @@ QT_BEGIN_NAMESPACE
 /*!
     \relates <QtGlobal>
 
-    Returns the version number of Katie at run-time as a string (for
+    Returns the version number of Qt at run-time as a string (for
     example, "4.1.2"). This may be a different version than the
     version the application was compiled against.
 
@@ -1111,18 +1110,22 @@ static QtMsgHandler handler = 0;                // pointer to debug handler
     \fn QtMsgHandler qInstallMsgHandler(QtMsgHandler handler)
     \relates <QtGlobal>
 
-    Installs a Katie message \a handler which has been defined
+    Installs a Qt message \a handler which has been defined
     previously. Returns a pointer to the previous message handler
     (which may be 0).
 
     The message handler is a function that prints out debug messages,
-    warnings, critical and fatal error messages. The Katie library
-    contains hundreds of warning messages that are printed when internal
-    errors (usually invalid function arguments) occur. If you implement
-    your own message handler, you get total control of these messages.
+    warnings, critical and fatal error messages. The Qt library (debug
+    mode) contains hundreds of warning messages that are printed
+    when internal errors (usually invalid function arguments)
+    occur. Qt built in release mode also contains such warnings unless
+    QT_NO_WARNING_OUTPUT and/or QT_NO_DEBUG_OUTPUT have been set during
+    compilation. If you implement your own message handler, you get total
+    control of these messages.
 
     The default message handler prints the message to the standard
-    output. If it is a fatal message, the application aborts immediately.
+    output under X11 or to the debugger under Windows. If it is a
+    fatal message, the application aborts immediately.
 
     Only one message handler can be defined, since this is usually
     done on an application-wide basis to control debug output.
@@ -1176,12 +1179,16 @@ static void qt_message(QtMsgType msgType, const char *format, va_list ap)
     }
 }
 
+#undef qDebug
 /*!
     \relates <QtGlobal>
 
     Calls the message handler with the debug message \a msg. If no
     message handler has been installed, the message is printed to
-    stderr.
+    stderr. Under Windows, the message is sent to the console, if it is a
+    console application; otherwise, it is sent to the debugger. This
+    function does nothing if \c QT_NO_DEBUG_OUTPUT was defined
+    during compilation.
 
     If you pass the function a format string and a list of arguments,
     it works in similar way to the C printf() function. The format
@@ -1199,7 +1206,7 @@ static void qt_message(QtMsgType msgType, const char *format, va_list ap)
     With this syntax, the function returns a QDebug object that is
     configured to use the QtDebugMsg message type. It automatically
     puts a single space between each item, and outputs a newline at
-    the end. It supports many C++ and Katie types.
+    the end. It supports many C++ and Qt types.
 
     To suppress the output at run-time, install your own message handler
     with qInstallMsgHandler().
@@ -1215,13 +1222,16 @@ void qDebug(const char *msg, ...)
     va_end(ap);
 }
 
+#undef qWarning
 /*!
     \relates <QtGlobal>
 
     Calls the message handler with the warning message \a msg. If no
     message handler has been installed, the message is printed to
-    stderr. It exits if the environment variable \c QT_FATAL_WARNINGS
-    is set.
+    stderr. Under Windows, the message is sent to the debugger. This
+    function does nothing if \c QT_NO_WARNING_OUTPUT was defined
+    during compilation; it exits if the environment variable \c
+    QT_FATAL_WARNINGS is defined.
 
     This function takes a format string and a list of arguments,
     similar to the C printf() function. The format should be a Latin-1
@@ -1257,7 +1267,7 @@ void qWarning(const char *msg, ...)
 
     Calls the message handler with the critical message \a msg. If no
     message handler has been installed, the message is printed to
-    stderr.
+    stderr. Under Windows, the message is sent to the debugger.
 
     This function takes a format string and a list of arguments,
     similar to the C printf() function. The format should be a Latin-1
@@ -1293,10 +1303,12 @@ void qCritical(const char *msg, ...)
 
     Calls the message handler with the fatal message \a msg. If no
     message handler has been installed, the message is printed to
-    stderr.
+    stderr. Under Windows, the message is sent to the debugger.
 
     If you are using the \bold{default message handler} this function will
-    abort on Unix systems to create a core dump.
+    abort on Unix systems to create a core dump. On Windows, for debug builds,
+    this function will report a _CRT_ERROR enabling you to connect a debugger
+    to the application.
 
     This function takes a format string and a list of arguments,
     similar to the C printf() function.
@@ -1451,9 +1463,9 @@ int qrand()
     \macro foreach(variable, container)
     \relates <QtGlobal>
 
-    This macro is used to implement Katie's \c foreach loop. The \a
+    This macro is used to implement Qt's \c foreach loop. The \a
     variable parameter is a variable name or variable definition; the
-    \a container parameter is a container whose value type
+    \a container parameter is a Qt container whose value type
     corresponds to the type of the variable. See \l{The foreach
     Keyword} for details.
 
@@ -1497,7 +1509,7 @@ int qrand()
     using these macros is not required if UTF-8 codec is used for
     translations.
 
-    \sa QT_TRANSLATE_NOOP(), {Internationalization with Katie}
+    \sa QT_TRANSLATE_NOOP(), {Internationalization with Qt}
 */
 
 /*!
@@ -1515,7 +1527,7 @@ int qrand()
 
     \snippet doc/src/snippets/code/src_corelib_global_qglobal.cpp 35
 
-    \sa QT_TR_NOOP(), {Internationalization with Katie}
+    \sa QT_TR_NOOP(), {Internationalization with Qt}
 */
 
 /*!
@@ -1585,7 +1597,7 @@ int qrand()
     \relates <QtGlobal>
 
     You can use this macro to specify information about a custom type
-    \a Type. With accurate type information, Katie's \l{Container Classes}
+    \a Type. With accurate type information, Qt's \l{Container Classes}
     {generic containers} can choose appropriate storage methods and
     algorithms.
 
@@ -1621,13 +1633,35 @@ int qrand()
     with meaningful parameter names in their signatures.
 */
 
+Q_GLOBAL_STATIC(QList<qInternalCallback>, qGlobalCallbacks)
+
+void QInternal::registerCallback(qInternalCallback callback)
+{
+    qGlobalCallbacks()->append(callback);
+}
+
+void QInternal::unregisterCallback(qInternalCallback callback)
+{
+    qGlobalCallbacks()->removeAll(callback);
+}
+
+bool QInternal::activateCallbacks(void **parameters)
+{
+    QList<qInternalCallback> *callbacks = qGlobalCallbacks();
+    bool ret = false;
+    for (int i = 0; i < callbacks->size(); i++) {
+        ret |= (callbacks->at(i))(parameters);
+    }
+    return ret;
+}
+
 /*!
     \macro Q_BYTE_ORDER
     \relates <QtGlobal>
 
     This macro can be used to determine the byte order your system
     uses for storing data in memory. i.e., whether your system is
-    little-endian or big-endian. It is set by Katie to one of the macros
+    little-endian or big-endian. It is set by Qt to one of the macros
     Q_LITTLE_ENDIAN or Q_BIG_ENDIAN. You normally won't need to worry
     about endian-ness, but you might, for example if you need to know
     which byte of an integer or UTF-16 character is stored in the
@@ -1694,14 +1728,34 @@ int qrand()
 */
 
 /*!
+    \macro Q_GLOBAL_STATIC_WITH_INITIALIZER(type, name, initializer)
+    \internal
+
+    Declares a global static variable with the specified \a type and \a name.
+
+    Use this macro to instantiate an object using the \a initializer specified
+    in a thread-safe way, creating a global pointer that can be used to refer
+    to it.
+
+    \warning This macro is subject to a race condition that can cause the object
+    to be constructed twice. However, if this occurs, the second instance will
+    be immediately deleted.
+
+    See also
+    \l{http://www.aristeia.com/publications.html}{"C++ and the perils of Double-Checked Locking"}
+    by Scott Meyers and Andrei Alexandrescu.
+*/
+
+/*!
     \macro QT_NAMESPACE
     \internal
 
-    If this macro is defined to \c ns all Katie classes are put in a namespace
+    If this macro is defined to \c ns all Qt classes are put in a namespace
     called \c ns. Also, moc will output code putting metaobjects etc.
     into namespace \c ns.
 
-    \sa QT_BEGIN_NAMESPACE, QT_END_NAMESPACE, QT_PREPEND_NAMESPACE
+    \sa QT_BEGIN_NAMESPACE, QT_END_NAMESPACE,
+    QT_PREPEND_NAMESPACE, QT_BEGIN_INCLUDE_NAMESPACE, QT_END_INCLUDE_NAMESPACE
 */
 
 /*!
@@ -1743,12 +1797,14 @@ int qrand()
     declaration.
 
     If that rule can't be followed because, e.g., \c{#include} lines and
-    declarations are wildly mixed, wrap the \c{#include} lines in
-    \c QT_END_NAMESPACE and \c QT_BEGIN_NAMESPACE.
+    declarations are wildly mixed, place \c QT_BEGIN_NAMESPACE before
+    the first declaration and wrap the \c{#include} lines in
+    \c QT_BEGIN_INCLUDE_NAMESPACE and \c QT_END_INCLUDE_NAMESPACE.
 
-    When using the \c QT_NAMESPACE feature in user code where
+    When using the \c QT_NAMESPACE feature in user code
+    (e.g., when building plugins statically linked to Qt) where
     the user code is not intended to go into the \c QT_NAMESPACE
-    namespace, all forward declarations of Katie classes need to
+    namespace, all forward declarations of Qt classes need to
     be wrapped in \c QT_BEGIN_NAMESPACE and \c QT_END_NAMESPACE.
     After that, a \c QT_USE_NAMESPACE should follow.
     No further changes should be needed.
@@ -1769,6 +1825,30 @@ int qrand()
 
     If a source file ends with a \c{#include} directive that includes a moc file,
     \c QT_END_NAMESPACE should be placed before that \c{#include}.
+
+    \sa QT_NAMESPACE
+*/
+
+/*!
+    \macro QT_BEGIN_INCLUDE_NAMESPACE
+    \internal
+
+    This macro is equivalent to \c QT_END_NAMESPACE.
+    It only serves as syntactic sugar and is intended
+    to be used before #include lines within a
+    \c QT_BEGIN_NAMESPACE ... \c QT_END_NAMESPACE block.
+
+    \sa QT_NAMESPACE
+*/
+
+/*!
+    \macro QT_END_INCLUDE_NAMESPACE
+    \internal
+
+    This macro is equivalent to \c QT_BEGIN_NAMESPACE.
+    It only serves as syntactic sugar and is intended
+    to be used after #include lines within a
+    \c QT_BEGIN_NAMESPACE ... \c QT_END_NAMESPACE block.
 
     \sa QT_NAMESPACE
 */
@@ -1809,13 +1889,13 @@ int qrand()
     \relates <QtGlobal>
 
     This macro can be used to ensure that the application is run
-    against a recent enough version of Katie. This is especially useful
+    against a recent enough version of Qt. This is especially useful
     if your application depends on a specific bug fix introduced in a
     bug-fix release (e.g., 4.0.2).
 
     The \a argc and \a argv parameters are the \c main() function's
     \c argc and \c argv parameters. The \a version parameter is a
-    string literal that specifies which version of Katie the application
+    string literal that specifies which version of Qt the application
     requires (e.g., "4.0.2").
 
     Example:
@@ -1919,14 +1999,12 @@ static const qint16 elementsTblSize = 59;
 */
 bool Qt::mightBeRichText(const QString& text)
 {
-    if (text.isEmpty()) {
+    if (text.isEmpty())
         return false;
-    }
-
     int start = 0;
-    while (start < text.length() && text.at(start).isSpace()) {
+
+    while (start < text.length() && text.at(start).isSpace())
         ++start;
-    }
 
     // skip a leading <?xml ... ?> as for example with xhtml
     if (text.mid(start, 5) == QLatin1String("<?xml")) {
@@ -1940,49 +2018,40 @@ bool Qt::mightBeRichText(const QString& text)
             ++start;
         }
 
-        while (start < text.length() && text.at(start).isSpace()) {
+        while (start < text.length() && text.at(start).isSpace())
             ++start;
-        }
     }
 
-    if (text.mid(start, 5).toLower() == QLatin1String("<!doc")) {
+    if (text.mid(start, 5).toLower() == QLatin1String("<!doc"))
         return true;
-    }
     int open = start;
     while (open < text.length() && text.at(open) != QLatin1Char('<')
-        && text.at(open) != QLatin1Char('\n')) {
-        if (text.at(open) == QLatin1Char('&') &&  text.mid(open+1,3) == QLatin1String("lt;")) {
-            // support desperate attempt of user to see <...>
-            return true;
-        }
+            && text.at(open) != QLatin1Char('\n')) {
+        if (text.at(open) == QLatin1Char('&') &&  text.mid(open+1,3) == QLatin1String("lt;"))
+            return true; // support desperate attempt of user to see <...>
         ++open;
     }
-
-    int tagstart = text.indexOf(QLatin1Char('<'), start);
-    while (tagstart > -1) {
-        const int tagclose = text.indexOf(QLatin1Char('>'), tagstart);
-        if (tagclose > -1) {
+    if (open < text.length() && text.at(open) == QLatin1Char('<')) {
+        const int close = text.indexOf(QLatin1Char('>'), open);
+        if (close > -1) {
             QByteArray tag;
-            for (int i = tagstart+1; i < tagclose; ++i) {
-                if (text[i].isDigit() || text[i].isLetter()) {
+            for (int i = open+1; i < close; ++i) {
+                if (text[i].isDigit() || text[i].isLetter())
                     tag += text[i].toLatin1();
-                } else if (!tag.isEmpty() && text[i].isSpace()) {
+                else if (!tag.isEmpty() && text[i].isSpace())
                     break;
-                } else if (!tag.isEmpty() && text[i] == QLatin1Char('/') && i + 1 == tagclose) {
+                else if (!tag.isEmpty() && text[i] == QLatin1Char('/') && i + 1 == close)
                     break;
-                } else if (!text[i].isSpace() && (!tag.isEmpty() || text[i] != QLatin1Char('!'))) {
-                    // that's not a tag
-                    goto nexttag;
-                }
+                else if (!text[i].isSpace() && (!tag.isEmpty() || text[i] != QLatin1Char('!')))
+                    return false; // that's not a tag
             }
             for (qint16 i = 0; i < elementsTblSize; i++) {
                 if (qstricmp(tag.constData(), elementsTbl[i]) == 0) {
                     return true;
                 }
             }
+            return false;
         }
-    nexttag:
-        tagstart = text.indexOf(QLatin1Char('<'), tagstart + 1);
     }
     return false;
 }

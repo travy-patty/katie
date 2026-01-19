@@ -40,7 +40,7 @@ QT_BEGIN_NAMESPACE
 class QTestData;
 class QTestTablePrivate;
 
-class QTestTable
+class Q_TEST_EXPORT QTestTable
 {
 public:
     QTestTable();
@@ -64,6 +64,7 @@ public:
 
 private:
     Q_DISABLE_COPY(QTestTable)
+
     QTestTablePrivate *d;
 };
 

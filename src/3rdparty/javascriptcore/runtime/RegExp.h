@@ -26,7 +26,7 @@
 #include <wtf/Forward.h>
 #include <wtf/RefCounted.h>
 
-#include <QRegExp>
+#include <pcre.h>
 
 namespace JSC {
 
@@ -42,8 +42,8 @@ namespace JSC {
 
         const UString& pattern() const { return m_pattern; }
 
-        bool isValid() const { return m_constructionError.isEmpty(); }
-        const char* errorMessage() const { return m_constructionError.constData(); }
+        bool isValid() const { return !m_constructionError; }
+        const char* errorMessage() const { return m_constructionError; }
 
         int match(const UString&, int startOffset, Vector<int, 32>* ovector = 0);
         unsigned numSubpatterns() const { return m_numSubpatterns; }
@@ -58,9 +58,10 @@ namespace JSC {
 
         UString m_pattern; // FIXME: Just decompile m_regExp instead of storing this.
         int m_flagBits;
+        const char* m_constructionError;
         unsigned m_numSubpatterns;
-        QRegExp m_regExp;
-        QByteArray m_constructionError;
+
+        pcre* m_regExp;
     };
 
 } // namespace JSC

@@ -25,7 +25,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QEventLoop>
-#include <QElapsedTimer>
+#include <QTime>
 
 class ChipTester : public QGraphicsView
 {
@@ -39,6 +39,7 @@ public:
     ChipTester(QWidget *parent = nullptr);
 
     void setAntialias(bool enabled);
+    void setOpenGL(bool enabled);
     void runBenchmark();
     void setOperation(Operation operation);
 
@@ -54,7 +55,7 @@ private:
     int npaints;
     int timerId;
     QEventLoop eventLoop;
-    QElapsedTimer stopWatch;
+    QTime stopWatch;
     Operation operation;
 };
 

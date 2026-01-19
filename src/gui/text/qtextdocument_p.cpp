@@ -182,6 +182,7 @@ QTextDocumentPrivate::QTextDocumentPrivate()
 
     defaultTextOption.setTabStop(80); // same as in qtextengine.cpp
     defaultTextOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    defaultCursorMoveStyle = Qt::LogicalMoveStyle;
 
     indentWidth = 40;
     documentMargin = 4;
@@ -217,41 +218,46 @@ void QTextDocumentPrivate::clear()
     }
 
     QList<QTextCursorPrivate *>oldCursors = cursors;
-    cursors.clear();
+    QT_TRY{
+        cursors.clear();
 
-    QMap<int, QTextObject *>::Iterator objectIt = objects.begin();
-    while (objectIt != objects.end()) {
-        if (*objectIt != rtFrame) {
-            delete *objectIt;
-            objectIt = objects.erase(objectIt);
-        } else {
-            ++objectIt;
+        QMap<int, QTextObject *>::Iterator objectIt = objects.begin();
+        while (objectIt != objects.end()) {
+            if (*objectIt != rtFrame) {
+                delete *objectIt;
+                objectIt = objects.erase(objectIt);
+            } else {
+                ++objectIt;
+            }
         }
-    }
-    // also clear out the remaining root frame pointer
-    // (we're going to delete the object further down)
-    objects.clear();
+        // also clear out the remaining root frame pointer
+        // (we're going to delete the object further down)
+        objects.clear();
 
-    title.clear();
-    clearUndoRedoStacks(QTextDocument::UndoAndRedoStacks);
-    text = QString();
-    unreachableCharacterCount = 0;
-    modifiedState = 0;
-    modified = false;
-    formats = QTextFormatCollection();
-    int len = fragments.length();
-    fragments.clear();
-    blocks.clear();
-    cachedResources.clear();
-    delete rtFrame;
-    rtFrame = 0;
-    init();
-    cursors = oldCursors;
-    inContentsChange = true;
-    q->contentsChange(0, len, 0);
-    inContentsChange = false;
-    if (lout)
-        lout->documentChanged(0, len, 0);
+        title.clear();
+        clearUndoRedoStacks(QTextDocument::UndoAndRedoStacks);
+        text = QString();
+        unreachableCharacterCount = 0;
+        modifiedState = 0;
+        modified = false;
+        formats = QTextFormatCollection();
+        int len = fragments.length();
+        fragments.clear();
+        blocks.clear();
+        cachedResources.clear();
+        delete rtFrame;
+        rtFrame = 0;
+        init();
+        cursors = oldCursors;
+        inContentsChange = true;
+        q->contentsChange(0, len, 0);
+        inContentsChange = false;
+        if (lout)
+            lout->documentChanged(0, len, 0);
+    } QT_CATCH(...) {
+        cursors = oldCursors; // at least recover the cursors
+        QT_RETHROW;
+    }
 }
 
 QTextDocumentPrivate::~QTextDocumentPrivate()
@@ -1351,6 +1357,20 @@ int QTextDocumentPrivate::previousCursorPosition(int position, QTextLayout::Curs
         return start - 1;
 
     return it.layout()->previousCursorPosition(position-start, mode) + start;
+}
+
+int QTextDocumentPrivate::leftCursorPosition(int position) const
+{
+    QTextBlock it = blocksFind(position);
+    int start = it.position();
+    return it.layout()->leftCursorPosition(position-start) + start;
+}
+
+int QTextDocumentPrivate::rightCursorPosition(int position) const
+{
+    QTextBlock it = blocksFind(position);
+    int start = it.position();
+    return it.layout()->rightCursorPosition(position-start) + start;
 }
 
 void QTextDocumentPrivate::changeObjectFormat(QTextObject *obj, int format)

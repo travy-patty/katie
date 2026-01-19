@@ -87,7 +87,7 @@ void tst_QMutex::tryLock()
             testsTurn.release();
 
             threadsTurn.acquire();
-            QElapsedTimer timer;
+            QTime timer;
             timer.start();
             QVERIFY(!normalMutex.tryLock(1000));
             QVERIFY(timer.elapsed() >= 1000);
@@ -227,7 +227,7 @@ enum { one_minute = 60 * 1000, threadCount = 10 };
 
 class StressTestThread : public QThread
 {
-    QElapsedTimer t;
+    QTime t;
 public:
     static QAtomicInt lockCount;
     static QAtomicInt sentinel;
@@ -279,7 +279,7 @@ public:
 
     void run()
     {
-        QElapsedTimer t;
+        QTime t;
         t.start();
         do {
             if (mutex.tryLock())

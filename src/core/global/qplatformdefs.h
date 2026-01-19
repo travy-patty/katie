@@ -25,8 +25,10 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <dirent.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 
 // Definitions
@@ -43,6 +45,7 @@
 #define QT_BUFFSIZE             BUFSIZ
 
 // Types
+#define QT_FPOS_T               fpos_t
 #define QT_OFF_T                off_t
 #define QT_SOCKLEN_T            socklen_t
 
@@ -69,6 +72,8 @@
 #define QT_READDIR              ::readdir
 #define QT_READDIR_R            ::readdir_r
 #define QT_ACCESS               ::access
+#define QT_GETCWD               ::getcwd
+#define QT_CHDIR                ::chdir
 #define QT_MKDIR                ::mkdir
 #define QT_RMDIR                ::rmdir
 #define QT_CLOSE                ::close
@@ -77,5 +82,7 @@
 #define QT_OPENDIR              ::opendir
 #define QT_CLOSEDIR             ::closedir
 #define QT_FILENO               fileno // defined as macro on OpenBSD
+#define QT_SOCKET_CONNECT       ::connect
+#define QT_SOCKET_BIND          ::bind
 
 #endif // QPLATFORMDEFS_H

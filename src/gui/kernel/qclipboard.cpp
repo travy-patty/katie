@@ -27,6 +27,7 @@
 #include "qapplication_p.h"
 #include "qpixmap.h"
 #include "qvariant.h"
+#include "qbuffer.h"
 #include "qimage.h"
 #include "qtextcodec.h"
 #include "qthread.h"
@@ -359,7 +360,7 @@ void QClipboard::setImage(const QImage &image, Mode mode)
     QClipboard::Selection, the pixmap is retrieved from the global
     mouse selection.
 
-    \sa setPixmap() image() mimeData() QPixmap::fromImage()
+    \sa setPixmap() image() mimeData() QPixmap::convertFromImage()
 */
 QPixmap QClipboard::pixmap(Mode mode) const
 {
@@ -503,9 +504,9 @@ void QClipboard::emitChanged(Mode mode)
     emit changed(mode);
 }
 
-QT_END_NAMESPACE
-
 #endif // QT_NO_CLIPBOARD
+
+QT_END_NAMESPACE
 
 #include "moc_qclipboard.h"
 

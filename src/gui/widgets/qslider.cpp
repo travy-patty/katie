@@ -21,6 +21,9 @@
 
 #include "qslider.h"
 #ifndef QT_NO_SLIDER
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
 #include "qapplication.h"
 #include "qevent.h"
 #include "qpainter.h"
@@ -40,7 +43,7 @@ public:
     QSlider::TickPosition tickPosition;
     int clickOffset;
     void init();
-    void resetLayoutItemMargins();
+	void resetLayoutItemMargins();
     int pixelPosToRangeValue(int pos) const;
     inline int pick(const QPoint &pt) const;
 
@@ -63,7 +66,7 @@ void QSliderPrivate::init()
         sp.transpose();
     q->setSizePolicy(sp);
     q->setAttribute(Qt::WA_WState_OwnSizePolicy, false);
-    resetLayoutItemMargins();
+	resetLayoutItemMargins();
 }
 
 void QSliderPrivate::resetLayoutItemMargins()

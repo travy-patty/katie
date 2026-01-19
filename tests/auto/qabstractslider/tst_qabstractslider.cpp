@@ -75,7 +75,7 @@ private slots:
     void setRepeatAction();
 
 private:
-    void waitUntilTimeElapsed(const QElapsedTimer& t, int ms);
+    void waitUntilTimeElapsed(const QTime& t, int ms);
 
     QWidget *topLevel;
     Slider *slider;
@@ -802,7 +802,6 @@ void tst_QAbstractSlider::wheelEvent_data()
 
 void tst_QAbstractSlider::wheelEvent()
 {
-#ifndef QT_NO_WHEELEVENT
     QFETCH(int,initialSliderPosition);
     QFETCH(int,minimum);
     QFETCH(int,maximum);
@@ -849,9 +848,6 @@ void tst_QAbstractSlider::wheelEvent()
     QCOMPARE(spy2.count(), expectedSignalCount);
     if (expectedSignalCount)
         QVERIFY(actionTriggeredTimeStamp < valueChangedTimeStamp);
-#else // QT_NO_WHEELEVENT
-    QSKIP("Katie compiled without wheel event support (QT_NO_WHEELEVENT)", SkipAll);
-#endif // QT_NO_WHEELEVENT
 }
 
 void tst_QAbstractSlider::sliderPressedReleased_data()
@@ -1161,11 +1157,11 @@ void tst_QAbstractSlider::setValue()
         QVERIFY(sliderMovedTimeStamp < valueChangedTimeStamp);
 }
 
-void tst_QAbstractSlider::waitUntilTimeElapsed(const QElapsedTimer& t, int ms)
+void tst_QAbstractSlider::waitUntilTimeElapsed(const QTime& t, int ms)
 {
     const int eps = 80;
     while (t.elapsed() < ms + eps)
-        QTest::qWait(qMax(ms - t.elapsed() + eps, qint64(25)));
+        QTest::qWait(qMax(ms - t.elapsed() + eps, 25));
 }
 
 void tst_QAbstractSlider::setRepeatAction()
@@ -1181,7 +1177,7 @@ void tst_QAbstractSlider::setRepeatAction()
     QCOMPARE(spy.count(), 0);
     QCOMPARE(slider->value(), 55);
 
-    QElapsedTimer t;
+    QTime t;
     t.start();
     QTest::qWait(300);
     QCOMPARE(spy.count(), 0);

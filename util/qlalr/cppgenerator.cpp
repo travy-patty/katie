@@ -205,7 +205,7 @@ void CppGenerator::operator () ()
              << endl;
     }
 
-  QBitArray used_rules (grammar.rules.size ());
+  QBitArray used_rules (grammar.rules.count ());
 
   int q = 0;
   for (StatePointer state = aut.states.begin (); state != aut.states.end (); ++state, ++q)

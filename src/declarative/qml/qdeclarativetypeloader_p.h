@@ -34,6 +34,7 @@
 //
 
 #include <QtCore/qobject.h>
+#include <QtNetwork/qnetworkreply.h>
 #include <QtDeclarative/qdeclarativeerror.h>
 #include <QtDeclarative/qdeclarativeengine.h>
 #include "qdeclarativescriptparser_p.h"
@@ -96,7 +97,7 @@ protected:
     virtual void dataReceived(const QByteArray &) = 0;
 
     virtual void done();
-    virtual void networkError();
+    virtual void networkError(QNetworkReply::NetworkError);
 
     virtual void dependencyError(QDeclarativeDataBlob *);
     virtual void dependencyComplete(QDeclarativeDataBlob *);
@@ -126,8 +127,9 @@ private:
 
     // Manager that is currently fetching data for me
     QDeclarativeDataLoader *m_manager;
-    bool m_inCallback;
-    bool m_isDone;
+    int m_redirectCount:30;
+    bool m_inCallback:1;
+    bool m_isDone:1;
 
     QList<QDeclarativeError> m_errors;
 };
@@ -144,10 +146,18 @@ public:
 
     QDeclarativeEngine *engine() const;
 
+private slots:
+    void networkReplyFinished();
+    void networkReplyProgress(qint64,qint64);
+
 private:
     void setData(QDeclarativeDataBlob *, const QByteArray &);
+    void networkReplyFinished(QNetworkReply *);
+    void networkReplyProgress(QNetworkReply *, qint64, qint64);
 
     QDeclarativeEngine *m_engine;
+    typedef QHash<QNetworkReply *, QDeclarativeDataBlob *> NetworkReplies;
+    NetworkReplies m_networkReplies;
 };
 
 

@@ -38,6 +38,7 @@
 
 QT_BEGIN_NAMESPACE
 
+typedef qreal qfixed;
 struct qfixed2d
 {
     qreal x;
@@ -46,6 +47,8 @@ struct qfixed2d
     bool operator==(const qfixed2d &other) const { return qFuzzyCompare(x, other.x)
                                                        && qFuzzyCompare(y, other.y); }
 };
+
+#define QT_PATH_KAPPA 0.5522847498
 
 QPointF qt_curves_for_arc(const QRectF &rect, qreal startAngle, qreal sweepLength,
                           QPointF *controlPoints, int *point_count);

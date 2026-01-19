@@ -21,8 +21,11 @@
 
 
 #include <QtTest/QtTest>
+
+
 #include <qfont.h>
 #include <qfontdatabase.h>
+#include <qfontinfo.h>
 #include <qstringlist.h>
 #include <qapplication.h>
 #include <qwidget.h>
@@ -51,10 +54,10 @@ private slots:
     void resolve();
     void resetFont();
     void isCopyOf();
-    void lastResortFamily();
-
-    void toString_fromString_data();
-    void toString_fromString();
+    void italicOblique();
+    void insertAndRemoveSubstitutions();
+    void serializeSpacing();
+    void lastResortFont();
 };
 
 // Testing get/set functions
@@ -70,12 +73,26 @@ void tst_QFont::getSetCheck()
     obj1.setStyle(QFont::Style(QFont::StyleOblique));
     QCOMPARE(QFont::Style(QFont::StyleOblique), obj1.style());
 
-    // HintingPreference QFont::hintingPreference()
-    // void QFont::setHintingPreference(HintingPreference)
-    obj1.setHintingPreference(QFont::HintingPreference(QFont::PreferDefaultHinting));
-    QCOMPARE(QFont::HintingPreference(QFont::PreferDefaultHinting), obj1.hintingPreference());
-    obj1.setHintingPreference(QFont::HintingPreference(QFont::PreferNoHinting));
-    QCOMPARE(QFont::HintingPreference(QFont::PreferNoHinting), obj1.hintingPreference());
+    // StyleStrategy QFont::styleStrategy()
+    // void QFont::setStyleStrategy(StyleStrategy)
+    obj1.setStyleStrategy(QFont::StyleStrategy(QFont::PreferDefault));
+    QCOMPARE(QFont::StyleStrategy(QFont::PreferDefault), obj1.styleStrategy());
+    obj1.setStyleStrategy(QFont::StyleStrategy(QFont::PreferBitmap));
+    QCOMPARE(QFont::StyleStrategy(QFont::PreferBitmap), obj1.styleStrategy());
+    obj1.setStyleStrategy(QFont::StyleStrategy(QFont::PreferDevice));
+    QCOMPARE(QFont::StyleStrategy(QFont::PreferDevice), obj1.styleStrategy());
+    obj1.setStyleStrategy(QFont::StyleStrategy(QFont::PreferOutline));
+    QCOMPARE(QFont::StyleStrategy(QFont::PreferOutline), obj1.styleStrategy());
+    obj1.setStyleStrategy(QFont::StyleStrategy(QFont::ForceOutline));
+    QCOMPARE(QFont::StyleStrategy(QFont::ForceOutline), obj1.styleStrategy());
+    obj1.setStyleStrategy(QFont::StyleStrategy(QFont::PreferMatch));
+    QCOMPARE(QFont::StyleStrategy(QFont::PreferMatch), obj1.styleStrategy());
+    obj1.setStyleStrategy(QFont::StyleStrategy(QFont::PreferQuality));
+    QCOMPARE(QFont::StyleStrategy(QFont::PreferQuality), obj1.styleStrategy());
+    obj1.setStyleStrategy(QFont::StyleStrategy(QFont::PreferAntialias));
+    QCOMPARE(QFont::StyleStrategy(QFont::PreferAntialias), obj1.styleStrategy());
+    obj1.setStyleStrategy(QFont::StyleStrategy(QFont::NoAntialias));
+    QCOMPARE(QFont::StyleStrategy(QFont::NoAntialias), obj1.styleStrategy());
 }
 
 tst_QFont::tst_QFont()
@@ -89,14 +106,14 @@ tst_QFont::~tst_QFont()
 
 void tst_QFont::init()
 {
-    // TODO: Add initialization code here.
-    // This will be executed immediately before each test is run.
+// TODO: Add initialization code here.
+// This will be executed immediately before each test is run.
 }
 
 void tst_QFont::cleanup()
 {
-    // TODO: Add cleanup code here.
-    // This will be executed immediately after each test is run.
+// TODO: Add cleanup code here.
+// This will be executed immediately after each test is run.
 }
 
 void tst_QFont::exactMatch()
@@ -105,10 +122,46 @@ void tst_QFont::exactMatch()
     QFont font( "BogusFont", 33 );
     QVERIFY(!font.exactMatch() );
 
+#ifdef Q_WS_X11
     QFontDatabase fdb;
-    QVERIFY(!QFont("freesans").exactMatch());
-    QVERIFY(!QFont("freeserif").exactMatch());
-    QVERIFY(!QFont("freemono").exactMatch());
+    QVERIFY(!QFont("sans-serif").exactMatch());
+    QVERIFY(!QFont("sans").exactMatch());
+    QVERIFY(!QFont("serif").exactMatch());
+    QVERIFY(!QFont("monospace").exactMatch());
+#endif
+}
+
+void tst_QFont::italicOblique()
+{
+    QFontDatabase fdb;
+
+    QStringList families = fdb.families();
+    if (families.isEmpty())
+        return;
+
+    QStringList::ConstIterator f_it, f_end = families.end();
+    for (f_it = families.begin(); f_it != f_end; ++f_it) {
+
+        QString family = *f_it;
+        QStringList styles = fdb.styles(family);
+        QVERIFY(!styles.isEmpty());
+        QStringList::ConstIterator s_it, s_end = styles.end();
+        for (s_it = styles.begin(); s_it != s_end; ++s_it) {
+            QString style = *s_it;
+
+            if (fdb.isSmoothlyScalable(family, style)) {
+                if (style.contains("Oblique")) {
+                    style.replace("Oblique", "Italic");
+                } else if (style.contains("Italic")) {
+                    style.replace("Italic", "Oblique");
+                } else {
+                    continue;
+                }
+                QFont f = fdb.font(family, style, 12);
+                QVERIFY(f.italic());
+            }
+        }
+    }
 }
 
 void tst_QFont::compare()
@@ -180,6 +233,13 @@ void tst_QFont::compare()
         QVERIFY( font != font2 );
         QCOMPARE(font < font2,!(font2 < font));
         font.setOverline(false);
+        QVERIFY( font == font2 );
+        QVERIFY(!(font < font2));
+
+        font.setCapitalization(QFont::SmallCaps);
+        QVERIFY( font != font2 );
+        QCOMPARE(font < font2,!(font2 < font));
+        font.setCapitalization(QFont::MixedCase);
         QVERIFY( font == font2 );
         QVERIFY(!(font < font2));
     }
@@ -274,34 +334,75 @@ void tst_QFont::isCopyOf()
     QVERIFY(!font3.isCopyOf(font));
 }
 
-void tst_QFont::lastResortFamily()
+void tst_QFont::insertAndRemoveSubstitutions()
 {
-    QVERIFY(!QFont::lastResortFamily().isEmpty());
+    QFont::removeSubstitution("BogusFontFamily");
+    // make sure it is empty before we start
+    QVERIFY(QFont::substitutes("BogusFontFamily").isEmpty());
+    QVERIFY(QFont::substitutes("bogusfontfamily").isEmpty());
+
+    // inserting Foo
+    QFont::insertSubstitution("BogusFontFamily", "Foo");
+    QCOMPARE(QFont::substitutes("BogusFontFamily").count(), 1);
+    QCOMPARE(QFont::substitutes("bogusfontfamily").count(), 1);
+
+    // inserting Bar and Baz
+    QStringList moreFonts;
+    moreFonts << "Bar" << "Baz";
+    QFont::insertSubstitutions("BogusFontFamily", moreFonts);
+    QCOMPARE(QFont::substitutes("BogusFontFamily").count(), 3);
+    QCOMPARE(QFont::substitutes("bogusfontfamily").count(), 3);
+
+    QFont::removeSubstitution("BogusFontFamily");
+    // make sure it is empty again
+    QVERIFY(QFont::substitutes("BogusFontFamily").isEmpty());
+    QVERIFY(QFont::substitutes("bogusfontfamily").isEmpty());
 }
 
-void tst_QFont::toString_fromString_data()
-{
-    QTest::addColumn<QString>("fontstring");
-    QTest::addColumn<QString>("expectedstring");
 
-    // actual font families
-    QTest::newRow("FreeSans") << QString("FreeSans,10,-1,50,1,0,0,0") << QString("FreeSans,10,-1,50,1,0,0,0");
-    QTest::newRow("FreeSans [GNU ]") << QString("FreeSans [GNU ],5,-1,99,0,1,0,0") << QString("FreeSans [GNU ],5,-1,99,0,1,0,0");
-    QTest::newRow("FreeMono") << QString("FreeMono,5,-1,999,0,0,1,0") << QString("FreeMono,5,-1,99,0,0,1,0");
-    QTest::newRow("FreeSans") << QString("FreeSans,10,-1,50,2,3,4,5") << QString("FreeSans,10,-1,50,2,1,1,1");
-    // aliases
-    QTest::newRow("Sans Serif") << QString("Sans Serif,123,-1,50,0,0,0,0") << QString("Sans Serif,123,-1,50,0,0,0,0");
-    QTest::newRow("Monospace") << QString("Monospace,10,666,50,0,0,0,0") << QString("Monospace,-1,666,50,0,0,0,0");
+static QFont copyFont(const QFont &font1) // copy using a QDataStream
+{
+    QBuffer buffer;
+    buffer.open(QIODevice::WriteOnly);
+    QDataStream ds(&buffer);
+    ds << font1;
+    buffer.close();
+
+    buffer.open(QIODevice::ReadOnly);
+    QFont font2;
+    ds >> font2;
+    return font2;
 }
 
-void tst_QFont::toString_fromString()
+void tst_QFont::serializeSpacing()
 {
-    QFETCH(QString, fontstring);
-    QFETCH(QString, expectedstring);
-
     QFont font;
-    font.fromString(fontstring);
-    QCOMPARE(expectedstring, font.toString());
+    QCOMPARE(font.letterSpacing(), 0.);
+    QCOMPARE(font.wordSpacing(), 0.);
+
+    font.setLetterSpacing(QFont::AbsoluteSpacing, 105);
+    QCOMPARE(font.letterSpacing(), 105.);
+    QCOMPARE(font.letterSpacingType(), QFont::AbsoluteSpacing);
+    QCOMPARE(font.wordSpacing(), 0.);
+    QFont font2 = copyFont(font);
+    QCOMPARE(font2.letterSpacing(), 105.);
+    QCOMPARE(font2.letterSpacingType(), QFont::AbsoluteSpacing);
+    QCOMPARE(font2.wordSpacing(), 0.);
+
+    font.setWordSpacing(50.0);
+    QCOMPARE(font.letterSpacing(), 105.);
+    QCOMPARE(font.wordSpacing(), 50.);
+
+    QFont font3 = copyFont(font);
+    QCOMPARE(font3.letterSpacing(), 105.);
+    QCOMPARE(font3.letterSpacingType(), QFont::AbsoluteSpacing);
+    QCOMPARE(font3.wordSpacing(), 50.);
+}
+
+void tst_QFont::lastResortFont()
+{
+    QFont font;
+    QVERIFY(!font.lastResortFont().isEmpty());
 }
 
 QTEST_MAIN(tst_QFont)

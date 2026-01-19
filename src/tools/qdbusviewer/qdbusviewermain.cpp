@@ -32,6 +32,8 @@ QT_USE_NAMESPACE
 
 int main(int argc, char *argv[])
 {
+    Q_INIT_RESOURCE(qdbusviewer);
+
     QApplication app(argc, argv);
 
 #ifndef QT_NO_TRANSLATION
@@ -45,7 +47,7 @@ int main(int argc, char *argv[])
 #endif
 
     QMainWindow mw;
-    app.setWindowIcon(QIcon(QDBusViewerPixmap()));
+    app.setWindowIcon(QIcon(QLatin1String(":/trolltech/qdbusviewer/qdbusviewer.png")));
     mw.setWindowTitle(app.translate("QtDBusViewer", "Katie D-Bus Viewer"));
 
 
@@ -73,3 +75,5 @@ int main(int argc, char *argv[])
 
     return app.exec();
 }
+
+#include "qrc_qdbusviewer.cpp"

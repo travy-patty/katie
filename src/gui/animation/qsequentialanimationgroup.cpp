@@ -267,14 +267,17 @@ QPauseAnimation *QSequentialAnimationGroup::addPause(int msecs)
 QPauseAnimation *QSequentialAnimationGroup::insertPause(int index, int msecs)
 {
     Q_D(const QSequentialAnimationGroup);
-    if (Q_UNLIKELY(index < 0 || index > d->animations.size())) {
+
+    if (index < 0 || index > d->animations.size()) {
         qWarning("QSequentialAnimationGroup::insertPause: index is out of bounds");
         return 0;
     }
+
     QPauseAnimation *pause = new QPauseAnimation(msecs);
     insertAnimation(index, pause);
     return pause;
 }
+
 
 /*!
     \property QSequentialAnimationGroup::currentAnimation
@@ -495,9 +498,9 @@ void QSequentialAnimationGroupPrivate::animationInsertedAt(int index)
     //we update currentAnimationIndex in case it has changed (the animation pointer is still valid)
     currentAnimationIndex = animations.indexOf(currentAnimation);
 
-    if (Q_UNLIKELY(index < currentAnimationIndex || currentLoop != 0)) {
+    if (index < currentAnimationIndex || currentLoop != 0) {
         qWarning("QSequentialGroup::insertAnimation only supports to add animations after the current one.");
-        // we're not affected because it is added after the current one
+        return; //we're not affected because it is added after the current one
     }
 }
 

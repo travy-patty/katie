@@ -223,14 +223,14 @@ public:
     SleepType sleepType;
     int interval;
 
-    qint64 elapsed; // result, in *MILLISECONDS*
+    int elapsed; // result, in *MILLISECONDS*
 
     void run()
     {
         QMutexLocker locker(&mutex);
 
         elapsed = 0;
-        QElapsedTimer time;
+        QTime time;
         time.start();
         switch (sleepType) {
         case Second:
@@ -938,7 +938,7 @@ void tst_QThread::adoptThreadExitWithActiveTimer()
 
 void tst_QThread::stressTest()
 {
-    QElapsedTimer t;
+    QTime t;
     t.start();
     while (t.elapsed() < one_minute) {
         Current_Thread t;

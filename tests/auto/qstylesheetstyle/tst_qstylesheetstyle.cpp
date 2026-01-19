@@ -27,10 +27,8 @@
 
 #include <qstylesheetstyle_p.h>
 
-// TESTED_CLASS=
-// TESTED_FILES=
-
-#ifndef QT_NO_STYLE_STYLESHEET
+//TESTED_CLASS=
+//TESTED_FILES=
 
 class tst_QStyleSheetStyle : public QObject
 {
@@ -706,7 +704,7 @@ void tst_QStyleSheetStyle::focusColors()
     int styleCount = 2;
     QStyle *styles[2];
 
-    styles[0] = new QCleanlooksStyle;
+    styles[0] = new QPlastiqueStyle;
     styles[1] = new QWindowsStyle;
 
     for (int i = 0; i < styleCount; ++i) {
@@ -1239,9 +1237,7 @@ void tst_QStyleSheetStyle::emptyStyleSheet()
     layout.addWidget(new QLineEdit(&w));
     layout.addWidget(new QSpinBox(&w));
     layout.addWidget(new QComboBox(&w));
-#ifndef QT_NO_DATETIMEEDIT
     layout.addWidget(new QDateEdit(&w));
-#endif
     layout.addWidget(new QGroupBox("some text", &w));
 
     w.show();
@@ -1558,7 +1554,7 @@ class ChangeEventWidget : public QWidget
             if (!recurse) {
                 recurse = true;
 
-                QStyle *style = new QWindowsStyle();
+                QStyle *style = new QMotifStyle;
                 style->setParent(this);
                 setStyle(style);
                 recurse = false;
@@ -1629,9 +1625,3 @@ void tst_QStyleSheetStyle::QTBUG15910_crashNullWidget()
 QTEST_MAIN(tst_QStyleSheetStyle)
 
 #include "moc_tst_qstylesheetstyle.cpp"
-
-#else // QT_NO_STYLE_STYLESHEET
-
-QTEST_NOOP_MAIN
-
-#endif // QT_NO_STYLE_STYLESHEET

@@ -26,16 +26,16 @@
 #include <QtCore/QString>
 #include <QtGui/QIcon>
 
+
 QT_BEGIN_NAMESPACE
 
 class QWidget;
+class QDesignerFormEditorInterface;
 
-class Q_UITOOLS_EXPORT QCustomWidget : public QObject
+class QDesignerCustomWidgetInterface
 {
-    Q_OBJECT
 public:
-    explicit QCustomWidget(QObject *parent = nullptr);
-    virtual ~QCustomWidget();
+    virtual ~QDesignerCustomWidgetInterface() {}
 
     virtual QString name() const = 0;
     virtual QString group() const = 0;
@@ -49,7 +49,7 @@ public:
     virtual QWidget *createWidget(QWidget *parent) = 0;
 
     virtual bool isInitialized() const { return false; }
-    virtual void initialize() { }
+    virtual void initialize(QDesignerFormEditorInterface *core) { Q_UNUSED(core); }
 
     virtual QString domXml() const
     {
@@ -60,16 +60,24 @@ public:
     virtual QString codeTemplate() const { return QString(); }
 };
 
-class Q_UITOOLS_EXPORT QCustomWidgetPlugin : public QObject
-{
-    Q_OBJECT
-public:
-    explicit QCustomWidgetPlugin(QObject *parent = nullptr);
-    virtual ~QCustomWidgetPlugin();
+QT_END_NAMESPACE
 
-    virtual QList<QCustomWidget*> customWidgets() const = 0;
+Q_DECLARE_INTERFACE(QDesignerCustomWidgetInterface, "Katie.Designer.CustomWidget")
+
+QT_BEGIN_NAMESPACE
+
+class QDesignerCustomWidgetCollectionInterface
+{
+public:
+    virtual ~QDesignerCustomWidgetCollectionInterface() {}
+
+    virtual QList<QDesignerCustomWidgetInterface*> customWidgets() const = 0;
 };
 
 QT_END_NAMESPACE
+
+Q_DECLARE_INTERFACE(QDesignerCustomWidgetCollectionInterface,
+    "Katie.Designer.CustomWidgetCollection")
+
 
 #endif // CUSTOMWIDGET_H

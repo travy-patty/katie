@@ -28,6 +28,7 @@
 #include "qtextlist.h"
 #include "qdebug.h"
 #include "qregexp.h"
+#include "qvarlengtharray.h"
 #include "qtextcodec.h"
 #include "qthread.h"
 #include "qtexthtmlparser_p.h"
@@ -42,7 +43,7 @@
 #include "qfont_p.h"
 #include "qtextedit_p.h"
 #include "qdataurl_p.h"
-#include "qstdcontainers_p.h"
+
 #include "qtextdocument_p.h"
 #include "qprinter_p.h"
 #include "qabstracttextdocumentlayout_p.h"
@@ -416,6 +417,29 @@ void QTextDocument::setDefaultTextOption(const QTextOption &option)
 }
 
 /*!
+    \since 4.8
+
+    The default cursor movement style is used by all QTextCursor objects
+    created from the document. The default is Qt::LogicalMoveStyle.
+*/
+Qt::CursorMoveStyle QTextDocument::defaultCursorMoveStyle() const
+{
+    Q_D(const QTextDocument);
+    return d->defaultCursorMoveStyle;
+}
+
+/*!
+    \since 4.8
+
+    Sets the default cursor movement style to the given \a style.
+*/
+void QTextDocument::setDefaultCursorMoveStyle(Qt::CursorMoveStyle style)
+{
+    Q_D(QTextDocument);
+    d->defaultCursorMoveStyle = style;
+}
+
+/*!
     \fn void QTextDocument::markContentsDirty(int position, int length)
 
     Marks the contents specified by the given \a position and \a length
@@ -432,6 +456,38 @@ void QTextDocument::markContentsDirty(int from, int length)
             d->docChangeFrom = -1;
         }
     }
+}
+
+/*!
+    \property QTextDocument::useDesignMetrics
+    \since 4.1
+    \brief whether the document uses design metrics of fonts to improve the accuracy of text layout
+
+    If this property is set to true, the layout will use design metrics.
+    Otherwise, the metrics of the paint device as set on
+    QAbstractTextDocumentLayout::setPaintDevice() will be used.
+
+    Using design metrics makes a layout have a width that is no longer dependent on hinting
+    and pixel-rounding. This means that WYSIWYG text layout becomes possible because the width
+    scales much more linearly based on paintdevice metrics than it would otherwise.
+
+    By default, this property is false.
+*/
+
+void QTextDocument::setUseDesignMetrics(bool b)
+{
+    Q_D(QTextDocument);
+    if (b == d->defaultTextOption.useDesignMetrics())
+        return;
+    d->defaultTextOption.setUseDesignMetrics(b);
+    if (d->lout)
+        d->lout->documentChanged(0, 0, d->length());
+}
+
+bool QTextDocument::useDesignMetrics() const
+{
+    Q_D(const QTextDocument);
+    return d->defaultTextOption.useDesignMetrics();
 }
 
 /*!
@@ -1795,9 +1851,16 @@ QVariant QTextDocument::loadResource(int type, const QUrl &name)
 
     if (!r.isNull()) {
         if (type == ImageResource && r.type() == QVariant::ByteArray) {
-            QImage image = QImage::fromData(r.toByteArray());
-            if (!image.isNull()) {
-                r = image;
+            if (qApp->thread() != QThread::currentThread()) {
+                // must use images in non-GUI threads
+                QImage image = QImage::fromData(r.toByteArray());
+                if (!image.isNull())
+                    r = image;
+            } else {
+                QPixmap pm;
+                pm.loadFromData(r.toByteArray());
+                if (!pm.isNull())
+                    r = pm;
             }
         }
         d->cachedResources.insert(name, r);
@@ -2045,6 +2108,24 @@ bool QTextHtmlExporter::emitCharFormatStyle(const QTextCharFormat &format)
             html += QLatin1String("bottom");
 
         html += QLatin1Char(';');
+        attributesEmitted = true;
+    }
+
+    if (format.fontCapitalization() != QFont::MixedCase) {
+        const QFont::Capitalization caps = format.fontCapitalization();
+        if (caps == QFont::AllUppercase)
+            html += QLatin1String(" text-transform:uppercase;");
+        else if (caps == QFont::AllLowercase)
+            html += QLatin1String(" text-transform:lowercase;");
+        else if (caps == QFont::SmallCaps)
+            html += QLatin1String(" font-variant:small-caps;");
+        attributesEmitted = true;
+    }
+
+    if (format.fontWordSpacing() != 0.0) {
+        html += QLatin1String(" word-spacing:");
+        html += QString::number(format.fontWordSpacing());
+        html += QLatin1String("px;");
         attributesEmitted = true;
     }
 
@@ -2585,7 +2666,7 @@ void QTextHtmlExporter::emitTable(const QTextTable *table)
     }
     Q_ASSERT(columnWidths.count() == columns);
 
-    QStdVector<bool> widthEmittedForColumn(columns);
+    QVarLengthArray<bool> widthEmittedForColumn(columns);
     for (int i = 0; i < columns; ++i)
         widthEmittedForColumn[i] = false;
 

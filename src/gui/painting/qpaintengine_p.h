@@ -96,6 +96,8 @@ public:
     }
 
     virtual void systemStateChanged() { }
+
+    void drawBoxTextItem(const QPointF &p, const QTextItemInt &ti);
 };
 
 QT_END_NAMESPACE

@@ -31,7 +31,6 @@
 #include <qdir.h>
 #include <qfileinfo.h>
 #include <qplatformdefs.h>
-#include <qtextstream.h>
 #include <qdebug.h>
 #include <qfileinfo_p.h>
 #include "../../shared/filesystem.h"
@@ -121,6 +120,9 @@ private slots:
     void isHidden_data();
     void isHidden();
 
+    void isLocalFs_data();
+    void isLocalFs();
+
     void refresh();
 
     void isWritable();
@@ -177,7 +179,6 @@ static QFileInfoPrivate* getPrivate(QFileInfo &info)
 
 void tst_QFileInfo::copy()
 {
-#ifndef QT_NO_TEMPORARYFILE
     QTemporaryFile t;
     t.open();
     QFileInfo info(t.fileName());
@@ -207,9 +208,6 @@ void tst_QFileInfo::copy()
     QVERIFY(privateInfo != privateInfo3);
     QVERIFY(privateInfo2 != privateInfo3);
     QCOMPARE(privateInfo, privateInfo2);
-#else // QT_NO_TEMPORARYFILE
-    QSKIP("Katie compiled without temporary file support (QT_NO_TEMPORARYFILE)", SkipAll);
-#endif // QT_NO_TEMPORARYFILE
 }
 
 void tst_QFileInfo::isFile_data()
@@ -219,6 +217,9 @@ void tst_QFileInfo::isFile_data()
 
     QTest::newRow("data0") << QDir::currentPath() << false;
     QTest::newRow("data1") << SRCDIR "tst_qfileinfo.cpp" << true;
+    QTest::newRow("data2") << ":/tst_qfileinfo/resources/" << false;
+    QTest::newRow("data3") << ":/tst_qfileinfo/resources/file1" << true;
+    QTest::newRow("data4") << ":/tst_qfileinfo/resources/afilethatshouldnotexist" << false;
 }
 
 void tst_QFileInfo::isFile()
@@ -249,6 +250,9 @@ void tst_QFileInfo::isDir_data()
 
     QTest::newRow("data0") << QDir::currentPath() << true;
     QTest::newRow("data1") << SRCDIR "tst_qfileinfo.cpp" << false;
+    QTest::newRow("data2") << ":/tst_qfileinfo/resources/" << true;
+    QTest::newRow("data3") << ":/tst_qfileinfo/resources/file1" << false;
+    QTest::newRow("data4") << ":/tst_qfileinfo/resources/afilethatshouldnotexist" << false;
 
     QTest::newRow("simple dir") << SRCDIR "resources" << true;
     QTest::newRow("simple dir with slash") << SRCDIR "resources/" << true;
@@ -273,6 +277,8 @@ void tst_QFileInfo::isRoot_data()
     QTest::newRow("data1") << "/" << true;
     QTest::newRow("data2") << "*" << false;
     QTest::newRow("data3") << "/*" << false;
+    QTest::newRow("data4") << ":/tst_qfileinfo/resources/" << false;
+    QTest::newRow("data5") << ":/" << true;
 
     QTest::newRow("simple dir") << SRCDIR "resources" << false;
     QTest::newRow("simple dir with slash") << SRCDIR "resources/" << false;
@@ -295,6 +301,9 @@ void tst_QFileInfo::exists_data()
     QTest::newRow("data0") << QDir::currentPath() << true;
     QTest::newRow("data1") << SRCDIR "tst_qfileinfo.cpp" << true;
     QTest::newRow("data2") << "/I/do_not_expect_this_path_to_exist/" << false;
+    QTest::newRow("data3") << ":/tst_qfileinfo/resources/" << true;
+    QTest::newRow("data4") << ":/tst_qfileinfo/resources/file1" << true;
+    QTest::newRow("data5") << ":/I/do_not_expect_this_path_to_exist/" << false;
     QTest::newRow("data6") << SRCDIR "resources/*" << false;
     QTest::newRow("data7") << SRCDIR "resources/*.foo" << false;
     QTest::newRow("data8") << SRCDIR "resources/*.ext1" << false;
@@ -372,15 +381,11 @@ void tst_QFileInfo::absFilePath()
 
 void tst_QFileInfo::canonicalPath()
 {
-#ifndef QT_NO_TEMPORARYFILE
     QTemporaryFile tempFile;
     tempFile.setAutoRemove(true);
     tempFile.open();
     QFileInfo fi(tempFile.fileName());
     QCOMPARE(fi.canonicalPath(), QFileInfo(QDir::tempPath()).canonicalFilePath());
-#else // QT_NO_TEMPORARYFILE
-    QSKIP("Katie compiled without temporary file support (QT_NO_TEMPORARYFILE)", SkipAll);
-#endif // QT_NO_TEMPORARYFILE
 }
 
 void tst_QFileInfo::canonicalFilePath()
@@ -459,6 +464,8 @@ void tst_QFileInfo::fileName_data()
     QTest::newRow("relativeFile") << "tmp.txt" << "tmp.txt";
     QTest::newRow("relativeFileInSubDir") << "temp/tmp.txt" << "tmp.txt";
     QTest::newRow("absFilePath") << "/home/andy/tmp.txt" << "tmp.txt";
+    QTest::newRow("resource1") << ":/tst_qfileinfo/resources/file1.ext1" << "file1.ext1";
+    QTest::newRow("resource2") << ":/tst_qfileinfo/resources/file1.ext1.ext2" << "file1.ext1.ext2";
 
     QTest::newRow("ending slash [small]") << QString::fromLatin1("/a/") << QString::fromLatin1("");
     QTest::newRow("no ending slash [small]") << QString::fromLatin1("/a") << QString::fromLatin1("a");
@@ -488,6 +495,7 @@ void tst_QFileInfo::dir_data()
     QTest::newRow("relativeFileInSubDirAbsPath") << "temp/tmp.txt" << true << QDir::currentPath() + "/temp";
     QTest::newRow("absFilePath") << QDir::currentPath() + "/tmp.txt" << false << QDir::currentPath();
     QTest::newRow("absFilePathAbsPath") << QDir::currentPath() + "/tmp.txt" << true << QDir::currentPath();
+    QTest::newRow("resource1") << ":/tst_qfileinfo/resources/file1.ext1" << true << ":/tst_qfileinfo/resources";
 }
 
 void tst_QFileInfo::dir()
@@ -518,6 +526,8 @@ void tst_QFileInfo::suffix_data()
     QTest::newRow("data1") << "file.tar.gz" << "gz";
     QTest::newRow("data2") << "/path/file/file.tar.gz" << "gz";
     QTest::newRow("data3") << "/path/file.tar" << "tar";
+    QTest::newRow("resource1") << ":/tst_qfileinfo/resources/file1.ext1" << "ext1";
+    QTest::newRow("resource2") << ":/tst_qfileinfo/resources/file1.ext1.ext2" << "ext2";
     QTest::newRow("hidden1") << ".ext1" << "ext1";
     QTest::newRow("hidden1") << ".ext" << "ext";
     QTest::newRow("hidden1") << ".ex" << "ex";
@@ -550,6 +560,8 @@ void tst_QFileInfo::completeSuffix_data()
     QTest::newRow("data1") << "file.tar.gz" << "tar.gz";
     QTest::newRow("data2") << "/path/file/file.tar.gz" << "tar.gz";
     QTest::newRow("data3") << "/path/file.tar" << "tar";
+    QTest::newRow("resource1") << ":/tst_qfileinfo/resources/file1.ext1" << "ext1";
+    QTest::newRow("resource2") << ":/tst_qfileinfo/resources/file1.ext1.ext2" << "ext1.ext2";
 }
 
 void tst_QFileInfo::completeSuffix()
@@ -571,6 +583,8 @@ void tst_QFileInfo::baseName_data()
     QTest::newRow("data2") << "/path/file/file.tar.gz" << "file";
     QTest::newRow("data3") << "/path/file.tar" << "file";
     QTest::newRow("data4") << "/path/file" << "file";
+    QTest::newRow("resource1") << ":/tst_qfileinfo/resources/file1.ext1" << "file1";
+    QTest::newRow("resource2") << ":/tst_qfileinfo/resources/file1.ext1.ext2" << "file1";
 }
 
 void tst_QFileInfo::baseName()
@@ -592,6 +606,8 @@ void tst_QFileInfo::completeBaseName_data()
     QTest::newRow("data2") << "/path/file/file.tar.gz" << "file.tar";
     QTest::newRow("data3") << "/path/file.tar" << "file";
     QTest::newRow("data4") << "/path/file" << "file";
+    QTest::newRow("resource1") << ":/tst_qfileinfo/resources/file1.ext1" << "file1";
+    QTest::newRow("resource2") << ":/tst_qfileinfo/resources/file1.ext1.ext2" << "file1.ext1";
 }
 
 void tst_QFileInfo::completeBaseName()
@@ -612,6 +628,9 @@ void tst_QFileInfo::permission_data()
     QTest::newRow("data0") << QCoreApplication::instance()->applicationFilePath() << int(QFile::ExeUser) << true;
     QTest::newRow("data1") << SRCDIR "tst_qfileinfo.cpp" << int(QFile::ReadUser) << true;
 //    QTest::newRow("data2") << "tst_qfileinfo.cpp" << int(QFile::WriteUser) << false;
+    QTest::newRow("resource1") << ":/tst_qfileinfo/resources/file1.ext1" << int(QFile::ReadUser) << true;
+    QTest::newRow("resource2") << ":/tst_qfileinfo/resources/file1.ext1" << int(QFile::WriteUser) << false;
+    QTest::newRow("resource3") << ":/tst_qfileinfo/resources/file1.ext1" << int(QFile::ExeUser) << false;
 }
 
 void tst_QFileInfo::permission()
@@ -628,11 +647,14 @@ void tst_QFileInfo::size_data()
     QTest::addColumn<QString>("file");
     QTest::addColumn<int>("size");
 
+    QTest::newRow("resource1") << ":/tst_qfileinfo/resources/file1.ext1" << 0;
     QFile::remove("file1");
     QFile file("file1");
     QVERIFY(file.open(QFile::WriteOnly));
     QCOMPARE(file.write("JAJAJAA"), qint64(7));
     QTest::newRow("created-file") << "file1" << 7;
+
+    QTest::newRow("resource2") << ":/tst_qfileinfo/resources/file1.ext1.ext2" << 0;
 }
 
 void tst_QFileInfo::size()
@@ -751,7 +773,6 @@ void tst_QFileInfo::fileTimes()
         QCOMPARE(line, fileName);
     }
 
-    // NOTE: the test will fail if the the filesystem is mounted with noatime
     QFileInfo fileInfo(fileName);
     QVERIFY(fileInfo.lastRead() > beforeRead);
     QVERIFY(fileInfo.lastModified() > beforeWrite);
@@ -818,6 +839,28 @@ void tst_QFileInfo::isHidden()
     QFileInfo fi(path);
 
     QCOMPARE(fi.isHidden(), isHidden);
+}
+
+void tst_QFileInfo::isLocalFs_data()
+{
+    QTest::addColumn<QString>("path");
+    QTest::addColumn<bool>("isLocalFs");
+
+    QTest::newRow("local root") << QString::fromLatin1("/") << true;
+    QTest::newRow("local non-existent file") << QString::fromLatin1("/abrakadabra.boo") << true;
+
+    QTest::newRow("qresource root") << QString::fromLatin1(":/") << false;
+}
+
+void tst_QFileInfo::isLocalFs()
+{
+    QFETCH(QString, path);
+    QFETCH(bool, isLocalFs);
+
+    QFileInfo info(path);
+    QFileInfoPrivate *privateInfo = getPrivate(info);
+    QCOMPARE(bool(privateInfo->fileEngine->fileFlags(QAbstractFileEngine::LocalDiskFlag)
+                     & QAbstractFileEngine::LocalDiskFlag), isLocalFs);
 }
 
 void tst_QFileInfo::refresh()
@@ -984,8 +1027,14 @@ void tst_QFileInfo::detachingOperations()
 
 void tst_QFileInfo::owner()
 {
-    QString expected;
-
+    QString userName;
+    {
+        struct passwd *pw = ::getpwuid(::geteuid());
+        QVERIFY(pw);
+        userName = QString::fromLocal8Bit(pw->pw_name);
+    }
+    if (userName.isEmpty())
+        QSKIP("Can't retrieve the user name", SkipAll);
     QString fileName("ownertest.txt");
     QVERIFY(!QFile::exists(fileName) || QFile::remove(fileName));
     {
@@ -993,45 +1042,31 @@ void tst_QFileInfo::owner()
         QVERIFY(testFile.open(QIODevice::WriteOnly | QIODevice::Text));
         QByteArray testData("testfile");
         QVERIFY(testFile.write(testData) != -1);
-
-        QT_STATBUF statbuf;
-        QVERIFY(QT_FSTAT(testFile.handle(), &statbuf) == 0);
-        struct passwd *pw = ::getpwuid(statbuf.st_uid);
-        QVERIFY(pw);
-        expected = QString::fromLocal8Bit(pw->pw_name);
-        QVERIFY(!expected.isEmpty());
     }
     QFileInfo fi(fileName);
     QVERIFY(fi.exists());
-    QCOMPARE(fi.owner(), expected);
+    QCOMPARE(fi.owner(), userName);
 
     QFile::remove(fileName);
 }
 
 void tst_QFileInfo::group()
 {
-    QString expected;
+    struct group *gr = ::getgrgid(::getegid());
+    QString expected = QString::fromLocal8Bit(gr->gr_name);
 
     QString fileName("ownertest.txt");
-    QVERIFY(!QFile::exists(fileName) || QFile::remove(fileName));
-    {
-        QFile testFile(fileName);
-        QVERIFY(testFile.open(QIODevice::WriteOnly | QIODevice::Text));
-        QByteArray testData("testfile");
-        QVERIFY(testFile.write(testData) != -1);
-
-        QT_STATBUF statbuf;
-        QVERIFY(QT_FSTAT(testFile.handle(), &statbuf) == 0);
-        struct group *gr = ::getgrgid(statbuf.st_gid);
-        QVERIFY(gr);
-        expected = QString::fromLocal8Bit(gr->gr_name);
-        QVERIFY(!expected.isEmpty());
-    }
+    if (QFile::exists(fileName))
+        QFile::remove(fileName);
+    QFile testFile(fileName);
+    QVERIFY(testFile.open(QIODevice::WriteOnly | QIODevice::Text));
+    QByteArray testData("testfile");
+    QVERIFY(testFile.write(testData) != -1);
+    testFile.close();
     QFileInfo fi(fileName);
     QVERIFY(fi.exists());
-    QCOMPARE(fi.group(), expected);
 
-    QFile::remove(fileName);
+    QCOMPARE(fi.group(), expected);
 }
 
 void tst_QFileInfo::invalidState()
@@ -1080,3 +1115,4 @@ void tst_QFileInfo::invalidState()
 QTEST_MAIN(tst_QFileInfo)
 
 #include "moc_tst_qfileinfo.cpp"
+#include "qrc_qfileinfo.cpp"

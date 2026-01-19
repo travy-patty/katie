@@ -23,6 +23,7 @@ set(QDBUSVIEWER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/qdbusmodel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/propertydialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/qdbusviewermain.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/qdbusviewer.qrc
 )
 
 configure_file(
@@ -43,7 +44,7 @@ set_target_properties(qdbusviewer PROPERTIES
 
 install(
     TARGETS qdbusviewer
-    EXPORT KatieTargets
+    EXPORT KatieTargets ${INSTALL_TARGETS_DEFAULT_ARGS}
     RUNTIME DESTINATION ${KATIE_BINARIES_PATH}
     COMPONENT Tools
 )
@@ -56,7 +57,7 @@ install(
 )
 
 install(
-    FILES ${CMAKE_SOURCE_DIR}/data/katie.png
+    FILES ${CMAKE_CURRENT_SOURCE_DIR}/qdbusviewer.png
     DESTINATION ${KATIE_PIXMAPS_PATH}
     RENAME qdbusviewer${KATIE_TOOLS_SUFFIX}.png
     COMPONENT Tools

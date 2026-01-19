@@ -21,14 +21,13 @@
 
 #include "qdbusmetatype.h"
 #include "qbytearray.h"
-#include "qmutex.h"
+#include "qreadwritelock.h"
 #include "qvector.h"
 #include "qdbusmessage.h"
 #include "qdbusunixfiledescriptor.h"
 #include "qdbusutil_p.h"
 #include "qdbusmetatype_p.h"
 #include "qdbusargument_p.h"
-#include "qstdcontainers_p.h"
 
 #include <dbus/dbus.h>
 #include <string.h>
@@ -110,8 +109,8 @@ static int QDBusMetaTypeIdInit()
 }
 Q_CONSTRUCTOR_FUNCTION(QDBusMetaTypeIdInit);
 
-Q_GLOBAL_STATIC(QStdVector<QDBusCustomTypeInfo>, customTypes)
-Q_GLOBAL_STATIC(QMutex, customTypesLock)
+Q_GLOBAL_STATIC(QVector<QDBusCustomTypeInfo>, customTypes)
+Q_GLOBAL_STATIC(QReadWriteLock, customTypesLock)
 
 /*!
     \class QDBusMetaType
@@ -180,8 +179,8 @@ Q_GLOBAL_STATIC(QMutex, customTypesLock)
 void QDBusMetaType::registerMarshallOperators(int id, MarshallFunction mf,
                                               DemarshallFunction df)
 {
-    QMutexLocker locker(customTypesLock());
-    QStdVector<QDBusCustomTypeInfo> *ct = customTypes();
+    QWriteLocker locker(customTypesLock());
+    QVector<QDBusCustomTypeInfo> *ct = customTypes();
     if (id < 0 || !mf || !df || !ct)
         return;                 // error!
 
@@ -202,8 +201,8 @@ bool QDBusMetaType::marshall(QDBusArgument &arg, int id, const void *data)
 {
     MarshallFunction mf;
     {
-        QMutexLocker locker(customTypesLock());
-        const QStdVector<QDBusCustomTypeInfo> *ct = customTypes();
+        QReadLocker locker(customTypesLock());
+        QVector<QDBusCustomTypeInfo> *ct = customTypes();
         if (id >= ct->size())
             return false;       // non-existent
 
@@ -229,8 +228,8 @@ bool QDBusMetaType::demarshall(const QDBusArgument &arg, int id, void *data)
 {
     DemarshallFunction df;
     {
-        QMutexLocker locker(customTypesLock());
-        const QStdVector<QDBusCustomTypeInfo> *ct = customTypes();
+        QReadLocker locker(customTypesLock());
+        QVector<QDBusCustomTypeInfo> *ct = customTypes();
         if (id >= ct->size())
             return false;       // non-existent
 
@@ -238,9 +237,8 @@ bool QDBusMetaType::demarshall(const QDBusArgument &arg, int id, void *data)
         if (!info.demarshall) {
             df = 0;             // make gcc happy
             return false;
-        } else {
+        } else
             df = info.demarshall;
-        }
     }
 
     QDBusArgument copy(arg); // const violation in demarshaller
@@ -396,8 +394,8 @@ const char *QDBusMetaType::typeToSignature(int type)
 
     // try the database
     {
-        QMutexLocker locker(customTypesLock());
-        const QStdVector<QDBusCustomTypeInfo> *ct = customTypes();
+        QReadLocker locker(customTypesLock());
+        QVector<QDBusCustomTypeInfo> *ct = customTypes();
         if (type >= ct->size())
             return nullptr;           // type not registered with us
 
@@ -415,9 +413,9 @@ const char *QDBusMetaType::typeToSignature(int type)
     // if there was an error, it'll return ""
     QByteArray signature = QDBusArgumentPrivate::createSignature(type);
 
-    // acquire lock
-    QMutexLocker locker(customTypesLock());
-    QStdVector<QDBusCustomTypeInfo> *ct = customTypes();
+    // re-acquire lock
+    QWriteLocker locker(customTypesLock());
+    QVector<QDBusCustomTypeInfo> *ct = customTypes();
     QDBusCustomTypeInfo *info = &(*ct)[type];
     info->signature = signature;
 

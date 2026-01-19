@@ -21,6 +21,9 @@
 
 #include "qimageiohandler.h"
 #include "qstringlist.h"
+
+#if !defined(QT_NO_SVGRENDERER)
+
 #include "qsvgiohandler.h"
 #include "qiodevice.h"
 #include "qbytearray.h"
@@ -31,31 +34,29 @@ QT_BEGIN_NAMESPACE
 class QSvgPlugin : public QImageIOPlugin
 {
 public:
-    QList<QByteArray> mimeTypes() const final;
-    QImageIOPlugin::Capabilities capabilities(QIODevice *device, const QByteArray &format) const final;
-    QImageIOHandler *create(QIODevice *device, const QByteArray &format = QByteArray()) const final;
+    QStringList keys() const;
+    Capabilities capabilities(QIODevice *device, const QByteArray &format) const;
+    QImageIOHandler *create(QIODevice *device, const QByteArray &format = QByteArray()) const;
 };
 
-QList<QByteArray> QSvgPlugin::mimeTypes() const
+QStringList QSvgPlugin::keys() const
 {
-    static const QList<QByteArray> list = QList<QByteArray>()
-        << "image/svg+xml"
-        << "image/svg+xml-compressed";
+    static const QStringList list = QStringList()
+        << QLatin1String("svg")
+        << QLatin1String("svgz");
     return list;
 }
 
 QImageIOPlugin::Capabilities QSvgPlugin::capabilities(QIODevice *device, const QByteArray &format) const
 {
-    if (format == "svg" || format == "svgz") {
-        return QImageIOPlugin::Capabilities(QImageIOPlugin::CanRead);
-    }
-    if (!format.isEmpty()) {
+    if (format == "svg" || format == "svgz")
+        return Capabilities(CanRead);
+    if (!format.isEmpty())
         return 0;
-    }
-    QImageIOPlugin::Capabilities cap;
-    if (device->isReadable() && QSvgIOHandler::canRead(device)) {
-        cap |= QImageIOPlugin::CanRead;
-    }
+
+    Capabilities cap;
+    if (device->isReadable() && QSvgIOHandler::canRead(device))
+        cap |= CanRead;
     return cap;
 }
 
@@ -67,6 +68,8 @@ QImageIOHandler *QSvgPlugin::create(QIODevice *device, const QByteArray &format)
     return hand;
 }
 
-Q_EXPORT_PLUGIN(QSvgPlugin)
+Q_EXPORT_PLUGIN2(qsvg, QSvgPlugin)
 
 QT_END_NAMESPACE
+
+#endif // !QT_NO_SVGRENDERER

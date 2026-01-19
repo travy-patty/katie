@@ -39,6 +39,7 @@ class QImageWriter;
 class QImageReader;
 class QColor;
 class QVariant;
+class QX11Info;
 class QPixmapData;
 
 class Q_GUI_EXPORT QPixmap : public QPaintDevice
@@ -49,12 +50,17 @@ public:
     QPixmap(int w, int h);
     QPixmap(const QSize &);
     QPixmap(const QString& fileName, const char *format = nullptr, Qt::ImageConversionFlags flags = Qt::AutoColor);
+#ifndef QT_NO_IMAGEFORMAT_XPM
+    QPixmap(const char * const xpm[]);
+#endif
     QPixmap(const QPixmap &);
     ~QPixmap();
 
     QPixmap &operator=(const QPixmap &);
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QPixmap &operator=(QPixmap &&other)
     { qSwap(data, other.data); return *this; }
+#endif
     inline void swap(QPixmap &other) { qSwap(data, other.data); }
 
     operator QVariant() const;
@@ -67,6 +73,8 @@ public:
     QSize size() const;
     QRect rect() const;
     int depth() const;
+
+    static int defaultDepth();
 
     void fill(const QColor &fillColor = Qt::white);
     void fill(const QWidget *widget, const QPoint &ofs);
@@ -115,6 +123,8 @@ public:
     bool save(const QString& fileName, const char* format = nullptr, int quality = -1) const;
     bool save(QIODevice* device, const char* format = nullptr, int quality = -1) const;
 
+    bool convertFromImage(const QImage &img, Qt::ImageConversionFlags flags = Qt::AutoColor);
+
     inline QPixmap copy(int x, int y, int width, int height) const;
     QPixmap copy(const QRect &rect = QRect()) const;
 
@@ -126,8 +136,14 @@ public:
     bool isQBitmap() const;
 
 #if defined(Q_WS_X11)
-    static QPixmap fromX11Pixmap(Qt::HANDLE pixmap);
-    Qt::HANDLE toX11Pixmap() const;
+    enum ShareMode { ImplicitlyShared, ExplicitlyShared };
+
+    static QPixmap fromX11Pixmap(Qt::HANDLE pixmap, ShareMode mode = ImplicitlyShared);
+    static int x11SetDefaultScreen(int screen);
+    void x11SetScreen(int screen);
+    const QX11Info &x11Info() const;
+    Qt::HANDLE x11PictureHandle() const;
+    Qt::HANDLE handle() const;
 #endif
 
     QPaintEngine *paintEngine() const;
@@ -146,6 +162,7 @@ private:
     QPixmapData* pixmapData() const;
 
     friend class QPixmapData;
+    friend class QX11PixmapData;
     friend class QBitmap;
     friend class QPaintDevice;
     friend class QPainter;
@@ -153,6 +170,7 @@ private:
     friend class QX11PaintEngine;
     friend class QWidgetPrivate;
     friend class QRasterBuffer;
+    friend QPixmap qt_toX11Pixmap(const QPixmap &pixmap);
 
 #if !defined(QT_NO_DATASTREAM)
     friend Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QPixmap &);

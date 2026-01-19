@@ -34,9 +34,9 @@
 //
 
 #include "qplatformdefs.h"
-#include "qdatetime.h"
+#include <QtCore/qdatetime.h>
+#include <QtCore/qabstractfileengine.h>
 #include "qfilesystementry_p.h"
-#include "qfile.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -82,15 +82,15 @@ public:
         LinkType            = 0x00010000,
         FileType            = 0x00020000,
         DirectoryType       = 0x00040000,
-        SequentialType      = 0x00800000,
+        SequentialType      = 0x00800000,   // Note: overlaps with QAbstractFileEngine::RootFlag
 
         // Attributes
         HiddenAttribute     = 0x00100000,
-        SizeAttribute       = 0x00200000,
+        SizeAttribute       = 0x00200000,   // Note: overlaps with QAbstractFileEngine::LocalDiskFlag
         ExistsAttribute     = 0x00400000,
 
         // Times
-        CreationTime        = 0x01000000,
+        CreationTime        = 0x01000000,   // Note: overlaps with QAbstractFileEngine::Refresh
         ModificationTime    = 0x02000000,
         AccessTime          = 0x04000000,
 
@@ -157,7 +157,7 @@ public:
     inline uint groupId() const                   { return groupId_; }
 
     void fillFromStatBuf(const QT_STATBUF &statBuffer);
-    void fillFromDirEnt(const QT_DIRENT *direntBuffer, const QFileSystemEntry::NativePath &nativePath);
+    void fillFromDirEnt(const QT_DIRENT &direntBuffer, const QFileSystemEntry::NativePath &nativePath);
 
     static const uint nobodyID;
 

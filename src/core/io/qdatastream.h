@@ -24,11 +24,14 @@
 
 #include <QtCore/qiodevice.h>
 
+
 QT_BEGIN_NAMESPACE
+
 
 class QByteArray;
 
 template <typename T> class QList;
+template <typename T> class QLinkedList;
 template <typename T> class QVector;
 template <typename T> class QSet;
 template <class Key, class T> class QHash;
@@ -38,6 +41,20 @@ template <class Key, class T> class QMap;
 class Q_CORE_EXPORT QDataStream
 {
 public:
+    enum Version {
+        Qt_4_6 = 12,
+        Qt_4_7 = Qt_4_6,
+        Qt_4_8 = Qt_4_7,
+        Qt_4_9 = Qt_4_8,
+        Qt_4_10 = Qt_4_9,
+        Qt_4_11 = Qt_4_10,
+#if QT_VERSION > 0x041101
+#error Add the datastream version for this version
+        Qt_4_12 = Qt_4_11
+#endif
+        Qt_Default = Qt_4_11
+    };
+
     enum ByteOrder {
         BigEndian = Q_BIG_ENDIAN,
         LittleEndian = Q_LITTLE_ENDIAN,
@@ -49,6 +66,11 @@ public:
         ReadPastEnd,
         ReadCorruptData,
         WriteFailed
+    };
+
+    enum FloatingPointPrecision {
+        SinglePrecision,
+        DoublePrecision
     };
 
     QDataStream();
@@ -66,8 +88,14 @@ public:
     void setStatus(DataStatus status);
     void resetStatus();
 
+    FloatingPointPrecision floatingPointPrecision() const;
+    void setFloatingPointPrecision(FloatingPointPrecision precision);
+
     ByteOrder byteOrder() const;
     void setByteOrder(ByteOrder);
+
+    Version version() const;
+    void setVersion(Version);
 
     QDataStream &operator>>(qint8 &i);
     QDataStream &operator>>(quint8 &i);
@@ -77,9 +105,11 @@ public:
     QDataStream &operator>>(quint32 &i);
     QDataStream &operator>>(qint64 &i);
     QDataStream &operator>>(quint64 &i);
+
     QDataStream &operator>>(bool &i);
     QDataStream &operator>>(float &f);
     QDataStream &operator>>(double &f);
+    QDataStream &operator>>(char *&str);
 
     QDataStream &operator<<(qint8 i);
     QDataStream &operator<<(quint8 i);
@@ -92,22 +122,26 @@ public:
     QDataStream &operator<<(bool i);
     QDataStream &operator<<(float f);
     QDataStream &operator<<(double f);
+    QDataStream &operator<<(const char *str);
 
+    QDataStream &readBytes(char *&, uint &len);
     int readRawData(char *, int len);
+
+    QDataStream &writeBytes(const char *, uint len);
     int writeRawData(const char *, int len);
+
     int skipRawData(int len);
 
 private:
-    // ASCII is ambiguous, write either QString or QByteArray
-    QDataStream &operator<<(const char *str);
-    QDataStream &operator>>(char *&str);
-
     Q_DISABLE_COPY(QDataStream)
 
     QIODevice *dev;
     bool owndev;
+    bool noswap;
     ByteOrder byteorder;
+    Version ver;
     DataStatus q_status;
+    FloatingPointPrecision floatingPrecision;
 };
 
 
@@ -120,6 +154,12 @@ inline QIODevice *QDataStream::device() const
 
 inline QDataStream::ByteOrder QDataStream::byteOrder() const
 { return byteorder; }
+
+inline QDataStream::Version QDataStream::version() const
+{ return ver; }
+
+inline void QDataStream::setVersion(QDataStream::Version v)
+{ ver = v; }
 
 inline QDataStream &QDataStream::operator>>(quint8 &i)
 { return *this >> reinterpret_cast<qint8&>(i); }
@@ -169,6 +209,33 @@ QDataStream& operator<<(QDataStream& s, const QList<T>& l)
     s << quint32(l.size());
     for (int i = 0; i < l.size(); ++i)
         s << l.at(i);
+    return s;
+}
+
+template <typename T>
+QDataStream& operator>>(QDataStream& s, QLinkedList<T>& l)
+{
+    l.clear();
+    quint32 c;
+    s >> c;
+    for(quint32 i = 0; i < c; ++i)
+    {
+        T t;
+        s >> t;
+        l.append(t);
+        if (s.atEnd())
+            break;
+    }
+    return s;
+}
+
+template <typename T>
+QDataStream& operator<<(QDataStream& s, const QLinkedList<T>& l)
+{
+    s << quint32(l.size());
+    typename QLinkedList<T>::const_iterator it = l.constBegin();
+    for(; it != l.constEnd(); ++it)
+        s << *it;
     return s;
 }
 

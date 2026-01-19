@@ -45,6 +45,7 @@
 #include <QtGui/qvector3d.h>
 #include <QtGui/qvector4d.h>
 #include <QtGui/qmatrix4x4.h>
+#include <QtGui/qquaternion.h>
 #include <QtGui/qfont.h>
 
 QT_BEGIN_NAMESPACE
@@ -225,7 +226,6 @@ private:
     QRect rect;
 };
 
-#ifndef QT_NO_VECTOR2D
 class Q_AUTOTEST_EXPORT QDeclarativeVector2DValueType : public QDeclarativeValueType
 {
     Q_PROPERTY(qreal x READ x WRITE setX)
@@ -247,9 +247,7 @@ public:
 private:
     QVector2D vector;
 };
-#endif // QT_NO_VECTOR2D
 
-#ifndef QT_NO_VECTOR3D
 class Q_AUTOTEST_EXPORT QDeclarativeVector3DValueType : public QDeclarativeValueType
 {
     Q_PROPERTY(qreal x READ x WRITE setX)
@@ -274,9 +272,7 @@ public:
 private:
     QVector3D vector;
 };
-#endif // QT_NO_VECTOR3D
 
-#ifndef QT_NO_VECTOR4D
 class Q_AUTOTEST_EXPORT QDeclarativeVector4DValueType : public QDeclarativeValueType
 {
     Q_PROPERTY(qreal x READ x WRITE setX)
@@ -304,7 +300,34 @@ public:
 private:
     QVector4D vector;
 };
-#endif // QT_NO_VECTOR4D
+
+class Q_AUTOTEST_EXPORT QDeclarativeQuaternionValueType : public QDeclarativeValueType
+{
+    Q_PROPERTY(qreal scalar READ scalar WRITE setScalar)
+    Q_PROPERTY(qreal x READ x WRITE setX)
+    Q_PROPERTY(qreal y READ y WRITE setY)
+    Q_PROPERTY(qreal z READ z WRITE setZ)
+    Q_OBJECT
+public:
+    QDeclarativeQuaternionValueType(QObject *parent = nullptr);
+
+    virtual void read(QObject *, int);
+    virtual void write(QObject *, int, QDeclarativePropertyPrivate::WriteFlags);
+    virtual QVariant value();
+    virtual void setValue(QVariant value);
+
+    qreal scalar() const;
+    qreal x() const;
+    qreal y() const;
+    qreal z() const;
+    void setScalar(qreal);
+    void setX(qreal);
+    void setY(qreal);
+    void setZ(qreal);
+
+private:
+    QQuaternion quaternion;
+};
 
 class Q_AUTOTEST_EXPORT QDeclarativeMatrix4x4ValueType : public QDeclarativeValueType
 {
@@ -431,6 +454,7 @@ class Q_AUTOTEST_EXPORT QDeclarativeFontValueType : public QDeclarativeValueType
 {
     Q_OBJECT
     Q_ENUMS(FontWeight)
+    Q_ENUMS(Capitalization)
 
     Q_PROPERTY(QString family READ family WRITE setFamily)
     Q_PROPERTY(bool bold READ bold WRITE setBold)
@@ -441,6 +465,9 @@ class Q_AUTOTEST_EXPORT QDeclarativeFontValueType : public QDeclarativeValueType
     Q_PROPERTY(bool strikeout READ strikeout WRITE setStrikeout)
     Q_PROPERTY(qreal pointSize READ pointSize WRITE setPointSize)
     Q_PROPERTY(int pixelSize READ pixelSize WRITE setPixelSize)
+    Q_PROPERTY(Capitalization capitalization READ capitalization WRITE setCapitalization)
+    Q_PROPERTY(qreal letterSpacing READ letterSpacing WRITE setLetterSpacing)
+    Q_PROPERTY(qreal wordSpacing READ wordSpacing WRITE setWordSpacing)
 
 public:
     enum FontWeight { Light = QFont::Light,
@@ -448,6 +475,11 @@ public:
                        DemiBold = QFont::DemiBold,
                        Bold = QFont::Bold,
                        Black = QFont::Black };
+    enum Capitalization { MixedCase = QFont::MixedCase,
+                           AllUppercase = QFont::AllUppercase,
+                           AllLowercase = QFont::AllLowercase,
+                           SmallCaps = QFont::SmallCaps,
+                           Capitalize = QFont::Capitalize };
 
     QDeclarativeFontValueType(QObject *parent = nullptr);
 
@@ -482,6 +514,15 @@ public:
 
     int pixelSize() const;
     void setPixelSize(int size);
+
+    Capitalization capitalization() const;
+    void setCapitalization(Capitalization);
+
+    qreal letterSpacing() const;
+    void setLetterSpacing(qreal spacing);
+
+    qreal wordSpacing() const;
+    void setWordSpacing(qreal spacing);
 
 private:
     QFont font;

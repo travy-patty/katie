@@ -22,10 +22,10 @@
 #include "Platform.h"
 #include "qscriptqobject_p.h"
 
-#include "qmetaobject.h"
-#include "qstdcontainers_p.h"
-#include "qdebug.h"
-#include "qscriptable.h"
+#include <QtCore/qmetaobject.h>
+#include <QtCore/qvarlengtharray.h>
+#include <QtCore/qdebug.h>
+#include <QtScript/qscriptable.h>
 #include "../api/qscriptengine_p.h"
 #include "../api/qscriptable_p.h"
 #include "../api/qscriptcontext_p.h"
@@ -458,10 +458,10 @@ struct QScriptMetaArguments
     int matchDistance;
     int index;
     QScriptMetaMethod method;
-    QStdVector<QVariant> args;
+    QVarLengthArray<QVariant, 9> args;
 
     inline QScriptMetaArguments(int dist, int idx, const QScriptMetaMethod &mtd,
-                                const QStdVector<QVariant> &as)
+                                const QVarLengthArray<QVariant, 9> &as)
         : matchDistance(dist), index(idx), method(mtd), args(as) { }
     inline QScriptMetaArguments()
         : index(-1) { }
@@ -492,7 +492,7 @@ static JSC::JSValue delegateQtMethod(JSC::ExecState *exec, QMetaMethod::MethodTy
 {
     QScriptMetaMethod chosenMethod;
     int chosenIndex = -1;
-    QStdVector<QVariant> args;
+    QVarLengthArray<QVariant, 9> args;
     QVector<QScriptMetaArguments> candidates;
     QVector<QScriptMetaArguments> unresolved;
     QVector<int> tooFewArgs;
@@ -562,7 +562,7 @@ static JSC::JSValue delegateQtMethod(JSC::ExecState *exec, QMetaMethod::MethodTy
         if (!mtd.fullyResolved()) {
             // remember it so we can give an error message later, if necessary
             unresolved.append(QScriptMetaArguments(/*matchDistance=*/INT_MAX, index,
-                                                   mtd, QStdVector<QVariant>()));
+                                                   mtd, QVarLengthArray<QVariant, 9>()));
             if (mtd.hasUnresolvedReturnType())
                 continue;
         }
@@ -904,11 +904,11 @@ struct QtMethodCaller
     {}
     JSC::JSValue operator()(JSC::ExecState *exec, QMetaMethod::MethodType callType,
                             const QMetaObject *meta, const QScriptMetaMethod &chosenMethod,
-                            int chosenIndex, const QStdVector<QVariant> &args)
+                            int chosenIndex, const QVarLengthArray<QVariant, 9> &args)
     {
         JSC::JSValue result;
 
-        QStdVector<void*> array(args.count());
+        QVarLengthArray<void*, 9> array(args.count());
         void **params = array.data();
         for (int i = 0; i < args.count(); ++i) {
             const QVariant &v = args[i];
@@ -1037,7 +1037,7 @@ struct QtMethodIndexReturner
 {
     JSC::JSValue operator()(JSC::ExecState *exec, QMetaMethod::MethodType,
                             const QMetaObject *, const QScriptMetaMethod &,
-                            int chosenIndex, const QStdVector<QVariant> &)
+                            int chosenIndex, const QVarLengthArray<QVariant, 9> &)
     {
         return JSC::jsNumber(exec, chosenIndex);
     }
@@ -2156,7 +2156,7 @@ void QObjectConnectionManager::execute(int slotIndex, void **argv)
     }
     Q_ASSERT(slot.isObject());
 
-    if (Q_UNLIKELY(engine->isCollecting())) {
+    if (engine->isCollecting()) {
         qWarning("QtScript: can't execute signal handler during GC");
         // we can't do a script function call during GC,
         // so we're forced to ignore this signal
@@ -2181,13 +2181,13 @@ void QObjectConnectionManager::execute(int slotIndex, void **argv)
     int argc = parameterTypes.count();
 
     JSC::ExecState *exec = engine->currentFrame;
-    QStdVector<JSC::JSValue> argsVector(argc);
+    QVarLengthArray<JSC::JSValue, 8> argsVector(argc);
     for (int i = 0; i < argc; ++i) {
         JSC::JSValue actual;
         void *arg = argv[i + 1];
         QByteArray typeName = parameterTypes.at(i);
         int argType = QMetaType::type(parameterTypes.at(i));
-        if (Q_UNLIKELY(!argType)) {
+        if (!argType) {
             qWarning("QScriptEngine: Unable to handle unregistered datatype '%s' "
                         "when invoking handler of signal %s::%s",
                         typeName.constData(), meta->className(), method.signature());

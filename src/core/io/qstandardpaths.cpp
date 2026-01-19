@@ -19,6 +19,11 @@
 ****************************************************************************/
 
 #include "qstandardpaths.h"
+
+#include "qdir.h"
+#include "qfileinfo.h"
+#include "qhash.h"
+#include "qobject.h"
 #include "qcoreapplication.h"
 #include "qcore_unix_p.h"
 
@@ -132,7 +137,7 @@ QT_BEGIN_NAMESPACE
 
 static inline bool existsAsSpecified(const QString &path, QStandardPaths::LocateOption options)
 {
-    const QStatInfo info(path);
+    QStatInfo info(path);
     if (options == QStandardPaths::LocateDirectory) {
         return info.isDir();
     }

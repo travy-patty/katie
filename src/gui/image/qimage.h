@@ -34,6 +34,8 @@ QT_BEGIN_NAMESPACE
 
 class QColor;
 class QIODevice;
+class QMatrix;
+class QTransform;
 class QVariant;
 template <class T> class QVector;
 struct QImageData;
@@ -46,6 +48,7 @@ public:
         Format_Invalid,
         Format_Mono,
         Format_MonoLSB,
+        Format_Indexed8,
         Format_RGB32,
         Format_ARGB32,
         Format_ARGB32_Premultiplied,
@@ -61,6 +64,9 @@ public:
     QImage(uchar *data, int width, int height, int bytesPerLine, Format format);
     QImage(const uchar *data, int width, int height, int bytesPerLine, Format format);
 
+#ifndef QT_NO_IMAGEFORMAT_XPM
+    explicit QImage(const char * const xpm[]);
+#endif
     explicit QImage(const QString &fileName, const char *format = nullptr);
 #ifndef QT_NO_CAST_FROM_ASCII
     explicit QImage(const char *fileName, const char *format = nullptr);
@@ -70,8 +76,10 @@ public:
     ~QImage();
 
     QImage &operator=(const QImage &);
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QImage &operator=(QImage &&other)
     { qSwap(d, other.d); return *this; }
+#endif
     inline void swap(QImage &other) { qSwap(d, other.d); }
 
     bool isNull() const;
@@ -90,6 +98,7 @@ public:
     static Format systemFormat();
 
     QImage convertToFormat(Format f, Qt::ImageConversionFlags flags = Qt::AutoColor) const Q_REQUIRED_RESULT;
+    QImage convertToFormat(Format f, const QVector<QRgb> &colorTable, Qt::ImageConversionFlags flags = Qt::AutoColor) const Q_REQUIRED_RESULT;
 
     int width() const;
     int height() const;
@@ -97,10 +106,12 @@ public:
     QRect rect() const;
 
     int depth() const;
+    int colorCount() const;
     int bitPlaneCount() const;
 
     QRgb color(int i) const;
     void setColor(int i, QRgb c);
+    void setColorCount(int);
 
     bool allGray() const;
     bool isGrayscale() const;
@@ -119,13 +130,17 @@ public:
     inline bool valid(const QPoint &pt) const
         { return valid(pt.x(), pt.y()); }
 
+    int pixelIndex(int x, int y) const;
+    inline int pixelIndex(const QPoint &pt) const
+        { return pixelIndex(pt.x(), pt.y());}
+
     QRgb pixel(int x, int y) const;
     inline QRgb pixel(const QPoint &pt) const
         { return pixel(pt.x(), pt.y()); }
 
-    void setPixel(int x, int y, QRgb rgb);
-    inline void setPixel(const QPoint &pt, QRgb rgb)
-        { setPixel(pt.x(), pt.y(), rgb); }
+    void setPixel(int x, int y, uint index_or_rgb);
+    inline void setPixel(const QPoint &pt, uint index_or_rgb)
+        { setPixel(pt.x(), pt.y(), index_or_rgb); }
 
     QVector<QRgb> colorTable() const;
     void setColorTable(const QVector<QRgb> &colors);
@@ -177,6 +192,12 @@ public:
 
     QPaintEngine *paintEngine() const;
 
+    // Auxiliary data
+    int dotsPerMeterX() const;
+    int dotsPerMeterY() const;
+    void setDotsPerMeterX(int);
+    void setDotsPerMeterY(int);
+
 protected:
     virtual int metric(PaintDeviceMetric metric) const;
 
@@ -187,15 +208,10 @@ private:
 
     friend class QPixmap;
     friend class QPainter;
-    friend class QPixmapData;
+    friend class QRasterPixmapData;
+    friend class QX11PixmapData;
+    friend class QX11AlphaDetector;
     friend class QSpanData;
-    friend class QPngHandler;
-    friend class QKatHandler;
-    friend class QX11Data;
-#if !defined(QT_NO_DATASTREAM)
-    friend Q_GUI_EXPORT QDataStream &operator<<(QDataStream &, const QImage &);
-    friend Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QImage &);
-#endif
 };
 
 Q_DECLARE_TYPEINFO(QImage, Q_MOVABLE_TYPE);

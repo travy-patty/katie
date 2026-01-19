@@ -116,10 +116,14 @@ public:
 
     static void syncX();
     static void beep();
+    static void alert(QWidget *widget, int duration = 0);
 
     static Qt::KeyboardModifiers keyboardModifiers();
     static Qt::KeyboardModifiers queryKeyboardModifiers();
     static Qt::MouseButtons mouseButtons();
+
+    static void setDesktopSettingsAware(bool);
+    static bool desktopSettingsAware();
 
     static void setCursorFlashTime(int);
     static int cursorFlashTime();
@@ -169,6 +173,7 @@ public:
     static QLocale keyboardInputLocale();
     static Qt::LayoutDirection keyboardInputDirection();
 
+    static int exec();
     bool notify(QObject *, QEvent *);
 
     static void setQuitOnLastWindowClosed(bool quit);
@@ -178,6 +183,7 @@ public:
 Q_SIGNALS:
     void lastWindowClosed();
     void focusChanged(QWidget *old, QWidget *now);
+    void fontDatabaseChanged();
 #ifndef QT_NO_SESSIONMANAGER
     void commitDataRequest(QSessionManager &sessionManager);
     void saveStateRequest(QSessionManager &sessionManager);
@@ -208,12 +214,18 @@ private:
     friend class QWidget;
     friend class QWidgetPrivate;
     friend class QETWidget;
+    friend class QWidgetAnimator;
 #ifndef QT_NO_SHORTCUT
     friend class QShortcut;
     friend class QLineEdit;
     friend class QTextControl;
 #endif
     friend class QAction;
+    friend class QFontDatabasePrivate;
+
+#if defined(Q_WS_X11)
+    Q_PRIVATE_SLOT(d_func(), void _q_alertTimeOut())
+#endif
 };
 
 #if defined(qApp)

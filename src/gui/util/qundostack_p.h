@@ -29,10 +29,7 @@
 
 #include "qundostack.h"
 
-#ifndef QT_NO_UNDOSTACK
-
 QT_BEGIN_NAMESPACE
-
 class QUndoCommand;
 class QUndoGroup;
 
@@ -56,6 +53,8 @@ public:
     QString actionText;
     int id;
 };
+
+#ifndef QT_NO_UNDOSTACK
 
 class QUndoStackPrivate : public QObjectPrivate
 {
@@ -89,8 +88,7 @@ private:
 };
 #endif // QT_NO_ACTION
 
+
 QT_END_NAMESPACE
-
 #endif // QT_NO_UNDOSTACK
-
 #endif // QUNDOSTACK_P_H

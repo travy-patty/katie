@@ -21,6 +21,7 @@
 
 #include "qfileinfogatherer_p.h"
 #include "qdebug.h"
+#include "qfsfileengine.h"
 #include "qdiriterator.h"
 
 QT_BEGIN_NAMESPACE

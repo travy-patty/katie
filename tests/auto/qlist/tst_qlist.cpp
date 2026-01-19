@@ -64,6 +64,7 @@ private slots:
     void takeFirst() const;
     void takeLast() const;
     void toSet() const;
+    void toStdList() const;
     void toVector() const;
     void value() const;
 
@@ -542,6 +543,21 @@ void tst_QList::toSet() const
     QCOMPARE(list, QList<QString>() << "foo" << "bar" << "baz" << "foo" << "bar" << "baz");
 }
 
+void tst_QList::toStdList() const
+{
+    QList<QString> list;
+    list << "foo" << "bar" << "baz";
+
+    // yuck.
+    std::list<QString> slist;
+    slist.push_back(QLatin1String("foo"));
+    slist.push_back(QLatin1String("bar"));
+    slist.push_back(QLatin1String("baz"));
+
+    QCOMPARE(list.toStdList(), slist);
+    QCOMPARE(list, QList<QString>() << "foo" << "bar" << "baz");
+}
+
 void tst_QList::toVector() const
 {
     QList<QString> list;
@@ -641,6 +657,7 @@ void tst_QList::testSTLIterators() const
 
 void tst_QList::initializeList() const
 {
+#ifdef Q_COMPILER_INITIALIZER_LISTS
     QList<int> v1{2,3,4};
     QCOMPARE(v1, QList<int>() << 2 << 3 << 4);
     QCOMPARE(v1, (QList<int>{2,3,4}));
@@ -649,6 +666,7 @@ void tst_QList::initializeList() const
     QList<QList<int>> v3;
     v3 << v1 << (QList<int>() << 1) << QList<int>() << v1;
     QCOMPARE(v3, v2);
+#endif
 }
 
 QTEST_APPLESS_MAIN(tst_QList)

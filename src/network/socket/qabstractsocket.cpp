@@ -143,7 +143,7 @@
     issue to be aware of, though: You must make sure that enough data
     is available before attempting to read it using operator>>().
 
-    \sa QTcpServer
+    \sa QFtp, QNetworkAccessManager, QTcpServer
 */
 
 /*!
@@ -189,6 +189,10 @@
     This signal is emitted after an error occurred. The \a socketError
     parameter describes the type of error that occurred.
 
+    QAbstractSocket::SocketError is not a registered metatype, so for queued
+    connections, you will have to register it with Q_DECLARE_METATYPE() and
+    qRegisterMetaType().
+
     \sa error(), errorString(), {Creating Custom Qt Types}
 */
 
@@ -198,7 +202,27 @@
     This signal is emitted whenever QAbstractSocket's state changes.
     The \a socketState parameter is the new state.
 
+    QAbstractSocket::SocketState is not a registered metatype, so for queued
+    connections, you will have to register it with Q_REGISTER_METATYPE() and
+    qRegisterMetaType().
+
     \sa state(), {Creating Custom Qt Types}
+*/
+
+/*!
+    \fn void QAbstractSocket::proxyAuthenticationRequired(const QNetworkProxy &proxy, QAuthenticator *authenticator)
+    \since 4.3
+
+    This signal can be emitted when a \a proxy that requires
+    authentication is used. The \a authenticator object can then be
+    filled in with the required details to allow authentication and
+    continue the connection.
+
+    \note It is not possible to use a QueuedConnection to connect to
+    this signal, as the connection will fail if the authenticator has
+    not been filled in with new information when the signal returns.
+
+    \sa QAuthenticator, QNetworkProxy
 */
 
 /*!
@@ -254,9 +278,26 @@
     \value UnsupportedSocketOperationError The requested socket operation is
            not supported by the local operating system (e.g., lack of
            IPv6 support).
+    \value ProxyAuthenticationRequiredError The socket is using a proxy, and
+           the proxy requires authentication.
+    \value SslHandshakeFailedError The SSL/TLS handshake failed, so
+           the connection was closed (only used in QSslSocket) (This value was introduced in 4.4.)
     \value UnfinishedSocketOperationError Used by QAbstractSocketEngine only,
            The last operation attempted has not finished yet (still in progress in
             the background). (This value was introduced in 4.4.)
+    \value ProxyConnectionRefusedError Could not contact the proxy server because
+           the connection to that server was denied (This value was introduced in 4.5.)
+    \value ProxyConnectionClosedError The connection to the proxy server was closed
+           unexpectedly (before the connection to the final peer was established)
+           (This value was introduced in 4.5.)
+    \value ProxyConnectionTimeoutError The connection to the proxy server timed out
+           or the proxy server stopped responding in the authentication phase.
+           (This value was introduced in 4.5.)
+    \value ProxyNotFoundError The proxy address set with setProxy() (or the application
+           proxy) was not found. (This value was introduced in 4.5.)
+    \value ProxyProtocolError The connection negotiation with the proxy server
+           because the response from the proxy server could not be understood.
+           (This value was introduced in 4.5.)
 
     \value UnknownSocketError An unidentified error occurred.
     \sa QAbstractSocket::error()
@@ -316,11 +357,12 @@
 #include "qtimer.h"
 #include "qelapsedtimer.h"
 #include "qscopedvaluerollback.h"
+#include "qsslsocket.h"
 #include "qdebug.h"
 #include "qthread_p.h"
 #include "qcore_unix_p.h"
-#include "qcorecommon_p.h"
 #include "qnetworkcommon_p.h"
+#include "qcorecommon_p.h"
 
 #include <time.h>
 
@@ -329,7 +371,24 @@
         return returnValue; \
     } } while (0)
 
+#define QT_CONNECT_TIMEOUT 30000
+
 QT_BEGIN_NAMESPACE
+
+static bool isProxyError(QAbstractSocket::SocketError error)
+{
+    switch (error) {
+    case QAbstractSocket::ProxyAuthenticationRequiredError:
+    case QAbstractSocket::ProxyConnectionRefusedError:
+    case QAbstractSocket::ProxyConnectionClosedError:
+    case QAbstractSocket::ProxyConnectionTimeoutError:
+    case QAbstractSocket::ProxyNotFoundError:
+    case QAbstractSocket::ProxyProtocolError:
+        return true;
+    default:
+        return false;
+    }
+}
 
 /*! \internal
 
@@ -351,14 +410,14 @@ QAbstractSocketPrivate::QAbstractSocketPrivate()
       cachedSocketDescriptor(-1),
       readBufferMaxSize(0),
       isBuffered(false),
+      blockingTimeout(30000),
       connectTimer(0),
       disconnectTimer(0),
+      hostLookupId(-1),
       socketType(QAbstractSocket::UnknownSocketType),
       state(QAbstractSocket::UnconnectedState),
       socketError(QAbstractSocket::UnknownSocketError)
 {
-    qRegisterMetaType<QAbstractSocket::SocketState>();
-    qRegisterMetaType<QAbstractSocket::SocketError>();
 }
 
 /*! \internal
@@ -402,6 +461,11 @@ void QAbstractSocketPrivate::resetSocketLayer()
 */
 bool QAbstractSocketPrivate::initSocketLayer(QAbstractSocket::NetworkLayerProtocol protocol)
 {
+#ifdef QT_NO_NETWORKPROXY
+    // this is here to avoid a duplication of the call to createSocketEngine below
+    static const QNetworkProxy &proxyInUse = *(QNetworkProxy *)0;
+#endif
+
     Q_Q(QAbstractSocket);
 #if defined (QABSTRACTSOCKET_DEBUG)
     QString typeStr;
@@ -415,12 +479,16 @@ bool QAbstractSocketPrivate::initSocketLayer(QAbstractSocket::NetworkLayerProtoc
 #endif
 
     resetSocketLayer();
-    socketEngine = new QAbstractSocketEngine(q);
+    socketEngine = QAbstractSocketEngine::createSocketEngine(q->socketType(), proxyInUse, q);
     if (!socketEngine) {
         socketError = QAbstractSocket::UnsupportedSocketOperationError;
         q->setErrorString(QAbstractSocket::tr("Operation on socket is not supported"));
         return false;
     }
+#ifndef QT_NO_NETWORKPROXY
+    //copy user agent to socket engine (if it has been set)
+    socketEngine->setProperty("_q_user-agent", q->property("_q_user-agent"));
+#endif
     if (!socketEngine->initialize(q->socketType(), protocol)) {
 #if defined (QABSTRACTSOCKET_DEBUG)
         qDebug("QAbstractSocketPrivate::initSocketLayer(%s, %s) failed (%s)",
@@ -639,6 +707,86 @@ bool QAbstractSocketPrivate::flush()
     return true;
 }
 
+#ifndef QT_NO_NETWORKPROXY
+/*! \internal
+
+    Resolve the proxy to its final value.
+*/
+void QAbstractSocketPrivate::resolveProxy(const QString &hostname, quint16 port)
+{
+    QList<QNetworkProxy> proxies;
+
+    if (proxy.type() != QNetworkProxy::DefaultProxy) {
+        // a non-default proxy was set with setProxy
+        proxies << proxy;
+    } else {
+        // try the application settings instead
+        QNetworkProxyQuery query(hostname, port, QString(),
+                                 socketType == QAbstractSocket::TcpSocket ?
+                                 QNetworkProxyQuery::TcpSocket :
+                                 QNetworkProxyQuery::UdpSocket);
+        proxies = QNetworkProxyFactory::proxyForQuery(query);
+    }
+
+    // return the first that we can use
+    foreach (const QNetworkProxy &p, proxies) {
+        if (socketType == QAbstractSocket::UdpSocket &&
+            (p.capabilities() & QNetworkProxy::UdpTunnelingCapability) == 0)
+            continue;
+
+        if (socketType == QAbstractSocket::TcpSocket &&
+            (p.capabilities() & QNetworkProxy::TunnelingCapability) == 0)
+            continue;
+
+        proxyInUse = p;
+        return;
+    }
+
+    // no proxy found
+    // DefaultProxy here will raise an error
+    proxyInUse = QNetworkProxy();
+}
+
+/*!
+    \internal
+
+    Starts the connection to \a host, like _q_startConnecting below,
+    but without hostname resolution.
+*/
+void QAbstractSocketPrivate::startConnectingByName(const QString &host)
+{
+    Q_Q(QAbstractSocket);
+    if (state == QAbstractSocket::ConnectingState || state == QAbstractSocket::ConnectedState)
+        return;
+
+#if defined(QABSTRACTSOCKET_DEBUG)
+    qDebug("QAbstractSocketPrivate::startConnectingByName(host == %s)", qPrintable(host));
+#endif
+
+    // ### Let the socket engine drive this?
+    state = QAbstractSocket::ConnectingState;
+    emit q->stateChanged(state);
+
+    if (initSocketLayer(QAbstractSocket::UnknownNetworkLayerProtocol)) {
+        if (socketEngine->connectToHostByName(host, port) ||
+            socketEngine->state() == QAbstractSocket::ConnectingState) {
+            cachedSocketDescriptor = socketEngine->socketDescriptor();
+
+            return;
+        }
+
+        // failed to connect
+        socketError = socketEngine->error();
+        q->setErrorString(socketEngine->errorString());
+    }
+
+    state = QAbstractSocket::UnconnectedState;
+    emit q->error(socketError);
+    emit q->stateChanged(state);
+}
+
+#endif
+
 /*! \internal
 
     Slot connected to QHostInfo::lookupHost() in connectToHost(). This
@@ -649,8 +797,11 @@ bool QAbstractSocketPrivate::flush()
 void QAbstractSocketPrivate::_q_startConnecting(const QHostInfo &hostInfo)
 {
     Q_Q(QAbstractSocket);
-    if (state != QAbstractSocket::HostLookupState) {
+    if (state != QAbstractSocket::HostLookupState)
         return;
+
+    if (hostLookupId != -1 && hostLookupId != hostInfo.lookupId()) {
+        qWarning("QAbstractSocketPrivate::_q_startConnecting() received hostInfo for wrong lookup ID %d expected %d", hostInfo.lookupId(), hostLookupId);
     }
 
     addresses = hostInfo.addresses();
@@ -821,6 +972,10 @@ void QAbstractSocketPrivate::_q_testConnection()
             }
             return;
         }
+
+        // don't retry the other addresses if we had a proxy error
+        if (isProxyError(socketEngine->error()))
+            addresses.clear();
     }
 
     if (threadData->eventDispatcher) {
@@ -959,6 +1114,36 @@ void QAbstractSocketPrivate::fetchConnectionParameters()
 #endif
 }
 
+
+void QAbstractSocketPrivate::pauseSocketNotifiers(QAbstractSocket *socket)
+{
+    QAbstractSocketEngine *socketEngine = socket->d_func()->socketEngine;
+    if (!socketEngine)
+        return;
+    socket->d_func()->prePauseReadSocketNotifierState = socketEngine->isReadNotificationEnabled();
+    socket->d_func()->prePauseWriteSocketNotifierState = socketEngine->isWriteNotificationEnabled();
+    socket->d_func()->prePauseExceptionSocketNotifierState = socketEngine->isExceptionNotificationEnabled();
+    socketEngine->setReadNotificationEnabled(false);
+    socketEngine->setWriteNotificationEnabled(false);
+    socketEngine->setExceptionNotificationEnabled(false);
+}
+
+void QAbstractSocketPrivate::resumeSocketNotifiers(QAbstractSocket *socket)
+{
+    QAbstractSocketEngine *socketEngine = socket->d_func()->socketEngine;
+    if (!socketEngine)
+        return;
+    socketEngine->setReadNotificationEnabled(socket->d_func()->prePauseReadSocketNotifierState);
+    socketEngine->setWriteNotificationEnabled(socket->d_func()->prePauseWriteSocketNotifierState);
+    socketEngine->setExceptionNotificationEnabled(socket->d_func()->prePauseExceptionSocketNotifierState);
+}
+
+QAbstractSocketEngine* QAbstractSocketPrivate::getSocketEngine(QAbstractSocket *socket)
+{
+    return socket->d_func()->socketEngine;
+}
+
+
 /*! \internal
 
     Constructs a new abstract socket of type \a socketType. The \a
@@ -1050,8 +1235,8 @@ void QAbstractSocket::connectToHost(const QString &hostName, quint16 port,
            (int) openMode);
 #endif
 
-    if (Q_UNLIKELY(d->state == ConnectedState || d->state == ConnectingState
-        || d->state == ClosingState || d->state == HostLookupState)) {
+    if (d->state == ConnectedState || d->state == ConnectingState
+        || d->state == ClosingState || d->state == HostLookupState) {
         qWarning("QAbstractSocket::connectToHost() called when already looking up or connecting/connected to \"%s\"", qPrintable(hostName));
         return;
     }
@@ -1069,6 +1254,22 @@ void QAbstractSocket::connectToHost(const QString &hostName, quint16 port,
     d->localAddress.clear();
     d->peerAddress.clear();
     d->peerName = hostName;
+    if (d->hostLookupId != -1) {
+        QHostInfo::abortHostLookup(d->hostLookupId);
+        d->hostLookupId = -1;
+    }
+
+#ifndef QT_NO_NETWORKPROXY
+    // Get the proxy information
+    d->resolveProxy(hostName, port);
+    if (d->proxyInUse.type() == QNetworkProxy::DefaultProxy) {
+        // failed to setup the proxy
+        d->socketError = QAbstractSocket::UnsupportedSocketOperationError;
+        setErrorString(QAbstractSocket::tr("Operation on socket is not supported"));
+        emit error(d->socketError);
+        return;
+    }
+#endif
 
     if (openMode & QIODevice::Unbuffered)
         d->isBuffered = false; // Unbuffered QTcpSocket
@@ -1082,12 +1283,17 @@ void QAbstractSocket::connectToHost(const QString &hostName, quint16 port,
     QHostAddress temp;
     if (temp.setAddress(hostName)) {
         QHostInfo info;
-        info.d->err = QHostInfo::NoError;
-        info.d->errorStr = QCoreApplication::translate("QHostInfo", "Unknown error");
-        info.d->addrs.append(temp);
+        info.setAddresses(QList<QHostAddress>() << temp);
         d->_q_startConnecting(info);
+#ifndef QT_NO_NETWORKPROXY
+    } else if (d->proxyInUse.capabilities() & QNetworkProxy::HostNameLookupCapability) {
+        // the proxy supports connection by name, so use it
+        d->startConnectingByName(hostName);
+        return;
+#endif
     } else {
         if (d->threadData->eventDispatcher) {
+            d->hostLookupId = -1;
             d->_q_startConnecting(QHostInfo::fromName(hostName));
         }
     }
@@ -1235,6 +1441,9 @@ bool QAbstractSocket::canReadLine() const
     Returns the native socket descriptor of the QAbstractSocket object
     if this is available; otherwise returns -1.
 
+    If the socket is using QNetworkProxy, the returned descriptor
+    may not be usable with native socket functions.
+
     The socket descriptor is not available when QAbstractSocket is in
     UnconnectedState.
 
@@ -1263,7 +1472,12 @@ bool QAbstractSocket::setSocketDescriptor(int socketDescriptor, SocketState sock
 {
     Q_D(QAbstractSocket);
     d->resetSocketLayer();
-    d->socketEngine = new QAbstractSocketEngine(this);
+    d->socketEngine = QAbstractSocketEngine::createSocketEngine(socketDescriptor, this);
+    if (!d->socketEngine) {
+        d->socketError = UnsupportedSocketOperationError;
+        setErrorString(tr("Operation on socket is not supported"));
+        return false;
+    }
     bool result = d->socketEngine->initialize(socketDescriptor, socketState);
     if (!result) {
         d->socketError = d->socketEngine->error();
@@ -1396,10 +1610,12 @@ bool QAbstractSocket::waitForConnected(int msecs)
 #if defined (QABSTRACTSOCKET_DEBUG)
         qDebug("QAbstractSocket::waitForConnected(%i) doing host name lookup", msecs);
 #endif
+        QHostInfo::abortHostLookup(d->hostLookupId);
+        d->hostLookupId = -1;
         d->_q_startConnecting(QHostInfo::fromName(d->hostName));
     }
     if (state() == UnconnectedState)
-        return false; // connect not in progress anymore!
+        return false; // connect not im progress anymore!
 
     bool timedOut = true;
 #if defined (QABSTRACTSOCKET_DEBUG)
@@ -1519,7 +1735,7 @@ bool QAbstractSocket::waitForBytesWritten(int msecs)
 #endif
 
     // require calling connectToHost() before waitForBytesWritten()
-    if (Q_UNLIKELY(state() == UnconnectedState)) {
+    if (state() == UnconnectedState) {
         qWarning("QAbstractSocket::waitForBytesWritten() is not allowed in UnconnectedState");
         return false;
     }
@@ -1594,7 +1810,7 @@ bool QAbstractSocket::waitForDisconnected(int msecs)
 {
     Q_D(QAbstractSocket);
     // require calling connectToHost() before waitForDisconnected()
-    if (Q_UNLIKELY(state() == UnconnectedState)) {
+    if (state() == UnconnectedState) {
         qWarning("QAbstractSocket::waitForDisconnected() is not allowed in UnconnectedState");
         return false;
     }
@@ -1699,6 +1915,7 @@ bool QAbstractSocket::atEnd() const
 
     \sa write(), waitForBytesWritten()
 */
+// Note! docs copied to QSslSocket::flush()
 bool QAbstractSocket::flush()
 {
     Q_D(QAbstractSocket);
@@ -1821,6 +2038,13 @@ qint64 QAbstractSocket::readData(char *data, qint64 maxSize)
            maxSize, readSoFar);
 #endif
     return readSoFar;
+}
+
+/*! \reimp
+*/
+qint64 QAbstractSocket::readLineData(char *data, qint64 maxlen)
+{
+    return QIODevice::readLineData(data, maxlen);
 }
 
 /*! \reimp
@@ -2056,6 +2280,10 @@ void QAbstractSocket::disconnectFromHost()
 #if defined(QABSTRACTSOCKET_DEBUG)
         qDebug("QAbstractSocket::disconnectFromHost() aborting immediately");
 #endif
+        if (d->state == HostLookupState) {
+            QHostInfo::abortHostLookup(d->hostLookupId);
+            d->hostLookupId = -1;
+        }
     } else {
         // Perhaps emit closing()
         if (d->state != ClosingState) {
@@ -2231,6 +2459,49 @@ void QAbstractSocket::setSocketError(SocketError socketError)
     d_func()->socketError = socketError;
 }
 
+#ifndef QT_NO_NETWORKPROXY
+/*!
+    \since 4.1
+
+    Sets the explicit network proxy for this socket to \a networkProxy.
+
+    To disable the use of a proxy for this socket, use the
+    QNetworkProxy::NoProxy proxy type:
+
+    \snippet doc/src/snippets/code/src_network_socket_qabstractsocket.cpp 3
+
+    The default value for the proxy is QNetworkProxy::DefaultProxy,
+    which means the socket will use the application settings: if a
+    proxy is set with QNetworkProxy::setApplicationProxy, it will use
+    that; otherwise, if a factory is set with
+    QNetworkProxyFactory::setApplicationProxyFactory, it will query
+    that factory with type QNetworkProxyQuery::TcpSocket.
+
+    \sa proxy(), QNetworkProxy, QNetworkProxyFactory::queryProxy()
+*/
+void QAbstractSocket::setProxy(const QNetworkProxy &networkProxy)
+{
+    Q_D(QAbstractSocket);
+    d->proxy = networkProxy;
+}
+
+/*!
+    \since 4.1
+
+    Returns the network proxy for this socket.
+    By default QNetworkProxy::DefaultProxy is used, which means this
+    socket will query the default proxy settings for the application.
+
+    \sa setProxy(), QNetworkProxy, QNetworkProxyFactory
+*/
+QNetworkProxy QAbstractSocket::proxy() const
+{
+    Q_D(const QAbstractSocket);
+    return d->proxy;
+}
+#endif // QT_NO_NETWORKPROXY
+
+
 #ifndef QT_NO_DEBUG_STREAM
 Q_NETWORK_EXPORT QDebug operator<<(QDebug debug, QAbstractSocket::SocketError error)
 {
@@ -2271,8 +2542,26 @@ Q_NETWORK_EXPORT QDebug operator<<(QDebug debug, QAbstractSocket::SocketError er
     case QAbstractSocket::UnfinishedSocketOperationError:
         debug << "QAbstractSocket::UnfinishedSocketOperationError";
         break;
+    case QAbstractSocket::ProxyAuthenticationRequiredError:
+        debug << "QAbstractSocket::ProxyAuthenticationRequiredError";
+        break;
     case QAbstractSocket::UnknownSocketError:
         debug << "QAbstractSocket::UnknownSocketError";
+        break;
+    case QAbstractSocket::ProxyConnectionRefusedError:
+        debug << "QAbstractSocket::ProxyConnectionRefusedError";
+        break;
+    case QAbstractSocket::ProxyConnectionClosedError:
+        debug << "QAbstractSocket::ProxyConnectionClosedError";
+        break;
+    case QAbstractSocket::ProxyConnectionTimeoutError:
+        debug << "QAbstractSocket::ProxyConnectionTimeoutError";
+        break;
+    case QAbstractSocket::ProxyNotFoundError:
+        debug << "QAbstractSocket::ProxyNotFoundError";
+        break;
+    case QAbstractSocket::ProxyProtocolError:
+        debug << "QAbstractSocket::ProxyProtocolError";
         break;
     default:
         debug << "QAbstractSocket::SocketError(" << int(error) << ')';

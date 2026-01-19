@@ -280,14 +280,18 @@ void **QListData::erase(void **xi)
     stores a list of values and provides fast index-based access as
     well as fast insertions and removals.
 
-    QList\<T\>, and QVector\<T\> provide similar functionality.
-    Here's an overview:
+    QList\<T\>, QLinkedList\<T\>, and QVector\<T\> provide similar
+    functionality. Here's an overview:
 
     \list
-    \i For most purposes, QList is the right class to use. It is
-       usually faster than QVector because of the way it stores
-       its items in memory. It also expands to less code in your
-       executable.
+    \i For most purposes, QList is the right class to use. Its
+       index-based API is more convenient than QLinkedList's
+       iterator-based API, and it is usually faster than
+       QVector because of the way it stores its items in
+       memory. It also expands to less code in your executable.
+    \i If you need a real linked list, with guarantees of \l{constant
+       time} insertions in the middle of the list and iterators to
+       items rather than indexes, use QLinkedList.
     \i If you want the items to occupy adjacent memory positions,
        use QVector.
     \endlist
@@ -411,7 +415,7 @@ void **QListData::erase(void **xi)
     value that might not be in the valid range, check that it is less
     than the value returned by size() but \e not less than 0.
 
-    \sa QListIterator, QMutableListIterator, QVector
+    \sa QListIterator, QMutableListIterator, QLinkedList, QVector
 */
 
 /*!
@@ -1158,7 +1162,9 @@ void **QListData::erase(void **xi)
 
     Multiple iterators can be used on the same list. However, be
     aware that any non-const function call performed on the QList
-    will render all existing iterators undefined.
+    will render all existing iterators undefined. If you need to keep
+    iterators over a long period of time, we recommend that you use
+    QLinkedList rather than QList.
 
     \sa QList::const_iterator, QMutableListIterator
 */
@@ -1405,7 +1411,9 @@ void **QListData::erase(void **xi)
 
     Multiple iterators can be used on the same list. However, be
     aware that any non-const function call performed on the QList
-    will render all existing iterators undefined.
+    will render all existing iterators undefined. If you need to keep
+    iterators over a long period of time, we recommend that you use
+    QLinkedList rather than QList.
 
     \sa QList::iterator, QListIterator
 */
@@ -1715,6 +1723,28 @@ void **QListData::erase(void **xi)
     \snippet doc/src/snippets/code/src_corelib_tools_qlistdata.cpp 24
 
     \sa toVector(), fromSet(), QSet::fromList()
+*/
+
+/*! \fn QList<T> QList<T>::fromStdList(const std::list<T> &list)
+
+    Returns a QList object with the data contained in \a list. The
+    order of the elements in the QList is the same as in \a list.
+
+    Example:
+
+    \snippet doc/src/snippets/code/src_corelib_tools_qlistdata.cpp 25
+
+    \sa toStdList(), QVector::fromStdVector()
+*/
+
+/*! \fn std::list<T> QList<T>::toStdList() const
+
+    Returns a std::list object with the data contained in this QList.
+    Example:
+
+    \snippet doc/src/snippets/code/src_corelib_tools_qlistdata.cpp 26
+
+    \sa fromStdList(), QVector::toStdVector()
 */
 
 QT_END_NAMESPACE

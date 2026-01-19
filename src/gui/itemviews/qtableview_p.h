@@ -34,6 +34,7 @@
 //
 
 #include <QtCore/QList>
+#include <QtCore/QLinkedList>
 #include <QtCore/QMap>
 #include <QtCore/QSet>
 #include <QtCore/QDebug>
@@ -91,7 +92,7 @@ public:
     void updateRemovedRows(int start, int end);
     void updateRemovedColumns(int start, int end);
 
-    typedef QList<Span *> SpanList;
+    typedef QLinkedList<Span *> SpanList;
     SpanList spans; //lists of all spans
 private:
     //the indexes are negative so the QMap::lowerBound do what i need.

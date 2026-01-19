@@ -35,6 +35,7 @@
 
 #include <QtCore/qatomic.h>
 #include <QtCore/qlist.h>
+#include <QtCore/qreadwritelock.h>
 #include <QtCore/qstring.h>
 #include <QtNetwork/qhostaddress.h>
 #include <QtNetwork/qabstractsocket.h>
@@ -64,17 +65,37 @@ public:
     QNetworkInterface::InterfaceFlags flags;
 
     QString name;
+    QString friendlyName;
     QString hardwareAddress;
 
     QList<QNetworkAddressEntry> addressEntries;
 
-    static QList<QNetworkInterfacePrivate *> scan();
+    static QString makeHwAddress(int len, uchar *data);
+
 private:
     Q_DISABLE_COPY(QNetworkInterfacePrivate);
 };
+
+class QNetworkInterfaceManager
+{
+public:
+    QNetworkInterfaceManager();
+    ~QNetworkInterfaceManager();
+
+    QSharedDataPointer<QNetworkInterfacePrivate> interfaceFromName(const QString &name);
+    QSharedDataPointer<QNetworkInterfacePrivate> interfaceFromIndex(int index);
+    QList<QSharedDataPointer<QNetworkInterfacePrivate> > allInterfaces();
+
+    // convenience:
+    QSharedDataPointer<QNetworkInterfacePrivate> empty;
+
+private:
+    QList<QNetworkInterfacePrivate *> scan();
+};
+
 
 QT_END_NAMESPACE
 
 #endif // QT_NO_NETWORKINTERFACE
 
-#endif // QNETWORKINTERFACEPRIVATE_H
+#endif

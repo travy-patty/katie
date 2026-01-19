@@ -25,15 +25,14 @@
 #include "qplatformdefs.h"
 #include "qstringlist.h"
 #include "qendian.h"
+#include "qnativesocketengine_p.h"
 #include "qcorecommon_p.h"
 
 #ifndef QT_NO_DATASTREAM
 #include "qdatastream.h"
 #endif
 
-#include <sys/socket.h>
 #include <arpa/inet.h>
-#include <netinet/in.h>
 
 QT_BEGIN_NAMESPACE
 

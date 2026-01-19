@@ -25,6 +25,7 @@
 #include <QtCore/qrect.h>
 #include <QtCore/qline.h>
 #include <QtCore/qvector.h>
+#include <QtCore/qscopedpointer.h>
 #include <QtGui/qmatrix.h>
 
 
@@ -33,6 +34,7 @@ QT_BEGIN_NAMESPACE
 class QFont;
 class QPainterPathPrivate;
 struct QPainterPathPrivateDeleter;
+class QPainterPathData;
 class QPainterPathStrokerPrivate;
 class QPolygonF;
 class QRegion;
@@ -69,10 +71,12 @@ public:
     explicit QPainterPath(const QPointF &startPoint);
     QPainterPath(const QPainterPath &other);
     QPainterPath &operator=(const QPainterPath &other);
+#ifdef Q_COMPILER_RVALUE_REFS
     inline QPainterPath &operator=(QPainterPath &&other)
     { qSwap(d_ptr, other.d_ptr); return *this; }
+#endif
     ~QPainterPath();
-    inline void swap(QPainterPath &other) { qSwap(d_ptr, other.d_ptr); }
+    inline void swap(QPainterPath &other) { d_ptr.swap(other.d_ptr); }
 
     void closeSubpath();
 
@@ -138,7 +142,7 @@ public:
     Qt::FillRule fillRule() const;
     void setFillRule(Qt::FillRule fillRule);
 
-    bool isEmpty() const;
+    inline bool isEmpty() const;
 
     QPainterPath toReversed() const;
     QList<QPolygonF> toSubpathPolygons(const QMatrix &matrix = QMatrix()) const;
@@ -148,9 +152,9 @@ public:
     QList<QPolygonF> toFillPolygons(const QTransform &matrix) const;
     QPolygonF toFillPolygon(const QTransform &matrix) const;
 
-    int elementCount() const;
-    const QPainterPath::Element &elementAt(int i) const;
-    void setElementPositionAt(int i, qreal x, qreal y);
+    inline int elementCount() const;
+    inline const QPainterPath::Element &elementAt(int i) const;
+    inline void setElementPositionAt(int i, qreal x, qreal y);
 
     qreal   length() const;
     qreal   percentAtLength(qreal t) const;
@@ -180,18 +184,19 @@ public:
     QPainterPath &operator-=(const QPainterPath &other);
 
 private:
-    QPainterPathPrivate *d_ptr;
+    QScopedPointer<QPainterPathPrivate, QPainterPathPrivateDeleter> d_ptr;
 
     inline void ensureData() { if (!d_ptr) ensureData_helper(); }
     void ensureData_helper();
-    void detach();
+    inline void detach();
+    void detach_helper();
     void setDirty(bool);
     void computeBoundingRect() const;
     void computeControlPointRect() const;
 
-    QPainterPathPrivate *d_func() const { return d_ptr; }
+    QPainterPathData *d_func() const { return reinterpret_cast<QPainterPathData *>(d_ptr.data()); }
 
-    friend class QPainterPathPrivate;
+    friend class QPainterPathData;
     friend class QPainterPathStroker;
     friend class QPainterPathStrokerPrivate;
     friend class QMatrix;
@@ -203,6 +208,26 @@ private:
     friend Q_GUI_EXPORT QDataStream &operator<<(QDataStream &, const QPainterPath &);
     friend Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QPainterPath &);
 #endif
+};
+
+class QPainterPathPrivate
+{
+public:
+    friend class QPainterPath;
+    friend class QPainterPathData;
+    friend class QPainterPathStroker;
+    friend class QPainterPathStrokerPrivate;
+    friend class QMatrix;
+    friend class QTransform;
+    friend class QVectorPath;
+    friend struct QPainterPathPrivateDeleter;
+#ifndef QT_NO_DATASTREAM
+    friend Q_GUI_EXPORT QDataStream &operator<<(QDataStream &, const QPainterPath &);
+    friend Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QPainterPath &);
+#endif
+private:
+    QAtomicInt ref;
+    QVector<QPainterPath::Element> elements;
 };
 
 Q_DECLARE_TYPEINFO(QPainterPath::Element, Q_PRIMITIVE_TYPE);
@@ -248,7 +273,7 @@ private:
 
     friend class QX11PaintEngine;
 
-    QPainterPathStrokerPrivate *d_ptr;
+    QScopedPointer<QPainterPathStrokerPrivate> d_ptr;
 };
 
 inline void QPainterPath::moveTo(qreal x, qreal y)
@@ -339,6 +364,41 @@ inline void QPainterPath::translate(const QPointF &offset)
 
 inline QPainterPath QPainterPath::translated(const QPointF &offset) const
 { return translated(offset.x(), offset.y()); }
+
+inline bool QPainterPath::isEmpty() const
+{
+    return !d_ptr || (d_ptr->elements.size() == 1 && d_ptr->elements.first().type == MoveToElement);
+}
+
+inline int QPainterPath::elementCount() const
+{
+    return d_ptr ? d_ptr->elements.size() : 0;
+}
+
+inline const QPainterPath::Element &QPainterPath::elementAt(int i) const
+{
+    Q_ASSERT(d_ptr);
+    Q_ASSERT(i >= 0 && i < elementCount());
+    return d_ptr->elements.at(i);
+}
+
+inline void QPainterPath::setElementPositionAt(int i, qreal x, qreal y)
+{
+    Q_ASSERT(d_ptr);
+    Q_ASSERT(i >= 0 && i < elementCount());
+    detach();
+    QPainterPath::Element &e = d_ptr->elements[i];
+    e.x = x;
+    e.y = y;
+}
+
+
+inline void QPainterPath::detach()
+{
+    if (d_ptr->ref != 1)
+        detach_helper();
+    setDirty(true);
+}
 
 #ifndef QT_NO_DEBUG_STREAM
 Q_GUI_EXPORT QDebug operator<<(QDebug, const QPainterPath &);

@@ -25,8 +25,6 @@
 #include "qtransform.h"
 #include "qmath.h"
 #include "qnumeric.h"
-#include "qcorecommon_p.h"
-#include "qguicommon_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -420,7 +418,7 @@ void QStroker::processCurrentSubpath()
 /*!
     \internal
 */
-void QStroker::joinPoints(qreal focal_x, qreal focal_y, const QLineF &nextLine, LineJoinMode join)
+void QStroker::joinPoints(qfixed focal_x, qfixed focal_y, const QLineF &nextLine, LineJoinMode join)
 {
 #ifdef QPP_STROKE_DEBUG
     printf(" -----> joinPoints: around=(%.0f, %.0f), next_p1=(%.0f, %.f) next_p2=(%.0f, %.f)\n",
@@ -489,7 +487,7 @@ void QStroker::joinPoints(qreal focal_x, qreal focal_y, const QLineF &nextLine, 
             }
 
         } else if (join == SquareJoin) {
-            qreal offset = m_strokeWidth / 2;
+            qfixed offset = m_strokeWidth / 2;
 
             QLineF l1(prevLine);
             l1.translate(l1.dx(), l1.dy());
@@ -502,7 +500,7 @@ void QStroker::joinPoints(qreal focal_x, qreal focal_y, const QLineF &nextLine, 
             emitLineTo(qreal(l2.x1()), qreal(l2.y1()));
 
         } else if (join == RoundJoin) {
-            qreal offset = m_strokeWidth / 2;
+            qfixed offset = m_strokeWidth / 2;
 
             QLineF shortCut(prevLine.p2(), nextLine.p1());
             qreal angle = shortCut.angleTo(prevLine);
@@ -546,7 +544,7 @@ void QStroker::joinPoints(qreal focal_x, qreal focal_y, const QLineF &nextLine, 
         // Same as round join except we know its 180 degrees. Can also optimize this
         // later based on the addEllipse logic
         } else if (join == RoundCap) {
-            qreal offset = m_strokeWidth / 2;
+            qfixed offset = m_strokeWidth / 2;
 
             // first control line
             QLineF l1 = prevLine;
@@ -631,7 +629,7 @@ template <class Iterator> bool qt_stroke_side(Iterator *it,
 
     bool first = true;
 
-    qreal offset = stroker->strokeWidth() / 2;
+    qfixed offset = stroker->strokeWidth() / 2;
 
     while (it->hasNext()) {
         QStrokerOps::Element e = it->next();
@@ -744,18 +742,18 @@ template <class Iterator> bool qt_stroke_side(Iterator *it,
 
     For a given angle in the range [0 .. 90], finds the corresponding parameter t
     of the prototype cubic bezier arc segment
-    b = fromPoints(QPointF(1, 0), QPointF(1, QT_PATH_KAPPA), QPointF(QT_PATH_KAPPA, 1), QPointF(0, 1));
+    b = fromPoints(QPointF(1, 0), QPointF(1, KAPPA), QPointF(KAPPA, 1), QPointF(0, 1));
 
     From the bezier equation:
-    b.pointAt(t).x() = (1-t)^3 + t*(1-t)^2 + t^2*(1-t)*QT_PATH_KAPPA
-    b.pointAt(t).y() = t*(1-t)^2 * QT_PATH_KAPPA + t^2*(1-t) + t^3
+    b.pointAt(t).x() = (1-t)^3 + t*(1-t)^2 + t^2*(1-t)*KAPPA
+    b.pointAt(t).y() = t*(1-t)^2 * KAPPA + t^2*(1-t) + t^3
 
     Third degree coefficients:
     b.pointAt(t).x() = at^3 + bt^2 + ct + d
-    where a = 2-3*QT_PATH_KAPPA, b = 3*(QT_PATH_KAPPA-1), c = 0, d = 1
+    where a = 2-3*KAPPA, b = 3*(KAPPA-1), c = 0, d = 1
 
     b.pointAt(t).y() = at^3 + bt^2 + ct + d
-    where a = 3*QT_PATH_KAPPA-2, b = 6*QT_PATH_KAPPA+3, c = 3*QT_PATH_KAPPA, d = 0
+    where a = 3*KAPPA-2, b = 6*KAPPA+3, c = 3*KAPPA, d = 0
 
     Newton's method to find the zero of a function:
     given a function f(x) and initial guess x_0
@@ -972,15 +970,15 @@ QPointF qt_curves_for_arc(const QRectF &rect, qreal startAngle, qreal sweepLengt
 }
 
 
-static inline void qdashstroker_moveTo(qreal x, qreal y, void *data) {
+static inline void qdashstroker_moveTo(qfixed x, qfixed y, void *data) {
     ((QStroker *) data)->moveTo(x, y);
 }
 
-static inline void qdashstroker_lineTo(qreal x, qreal y, void *data) {
+static inline void qdashstroker_lineTo(qfixed x, qfixed y, void *data) {
     ((QStroker *) data)->lineTo(x, y);
 }
 
-static inline void qdashstroker_cubicTo(qreal, qreal, qreal, qreal, qreal, qreal, void *) {
+static inline void qdashstroker_cubicTo(qfixed, qfixed, qfixed, qfixed, qfixed, qfixed, void *) {
     Q_ASSERT(false);
 //     ((QStroker *) data)->cubicTo(c1x, c1y, c2x, c2y, ex, ey);
 }
@@ -999,13 +997,13 @@ QDashStroker::QDashStroker(QStroker *stroker)
     }
 }
 
-QVector<qreal> QDashStroker::patternForStyle(Qt::PenStyle style)
+QVector<qfixed> QDashStroker::patternForStyle(Qt::PenStyle style)
 {
-    const qreal space = 2;
-    const qreal dot = 1;
-    const qreal dash = 4;
+    const qfixed space = 2;
+    const qfixed dot = 1;
+    const qfixed dash = 4;
 
-    QVector<qreal> pattern;
+    QVector<qfixed> pattern;
 
     switch (style) {
     case Qt::DashLine:
@@ -1063,7 +1061,7 @@ static bool lineIntersectsRect(qfixed2d p1, qfixed2d p2, const qfixed2d &tl, con
 void QDashStroker::processCurrentSubpath()
 {
     int dashCount = qMin(m_dashPattern.size(), 32);
-    QSTACKARRAY(qreal, dashes, 32);
+    qfixed dashes[32];
 
     if (m_stroker) {
         m_customData = m_stroker;
@@ -1108,6 +1106,8 @@ void QDashStroker::processCurrentSubpath()
 
     QLineF cline;
 
+    QPainterPath dashPath;
+
     QSubpathFlatIterator it(&m_elements, m_dashThreshold);
     qfixed2d prev = it.next();
 
@@ -1116,7 +1116,7 @@ void QDashStroker::processCurrentSubpath()
     qfixed2d line_to_pos;
 
     // Pad to avoid clipping the borders of thick pens.
-    qreal padding = qreal(qMax(m_stroke_width, m_miter_limit) * longestLength);
+    qfixed padding = qreal(qMax(m_stroke_width, m_miter_limit) * longestLength);
     qfixed2d clip_tl = { qreal(m_clip_rect.left()) - padding,
                          qreal(m_clip_rect.top()) - padding };
     qfixed2d clip_br = { qreal(m_clip_rect.right()) + padding ,

@@ -26,6 +26,7 @@
 #include "qapplication.h"
 #include "qmath.h"
 #include "qpainter.h"
+#include "qvarlengtharray.h"
 #include "qtextformat.h"
 #include "qabstracttextdocumentlayout.h"
 #include "qtextdocument_p.h"
@@ -223,7 +224,7 @@ QTextFormat QTextInlineObject::format() const
 */
 Qt::LayoutDirection QTextInlineObject::textDirection() const
 {
-    return Qt::LeftToRight;
+    return (eng->layoutData->items[itm].analysis.bidiLevel % 2 ? Qt::RightToLeft : Qt::LeftToRight);
 }
 
 /*!
@@ -269,6 +270,8 @@ Qt::LayoutDirection QTextInlineObject::textDirection() const
 
     The QTextLayout itself can be positioned with setPosition(); it has a
     boundingRect(), and a minimumWidth() and a maximumWidth().
+
+    \sa QStaticText
 */
 
 /*!
@@ -291,16 +294,14 @@ Qt::LayoutDirection QTextInlineObject::textDirection() const
     \sa setText()
 */
 QTextLayout::QTextLayout()
-    : d(new QTextEngine())
-{
-}
+{ d = new QTextEngine(); }
 
 /*!
     Constructs a text layout to lay out the given \a text.
 */
 QTextLayout::QTextLayout(const QString& text)
-    : d(new QTextEngine())
 {
+    d = new QTextEngine();
     d->text = text;
 }
 
@@ -325,8 +326,8 @@ QTextLayout::QTextLayout(const QString& text, const QFont &font, QPaintDevice *p
     Constructs a text layout to lay out the given \a block.
 */
 QTextLayout::QTextLayout(const QTextBlock &block)
-    : d(new QTextEngine())
 {
+    d = new QTextEngine();
     d->block = block;
 }
 
@@ -335,7 +336,8 @@ QTextLayout::QTextLayout(const QTextBlock &block)
 */
 QTextLayout::~QTextLayout()
 {
-    delete d;
+    if (!d->stackEngine)
+        delete d;
 }
 
 /*!
@@ -347,6 +349,7 @@ QTextLayout::~QTextLayout()
 void QTextLayout::setFont(const QFont &font)
 {
     d->fnt = font;
+    d->resetFontEngineCache();
 }
 
 /*!
@@ -408,6 +411,58 @@ QTextOption QTextLayout::textOption() const
 }
 
 /*!
+    Sets the \a position and \a text of the area in the layout that is
+    processed before editing occurs.
+
+    \sa preeditAreaPosition(), preeditAreaText()
+*/
+void QTextLayout::setPreeditArea(int position, const QString &text)
+{
+    if (text.isEmpty()) {
+        if (!d->specialData)
+            return;
+        if (d->specialData->addFormats.isEmpty()) {
+            delete d->specialData;
+            d->specialData = 0;
+        } else {
+            d->specialData->preeditText = QString();
+            d->specialData->preeditPosition = -1;
+        }
+    } else {
+        if (!d->specialData)
+            d->specialData = new QTextEngine::SpecialData;
+        d->specialData->preeditPosition = position;
+        d->specialData->preeditText = text;
+    }
+    d->invalidate();
+    d->clearLineData();
+    if (d->block.docHandle())
+        d->block.docHandle()->documentChange(d->block.position(), d->block.length());
+}
+
+/*!
+    Returns the position of the area in the text layout that will be
+    processed before editing occurs.
+
+    \sa preeditAreaText()
+*/
+int QTextLayout::preeditAreaPosition() const
+{
+    return d->specialData ? d->specialData->preeditPosition : -1;
+}
+
+/*!
+    Returns the text that is inserted in the layout before editing occurs.
+
+    \sa preeditAreaPosition()
+*/
+QString QTextLayout::preeditAreaText() const
+{
+    return d->specialData ? d->specialData->preeditText : QString();
+}
+
+
+/*!
     Sets the additional formats supported by the text layout to \a formatList.
 
     \sa additionalFormats(), clearAdditionalFormats()
@@ -417,17 +472,24 @@ void QTextLayout::setAdditionalFormats(const QList<FormatRange> &formatList)
     if (formatList.isEmpty()) {
         if (!d->specialData)
             return;
-        delete d->specialData;
-        d->specialData = 0;
+        if (d->specialData->preeditText.isEmpty()) {
+            delete d->specialData;
+            d->specialData = 0;
+        } else {
+            d->specialData->addFormats = formatList;
+            d->specialData->addFormatIndices.clear();
+        }
     } else {
         if (!d->specialData) {
             d->specialData = new QTextEngine::SpecialData;
+            d->specialData->preeditPosition = -1;
         }
         d->specialData->addFormats = formatList;
         d->indexAdditionalFormats();
     }
     if (d->block.docHandle())
         d->block.docHandle()->documentChange(d->block.position(), d->block.length());
+    d->resetFontEngineCache();
 }
 
 /*!
@@ -491,6 +553,34 @@ bool QTextLayout::cacheEnabled() const
 }
 
 /*!
+    \since 4.8
+
+    Set the cursor movement style. If the QTextLayout is backed by
+    a document, you can ignore this and use the option in QTextDocument,
+    this option is for widgets like QLineEdit or custom widgets without
+    a QTextDocument. Default value is Qt::LogicalMoveStyle.
+
+    \sa cursorMoveStyle()
+*/
+void QTextLayout::setCursorMoveStyle(Qt::CursorMoveStyle style)
+{
+    d->visualMovement = (style == Qt::VisualMoveStyle);
+}
+
+/*!
+    \since 4.8
+
+    The cursor movement style of this QTextLayout. The default is
+    Qt::LogicalMoveStyle.
+
+    \sa setCursorMoveStyle()
+*/
+Qt::CursorMoveStyle QTextLayout::cursorMoveStyle() const
+{
+    return d->visualMovement ? Qt::VisualMoveStyle : Qt::LogicalMoveStyle;
+}
+
+/*!
     Begins the layout process.
 
     \sa endLayout()
@@ -498,7 +588,7 @@ bool QTextLayout::cacheEnabled() const
 void QTextLayout::beginLayout()
 {
 #ifndef QT_NO_DEBUG
-    if (Q_UNLIKELY(d->layoutData && d->layoutData->layoutState == QTextEngine::InLayout)) {
+    if (d->layoutData && d->layoutData->layoutState == QTextEngine::InLayout) {
         qWarning("QTextLayout::beginLayout: Called while already doing layout");
         return;
     }
@@ -517,7 +607,7 @@ void QTextLayout::beginLayout()
 void QTextLayout::endLayout()
 {
 #ifndef QT_NO_DEBUG
-    if (Q_UNLIKELY(!d->layoutData || d->layoutData->layoutState == QTextEngine::LayoutEmpty)) {
+    if (!d->layoutData || d->layoutData->layoutState == QTextEngine::LayoutEmpty) {
         qWarning("QTextLayout::endLayout: Called without beginLayout()");
         return;
     }
@@ -612,6 +702,38 @@ int QTextLayout::previousCursorPosition(int oldPos, CursorMode mode) const
     return oldPos;
 }
 
+/*!
+    \since 4.8
+
+    Returns the cursor position to the right of \a oldPos, next to it.
+    The position is dependent on the visual position of characters, after
+    bi-directional reordering.
+
+    \sa leftCursorPosition(), nextCursorPosition()
+*/
+int QTextLayout::rightCursorPosition(int oldPos) const
+{
+    int newPos = d->positionAfterVisualMovement(oldPos, QTextCursor::Right);
+//    qDebug("%d -> %d", oldPos, newPos);
+    return newPos;
+}
+
+/*!
+    \since 4.8
+
+    Returns the cursor position to the left of \a oldPos, next to it.
+    The position is dependent on the visual position of characters, after
+    bi-directional reordering.
+
+    \sa rightCursorPosition(), previousCursorPosition()
+*/
+int QTextLayout::leftCursorPosition(int oldPos) const
+{
+    int newPos = d->positionAfterVisualMovement(oldPos, QTextCursor::Left);
+//    qDebug("%d -> %d", oldPos, newPos);
+    return newPos;
+}
+
 /*!/
     Returns true if position \a pos is a valid cursor position.
 
@@ -654,7 +776,7 @@ bool QTextLayout::isValidCursorPosition(int pos) const
 QTextLine QTextLayout::createLine()
 {
 #ifndef QT_NO_DEBUG
-    if (Q_UNLIKELY(!d->layoutData || d->layoutData->layoutState == QTextEngine::LayoutEmpty)) {
+    if (!d->layoutData || d->layoutData->layoutState == QTextEngine::LayoutEmpty) {
         qWarning("QTextLayout::createLine: Called without layouting");
         return QTextLine();
     }
@@ -789,12 +911,19 @@ qreal QTextLayout::maximumWidth() const
     return d->maxWidth.toReal();
 }
 
+
 /*!
     \internal
 */
 void QTextLayout::setFlags(int flags)
 {
+    if (flags & Qt::TextJustificationForced) {
+        d->option.setAlignment(Qt::AlignJustify);
+        d->forceJustification = true;
+    }
+
     if (flags & (Qt::TextForceLeftToRight|Qt::TextForceRightToLeft)) {
+        d->ignoreBidi = true;
         d->option.setTextDirection((flags & Qt::TextForceLeftToRight) ? Qt::LeftToRight : Qt::RightToLeft);
     }
 }
@@ -805,6 +934,8 @@ static void addSelectedRegionsToPath(QTextEngine *eng, int lineNumber, const QPo
     const QScriptLine &line = eng->lines[lineNumber];
 
     QTextLineItemIterator iterator(eng, lineNumber, pos, selection);
+
+
 
     const qreal selectionY = pos.y() + line.y.toReal();
     const qreal lineHeight = line.height().toReal();
@@ -871,6 +1002,7 @@ void QTextLayout::draw(QPainter *p, const QPointF &pos, const QVector<FormatRang
     int firstLine = 0;
     int lastLine = d->lines.size();
     for (int i = 0; i < d->lines.size(); ++i) {
+        QTextLine l(i, d);
         const QScriptLine &sl = d->lines[i];
 
         if (sl.y > clipe) {
@@ -898,6 +1030,7 @@ void QTextLayout::draw(QPainter *p, const QPointF &pos, const QVector<FormatRang
 
             QRectF lineRect(tl.naturalTextRect());
             lineRect.translate(position);
+            lineRect.adjust(0, 0, d->leadingSpaceWidth(sl).toReal(), 0);
 
             bool isLastLineInBlock = (line == d->lines.size()-1);
             int sl_length = sl.length + (isLastLineInBlock? 1 : 0); // the infamous newline
@@ -923,7 +1056,9 @@ void QTextLayout::draw(QPainter *p, const QPointF &pos, const QVector<FormatRang
                     region.addRect(clipIfValid(QRectF(lineRect.topRight(), fullLineRect.bottomRight()), clip));
                 if (!selectionStartInLine)
                     region.addRect(clipIfValid(QRectF(fullLineRect.topLeft(), lineRect.bottomLeft()), clip));
-            } else if (!selectionEndInLine && isLastLineInBlock) {
+            } else if (!selectionEndInLine
+                && isLastLineInBlock
+                &&!(d->option.flags() & QTextOption::ShowLineAndParagraphSeparators)) {
                 region.addRect(clipIfValid(QRectF(lineRect.right(), lineRect.top(),
                                                   lineRect.height()/4, lineRect.height()), clip));
             }
@@ -1059,16 +1194,25 @@ void QTextLayout::drawCursor(QPainter *p, const QPointF &pos, int cursorPosition
 
     qreal x = position.x() + l.cursorToX(cursorPosition);
 
-    int itm = d->findItem(cursorPosition - 1);
+    int itm;
+
+    if (d->visualCursorMovement()) {
+        if (cursorPosition == sl.from + sl.length)
+            cursorPosition--;
+        itm = d->findItem(cursorPosition);
+    } else
+        itm = d->findItem(cursorPosition - 1);
 
     QFixed base = sl.base();
     QFixed descent = sl.descent;
+    bool rightToLeft = d->isRightToLeft();
     if (itm >= 0) {
         const QScriptItem &si = d->layoutData->items.at(itm);
         if (si.ascent > 0)
             base = si.ascent;
         if (si.descent > 0)
             descent = si.descent;
+        rightToLeft = si.analysis.bidiLevel % 2;
     }
     qreal y = position.y() + (sl.y + sl.base() - base).toReal();
     bool toggleAntialiasing = !(p->renderHints() & QPainter::Antialiasing)
@@ -1078,6 +1222,13 @@ void QTextLayout::drawCursor(QPainter *p, const QPointF &pos, int cursorPosition
     p->fillRect(QRectF(x, y, qreal(width), (base + descent + 1).toReal()), p->pen().brush());
     if (toggleAntialiasing)
         p->setRenderHint(QPainter::Antialiasing, false);
+    if (d->layoutData->hasBidi) {
+        const int arrow_extent = 4;
+        int sign = rightToLeft ? -1 : 1;
+        p->drawLine(QLineF(x, y, x + (sign * arrow_extent/2), y + arrow_extent/2));
+        p->drawLine(QLineF(x, y+arrow_extent, x + (sign * arrow_extent/2), y + arrow_extent/2));
+    }
+    return;
 }
 
 /*!
@@ -1311,7 +1462,7 @@ qreal QTextLine::horizontalAdvance() const
 void QTextLine::setLineWidth(qreal width)
 {
     QScriptLine &line = eng->lines[i];
-    if (Q_UNLIKELY(!eng->layoutData)) {
+    if (!eng->layoutData) {
         qWarning("QTextLine: Can't set a line width while not layouting.");
         return;
     }
@@ -1376,9 +1527,8 @@ namespace {
     struct LineBreakHelper
     {
         LineBreakHelper()
-            : glyphCount(0), maxGlyphs(0), currentPosition(0), previousGlyph(0),
-            fontEngine(nullptr), previousFontEngine(nullptr), logClusters(0),
-            manualWrap(false), whiteSpaceOrObject(true)
+            : glyphCount(0), maxGlyphs(0), currentPosition(0), fontEngine(0), logClusters(0),
+              manualWrap(false), whiteSpaceOrObject(true)
         {
         }
 
@@ -1423,7 +1573,7 @@ namespace {
         inline void resetPreviousGlyph()
         {
             previousGlyph = 0;
-            previousFontEngine = nullptr;
+            previousFontEngine = 0;
         }
 
         inline void saveCurrentGlyph()
@@ -1518,6 +1668,7 @@ void QTextLine::layout_helper(int maxGlyphs)
     line.length = 0;
     line.trailingSpaces = 0;
     line.textWidth = 0;
+    line.hasTrailingSpaces = false;
 
     if (!eng->layoutData->items.size() || line.from >= eng->layoutData->string.length()) {
         line.setDefaultHeight(eng);
@@ -1532,7 +1683,7 @@ void QTextLine::layout_helper(int maxGlyphs)
 
     QTextOption::WrapMode wrapMode = eng->option.wrapMode();
     bool breakany = (wrapMode == QTextOption::WrapAnywhere);
-    lbh.manualWrap = (wrapMode == QTextOption::NoWrap);
+    lbh.manualWrap = (wrapMode == QTextOption::ManualWrap || wrapMode == QTextOption::NoWrap);
 
     int item = -1;
     int newItem = eng->findItem(line.from);
@@ -1603,8 +1754,13 @@ void QTextLine::layout_helper(int maxGlyphs)
             // we have a sane height
             if (!line.length && !lbh.tmpData.length)
                 line.setDefaultHeight(eng);
-            lbh.tmpData.length++;
-            lbh.adjustPreviousRightBearing();
+            if (eng->option.flags() & QTextOption::ShowLineAndParagraphSeparators) {
+                addNextCluster(lbh.currentPosition, end, lbh.tmpData, lbh.glyphCount,
+                               current, lbh.logClusters, lbh.glyphs);
+            } else {
+                lbh.tmpData.length++;
+                lbh.adjustPreviousRightBearing();
+            }
             line += lbh.tmpData;
             goto found;
         } else if (current.analysis.flags == QScriptAnalysis::Object) {
@@ -1733,6 +1889,7 @@ found:
         line.textWidth += lbh.spaceData.textWidth;
     if (lbh.spaceData.length) {
         line.trailingSpaces = lbh.spaceData.length;
+        line.hasTrailingSpaces = true;
     }
 
     line.justified = false;
@@ -1791,8 +1948,85 @@ int QTextLine::textStart() const
 */
 int QTextLine::textLength() const
 {
+    if (eng->option.flags() & QTextOption::ShowLineAndParagraphSeparators
+        && eng->block.isValid() && i == eng->lines.count()-1) {
+        return eng->lines[i].length - 1;
+    }
     return eng->lines[i].length + eng->lines[i].trailingSpaces;
 }
+
+static void drawMenuText(QPainter *p, QFixed x, QFixed y, const QScriptItem &si, QTextItemInt &gf, QTextEngine *eng,
+                         int start, int glyph_start)
+{
+    int ge = glyph_start + gf.glyphs.numGlyphs;
+    int gs = glyph_start;
+    int end = start + gf.num_chars;
+    unsigned short *logClusters = eng->logClusters(&si);
+    QGlyphLayout glyphs = eng->shapedGlyphs(&si);
+    QFixed orig_width = gf.width;
+
+    int *ul = eng->underlinePositions;
+    if (ul)
+        while (*ul != -1 && *ul < start)
+            ++ul;
+    bool rtl = si.analysis.bidiLevel % 2;
+    if (rtl)
+        x += si.width;
+
+    do {
+        int gtmp = ge;
+        int stmp = end;
+        if (ul && *ul != -1 && *ul < end) {
+            stmp = *ul;
+            gtmp = logClusters[*ul-si.position];
+        }
+
+        gf.glyphs = glyphs.mid(gs, gtmp - gs);
+        gf.num_chars = stmp - start;
+        gf.chars = eng->layoutData->string.unicode() + start;
+        QFixed w = 0;
+        while (gs < gtmp) {
+            w += glyphs.effectiveAdvance(gs);
+            ++gs;
+        }
+        start = stmp;
+        gf.width = w;
+        if (rtl)
+            x -= w;
+        if (gf.num_chars)
+            p->drawTextItem(QPointF(x.toReal(), y.toReal()), gf);
+        if (!rtl)
+            x += w;
+        if (ul && *ul != -1 && *ul < end) {
+            // draw underline
+            gtmp = (*ul == end-1) ? ge : logClusters[*ul+1-si.position];
+            ++stmp;
+            gf.glyphs = glyphs.mid(gs, gtmp - gs);
+            gf.num_chars = stmp - start;
+            gf.chars = eng->layoutData->string.unicode() + start;
+            gf.logClusters = logClusters + start - si.position;
+            w = 0;
+            while (gs < gtmp) {
+                w += glyphs.effectiveAdvance(gs);
+                ++gs;
+            }
+            ++start;
+            gf.width = w;
+            gf.underlineStyle = QTextCharFormat::SingleUnderline;
+            if (rtl)
+                x -= w;
+            p->drawTextItem(QPointF(x.toReal(), y.toReal()), gf);
+            if (!rtl)
+                x += w;
+            gf.underlineStyle = QTextCharFormat::NoUnderline;
+            ++gf.chars;
+            ++ul;
+        }
+    } while (gs < ge);
+
+    gf.width = orig_width;
+}
+
 
 static void setPenAndDrawBackground(QPainter *p, const QPen &defaultPen, const QTextCharFormat &chf, const QRectF &r)
 {
@@ -1808,6 +2042,21 @@ static void setPenAndDrawBackground(QPainter *p, const QPen &defaultPen, const Q
         p->setPen(QPen(c, 0));
     }
 
+}
+
+namespace {
+    struct GlyphInfo
+    {
+        GlyphInfo(const QGlyphLayout &layout, const QPointF &position,
+                  const QTextItemInt::RenderFlags &renderFlags)
+            : glyphLayout(layout), itemPosition(position), flags(renderFlags)
+        {
+        }
+
+        QGlyphLayout glyphLayout;
+        QPointF itemPosition;
+        QTextItem::RenderFlags flags;
+    };
 }
 
 /*!
@@ -1850,7 +2099,8 @@ void QTextLine::draw(QPainter *p, const QPointF &pos, const QTextLayout::FormatR
         if (selection && selection->start >= 0 && iterator.isOutsideSelection())
             continue;
 
-        if (si.analysis.flags == QScriptAnalysis::LineOrParagraphSeparator)
+        if (si.analysis.flags == QScriptAnalysis::LineOrParagraphSeparator
+            && !(eng->option.flags() & QTextOption::ShowLineAndParagraphSeparators))
             continue;
 
         QFixed itemBaseLine = y;
@@ -1912,6 +2162,19 @@ void QTextLine::draw(QPainter *p, const QPointF &pos, const QTextLayout::FormatR
                     gf.num_chars = 0;
                     gf.width = iterator.itemWidth;
                     p->drawTextItem(QPointF(iterator.x.toReal(), y.toReal()), gf);
+                    if (eng->option.flags() & QTextOption::ShowTabsAndSpaces) {
+                        QChar visualTab(0x2192);
+                        int w = QFontMetrics(f).width(visualTab);
+                        qreal x = iterator.itemWidth.toReal() - w; // Right-aligned
+                        if (x < 0)
+                             p->setClipRect(QRectF(iterator.x.toReal(), line.y.toReal(),
+                                                   iterator.itemWidth.toReal(), line.height().toReal()),
+                                            Qt::IntersectClip);
+                        else
+                             x /= 2; // Centered
+                        p->drawText(QPointF(iterator.x.toReal() + x,
+                                            y.toReal()), visualTab);
+                    }
 
                 }
                 p->restore();
@@ -1933,27 +2196,59 @@ void QTextLine::draw(QPainter *p, const QPointF &pos, const QTextLayout::FormatR
 
         Q_ASSERT(gf.fontEngine);
 
-        QPointF pos(iterator.x.toReal(), itemBaseLine.toReal());
-        if (format.penProperty(QTextFormat::TextOutline).style() != Qt::NoPen) {
-            QPainterPath path;
-            path.setFillRule(Qt::WindingFill);
-            path.addText(pos, f, gf.text());
-
-            p->save();
-            //Currently QPen with a Qt::NoPen style still returns a default
-            //QBrush which != Qt::NoBrush so we need this specialcase to reset it
-            if (p->pen().style() == Qt::NoPen)
-                p->setBrush(Qt::NoBrush);
-            else
-                p->setBrush(p->pen().brush());
-
-            p->setPen(format.textOutline());
-            p->drawPath(path);
-            p->restore();
+        if (eng->underlinePositions) {
+            // can't have selections in this case
+            drawMenuText(p, iterator.x, itemBaseLine, si, gf, eng, iterator.itemStart, iterator.glyphsStart);
         } else {
-            if (noText)
-                gf.glyphs.numGlyphs = 0; // slightly less elegant than it should be
-            p->drawTextItem(pos, gf);
+            QPointF pos(iterator.x.toReal(), itemBaseLine.toReal());
+            if (format.penProperty(QTextFormat::TextOutline).style() != Qt::NoPen) {
+                QPainterPath path;
+                path.setFillRule(Qt::WindingFill);
+
+                if (gf.glyphs.numGlyphs)
+                    gf.fontEngine->addOutlineToPath(pos.x(), pos.y(), gf.glyphs, &path, gf.flags);
+                if (gf.flags) {
+                    const QFontEngine *fe = gf.fontEngine;
+                    const qreal lw = fe->lineThickness().toReal();
+                    if (gf.flags & QTextItem::Underline) {
+                        qreal offs = fe->underlinePosition().toReal();
+                        path.addRect(pos.x(), pos.y() + offs, gf.width.toReal(), lw);
+                    }
+                    if (gf.flags & QTextItem::Overline) {
+                        qreal offs = fe->ascent().toReal() + 1;
+                        path.addRect(pos.x(), pos.y() - offs, gf.width.toReal(), lw);
+                    }
+                    if (gf.flags & QTextItem::StrikeOut) {
+                        qreal offs = fe->ascent().toReal() / 3;
+                        path.addRect(pos.x(), pos.y() - offs, gf.width.toReal(), lw);
+                    }
+                }
+
+                p->save();
+                //Currently QPen with a Qt::NoPen style still returns a default
+                //QBrush which != Qt::NoBrush so we need this specialcase to reset it
+                if (p->pen().style() == Qt::NoPen)
+                    p->setBrush(Qt::NoBrush);
+                else
+                    p->setBrush(p->pen().brush());
+
+                p->setPen(format.textOutline());
+                p->drawPath(path);
+                p->restore();
+            } else {
+                if (noText)
+                    gf.glyphs.numGlyphs = 0; // slightly less elegant than it should be
+                p->drawTextItem(pos, gf);
+            }
+        }
+        if (si.analysis.flags == QScriptAnalysis::Space
+            && (eng->option.flags() & QTextOption::ShowTabsAndSpaces)) {
+            QBrush c = format.foreground();
+            if (c.style() != Qt::NoBrush)
+                p->setPen(c.color());
+            QChar visualSpace((ushort)0xb7);
+            p->drawText(QPointF(iterator.x.toReal(), itemBaseLine.toReal()), visualSpace);
+            p->setPen(pen);
         }
     }
 
@@ -1984,9 +2279,10 @@ qreal QTextLine::cursorToX(int *cursorPos, Edge edge) const
         eng->itemize();
 
     const QScriptLine &line = eng->lines[i];
+    bool lastLine = i >= eng->lines.size() - 1;
 
     QFixed x = line.x;
-    x += eng->alignLine(line);
+    x += eng->alignLine(line) - eng->leadingSpaceWidth(line);
 
     if (!i && !eng->layoutData->items.size()) {
         *cursorPos = 0;
@@ -2033,14 +2329,23 @@ qreal QTextLine::cursorToX(int *cursorPos, Edge edge) const
             glyph_pos++;
     }
 
+    bool reverse = eng->layoutData->items[itm].analysis.bidiLevel % 2;
+
+
     // add the items left of the cursor
 
     int firstItem = eng->findItem(line.from);
     int lastItem = eng->findItem(lineEnd - 1);
     int nItems = (firstItem >= 0 && lastItem >= firstItem)? (lastItem-firstItem+1) : 0;
 
+    QVarLengthArray<int> visualOrder(nItems);
+    QVarLengthArray<uchar> levels(nItems);
+    for (int i = 0; i < nItems; ++i)
+        levels[i] = eng->layoutData->items[i+firstItem].analysis.bidiLevel;
+    QTextEngine::bidiReorder(nItems, levels.data(), visualOrder.data());
+
     for (int i = 0; i < nItems; ++i) {
-        int item = (i + firstItem);
+        int item = visualOrder[i]+firstItem;
         if (item == itm)
             break;
         QScriptItem &si = eng->layoutData->items[item];
@@ -2070,16 +2375,27 @@ qreal QTextLine::cursorToX(int *cursorPos, Edge edge) const
     logClusters = eng->logClusters(si);
     glyphs = eng->shapedGlyphs(si);
     if (si->analysis.flags >= QScriptAnalysis::TabOrObject) {
-        if (pos == l)
+        if (pos == (reverse ? 0 : l))
             x += si->width;
     } else {
+        bool rtl = eng->isRightToLeft();
+        bool visual = eng->visualCursorMovement();
         int end = qMin(lineEnd, si->position + l) - si->position;
-        int start = qMax(line.from - si->position, 0);
-        int glyph_start = logClusters[start];
-        int glyph_end = glyph_pos;
-        glyph_end--;
-        for (int i = glyph_start; i <= glyph_end; i++) {
-            x += glyphs.effectiveAdvance(i);
+        if (reverse) {
+            int glyph_end = end == l ? si->num_glyphs : logClusters[end];
+            int glyph_start = glyph_pos;
+            if (visual && !rtl && !(lastLine && itm == (visualOrder[nItems - 1] + firstItem)))
+                glyph_start++;
+            for (int i = glyph_end - 1; i >= glyph_start; i--)
+                x += glyphs.effectiveAdvance(i);
+        } else {
+            int start = qMax(line.from - si->position, 0);
+            int glyph_start = logClusters[start];
+            int glyph_end = glyph_pos;
+            if (!visual || !rtl || (lastLine && itm == visualOrder[0] + firstItem))
+                glyph_end--;
+            for (int i = glyph_start; i <= glyph_end; i++)
+                x += glyphs.effectiveAdvance(i);
         }
         x += eng->offsetInLigature(si, pos, end, glyph_pos);
     }
@@ -2106,6 +2422,8 @@ int QTextLine::xToCursor(qreal _x, CursorPosition cpos) const
 {
     QFixed x = QFixed::fromReal(_x);
     const QScriptLine &line = eng->lines[i];
+    bool lastLine = i >= eng->lines.size() - 1;
+    int lineNum = i;
 
     if (!eng->layoutData)
         eng->itemize();
@@ -2124,15 +2442,24 @@ int QTextLine::xToCursor(qreal _x, CursorPosition cpos) const
 
     x -= line.x;
     x -= eng->alignLine(line);
-    // qDebug("xToCursor: x=%f, cpos=%d", x.toReal(), cpos);
+//     qDebug("xToCursor: x=%f, cpos=%d", x.toReal(), cpos);
 
+    QSTACKARRAY(int, visualOrder, nItems);
+    QSTACKARRAY(unsigned char, levels, nItems);
+    for (int i = 0; i < nItems; ++i)
+        levels[i] = eng->layoutData->items[i+firstItem].analysis.bidiLevel;
+    QTextEngine::bidiReorder(nItems, levels, visualOrder);
+
+    bool visual = eng->visualCursorMovement();
     if (x <= 0) {
         // left of first item
-        int item = firstItem;
+        int item = visualOrder[0]+firstItem;
         QScriptItem &si = eng->layoutData->items[item];
         if (!si.num_glyphs)
             eng->shape(item);
         int pos = si.position;
+        if (si.analysis.bidiLevel % 2)
+            pos += eng->length(item);
         pos = qMax(line.from, pos);
         pos = qMin(line.from + line_length, pos);
         return pos;
@@ -2140,13 +2467,18 @@ int QTextLine::xToCursor(qreal _x, CursorPosition cpos) const
                || (line.justified && x < line.width)) {
         // has to be in one of the runs
         QFixed pos;
+        bool rtl = eng->isRightToLeft();
 
         eng->shapeLine(line);
+        QVector<int> insertionPoints;
+        if (visual && rtl)
+            eng->insertionPointsForLine(lineNum, insertionPoints);
+        int nchars = 0;
         for (int i = 0; i < nItems; ++i) {
-            int item = (i + firstItem);
+            int item = visualOrder[i]+firstItem;
             QScriptItem &si = eng->layoutData->items[item];
             int item_length = eng->length(item);
-            // qDebug("    item %d, visual %d x_remain=%f", i, item, x.toReal());
+//             qDebug("    item %d, visual %d x_remain=%f", i, item, x.toReal());
 
             int start = qMax(line.from - si.position, 0);
             int end = qMin(line.from + line_length - si.position, item_length);
@@ -2167,19 +2499,20 @@ int QTextLine::xToCursor(qreal _x, CursorPosition cpos) const
                     ++g;
                 }
             }
-            // qDebug("      start=%d, end=%d, gs=%d, ge=%d item_width=%f", start, end, gs, ge, item_width.toReal());
+//             qDebug("      start=%d, end=%d, gs=%d, ge=%d item_width=%f", start, end, gs, ge, item_width.toReal());
 
             if (pos + item_width < x) {
                 pos += item_width;
+                nchars += end;
                 continue;
             }
-            // qDebug("      inside run");
+//             qDebug("      inside run");
             if (si.analysis.flags >= QScriptAnalysis::TabOrObject) {
                 if (cpos == QTextLine::CursorOnCharacter)
                     return si.position;
                 bool left_half = (x - pos) < item_width/2;
 
-                if (left_half)
+                if (bool(si.analysis.bidiLevel % 2) != left_half)
                     return si.position;
                 return si.position + 1;
             }
@@ -2188,29 +2521,92 @@ int QTextLine::xToCursor(qreal _x, CursorPosition cpos) const
             QFixed edge;
             // has to be inside run
             if (cpos == QTextLine::CursorOnCharacter) {
-                glyph_pos = gs;
-                while (gs <= ge) {
-                    if (glyphs.attributes[gs].clusterStart) {
-                        if (pos > x)
+                if (si.analysis.bidiLevel % 2) {
+                    pos += item_width;
+                    glyph_pos = gs;
+                    while (gs <= ge) {
+                        if (glyphs.attributes[gs].clusterStart) {
+                            if (pos < x)
+                                break;
+                            glyph_pos = gs;
+                            edge = pos;
                             break;
-                        glyph_pos = gs;
-                        edge = pos;
+                        }
+                        pos -= glyphs.effectiveAdvance(gs);
+                        ++gs;
                     }
-                    pos += glyphs.effectiveAdvance(gs);
-                    ++gs;
+                } else {
+                    glyph_pos = gs;
+                    while (gs <= ge) {
+                        if (glyphs.attributes[gs].clusterStart) {
+                            if (pos > x)
+                                break;
+                            glyph_pos = gs;
+                            edge = pos;
+                        }
+                        pos += glyphs.effectiveAdvance(gs);
+                        ++gs;
+                    }
                 }
             } else {
                 QFixed dist = INT_MAX/256;
-                while (gs <= ge) {
-                    if (glyphs.attributes[gs].clusterStart && qAbs(x-pos) < dist) {
-                        glyph_pos = gs;
-                        edge = pos;
-                        dist = qAbs(x-pos);
+                if (si.analysis.bidiLevel % 2) {
+                    if (!visual || rtl || (lastLine && i == nItems - 1)) {
+                        pos += item_width;
+                        while (gs <= ge) {
+                            if (glyphs.attributes[gs].clusterStart && qAbs(x-pos) < dist) {
+                                glyph_pos = gs;
+                                edge = pos;
+                                dist = qAbs(x-pos);
+                            }
+                            pos -= glyphs.effectiveAdvance(gs);
+                            ++gs;
+                        }
+                    } else {
+                        while (ge >= gs) {
+                            if (glyphs.attributes[ge].clusterStart && qAbs(x-pos) < dist) {
+                                glyph_pos = ge;
+                                edge = pos;
+                                dist = qAbs(x-pos);
+                            }
+                            pos += glyphs.effectiveAdvance(ge);
+                            --ge;
+                        }
                     }
-                    pos += glyphs.effectiveAdvance(gs);
-                    ++gs;
+                } else {
+                    if (!visual || !rtl || (lastLine && i == 0)) {
+                        while (gs <= ge) {
+                            if (glyphs.attributes[gs].clusterStart && qAbs(x-pos) < dist) {
+                                glyph_pos = gs;
+                                edge = pos;
+                                dist = qAbs(x-pos);
+                            }
+                            pos += glyphs.effectiveAdvance(gs);
+                            ++gs;
+                        }
+                    } else {
+                        QFixed oldPos = pos;
+                        while (gs <= ge) {
+                            pos += glyphs.effectiveAdvance(gs);
+                            if (glyphs.attributes[gs].clusterStart && qAbs(x-pos) < dist) {
+                                glyph_pos = gs;
+                                edge = pos;
+                                dist = qAbs(x-pos);
+                            }
+                            ++gs;
+                        }
+                        pos = oldPos;
+                    }
                 }
                 if (qAbs(x-pos) < dist) {
+                    if (visual) {
+                        if (!rtl && i < nItems - 1) {
+                            nchars += end;
+                            continue;
+                        }
+                        if (rtl && nchars > 0)
+                            return insertionPoints[lastLine ? nchars : nchars - 1];
+                    }
                     return eng->positionInLigature(&si, end, x, pos, -1,
                                                    cpos == QTextLine::CursorOnCharacter);
                 }
@@ -2222,12 +2618,13 @@ int QTextLine::xToCursor(qreal _x, CursorPosition cpos) const
     }
     // right of last item
 //     qDebug() << "right of last";
-    int item = (nItems -1 + firstItem);
+    int item = visualOrder[nItems-1]+firstItem;
     QScriptItem &si = eng->layoutData->items[item];
     if (!si.num_glyphs)
         eng->shape(item);
     int pos = si.position;
-    pos += eng->length(item);
+    if (!(si.analysis.bidiLevel % 2))
+        pos += eng->length(item);
     pos = qMax(line.from, pos);
 
     int maxPos = line.from + line_length;
@@ -2245,3 +2642,7 @@ int QTextLine::xToCursor(qreal _x, CursorPosition cpos) const
 }
 
 QT_END_NAMESPACE
+
+
+
+

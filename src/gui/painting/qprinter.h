@@ -46,8 +46,10 @@ class Q_GUI_EXPORT QPrinter : public QPaintDevice
 {
     Q_DECLARE_PRIVATE(QPrinter)
 public:
-    QPrinter();
-    explicit QPrinter(const QPrinterInfo& printer);
+    enum PrinterMode { ScreenResolution, PrinterResolution, HighResolution };
+
+    explicit QPrinter(PrinterMode mode = ScreenResolution);
+    explicit QPrinter(const QPrinterInfo& printer, PrinterMode mode = ScreenResolution);
     ~QPrinter();
 
     int devType() const;
@@ -87,6 +89,8 @@ public:
                         Aborted,
                         Error };
 
+    enum OutputFormat { NativeFormat, PdfFormat, PostScriptFormat };
+
     // ### Qt 5: Merge with QAbstractPrintDialog::PrintRange
     enum PrintRange { AllPages, Selection, PageRange, CurrentPage };
 
@@ -107,10 +111,17 @@ public:
         DuplexShortSide
     };
 
+
+    void setOutputFormat(OutputFormat format);
+    OutputFormat outputFormat() const;
+
     void setPrinterName(const QString &);
     QString printerName() const;
 
     bool isValid() const;
+
+    void setOutputFileName(const QString &);
+    QString outputFileName()const;
 
     void setDocName(const QString &);
     QString docName() const;
@@ -162,6 +173,7 @@ public:
 
     QList<int> supportedResolutions() const;
 
+
     void setFontEmbeddingEnabled(bool enable);
     bool fontEmbeddingEnabled() const;
 
@@ -200,7 +212,7 @@ protected:
     void setEngines(QPrintEngine *printEngine, QPaintEngine *paintEngine);
 
 private:
-    void init();
+    void init(PrinterMode mode);
 
     Q_DISABLE_COPY(QPrinter)
 

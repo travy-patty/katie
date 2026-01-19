@@ -25,6 +25,8 @@
 #include "qdeclarativeinfo.h"
 #include "qdeclarativeengine_p.h"
 
+#include <QNetworkRequest>
+#include <QNetworkReply>
 #include <QFile>
 
 QT_BEGIN_NAMESPACE

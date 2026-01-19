@@ -26,9 +26,10 @@
 #include "qapplication.h"
 #include "qdebug.h"
 #include "qmath.h"
+#include "qtextengine_p.h"
+#include "qvarlengtharray.h"
 #include "qfontengine_p.h"
 #include "qpaintengineex_p.h"
-#include "qcorecommon_p.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -168,6 +169,8 @@ QFont QTextItem::font() const
   \value ConstantOpacity    The engine supports the feature provided by
                             QPainter::setOpacity().
   \value PainterPaths       The engine has path support.
+  \value PaintOutsidePaintEvent The engine is capable of painting outside of
+                                paint events.
   \value PatternTransform   The engine has support for transforming brush
                             patterns.
   \value PerspectiveTransform The engine has support for performing perspective
@@ -175,6 +178,7 @@ QFont QTextItem::font() const
   \value PixmapTransform    The engine can transform pixmaps, including
                             rotation and shearing.
   \value PorterDuff         The engine supports Porter-Duff operations
+  \value RasterOpModes      The engine supports bitwise raster operations.
   \value AllFeatures        All of the above features. This enum value is usually
                             used as a bit mask.
 */
@@ -258,17 +262,15 @@ static QPaintEngine *qt_polygon_recursion = 0;
 */
 void QPaintEngine::drawPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode)
 {
-    if (Q_LIKELY(pointCount > 0)) {
-        Q_ASSERT_X(qt_polygon_recursion != this, "QPaintEngine::drawPolygon",
-                   "At least one drawPolygon function must be implemented");
-        qt_polygon_recursion = this;
-        QSTACKARRAY(QPoint, fp, pointCount);
-        for (int i = 0; i < pointCount; ++i) {
-            fp[i] = points[i].toPoint();
-        }
-        drawPolygon(fp, pointCount, mode);
-        qt_polygon_recursion = 0;
+    Q_ASSERT_X(qt_polygon_recursion != this, "QPaintEngine::drawPolygon",
+               "At least one drawPolygon function must be implemented");
+    qt_polygon_recursion = this;
+    QPoint fp[pointCount];
+    for (int i = 0; i < pointCount; ++i) {
+        fp[i] = points[i].toPoint();
     }
+    drawPolygon(fp, pointCount, mode);
+    qt_polygon_recursion = 0;
 }
 
 /*!
@@ -281,17 +283,15 @@ void QPaintEngine::drawPolygon(const QPointF *points, int pointCount, PolygonDra
 */
 void QPaintEngine::drawPolygon(const QPoint *points, int pointCount, PolygonDrawMode mode)
 {
-    if (Q_LIKELY(pointCount > 0)) {
-        Q_ASSERT_X(qt_polygon_recursion != this, "QPaintEngine::drawPolygon",
-                   "At least one drawPolygon function must be implemented");
-        qt_polygon_recursion = this;
-        QSTACKARRAY(QPointF, fp, pointCount);
-        for (int i = 0; i < pointCount; ++i) {
-            fp[i] = points[i];
-        }
-        drawPolygon(fp, pointCount, mode);
-        qt_polygon_recursion = 0;
+    Q_ASSERT_X(qt_polygon_recursion != this, "QPaintEngine::drawPolygon",
+               "At least one drawPolygon function must be implemented");
+    qt_polygon_recursion = this;
+    QPointF fp[pointCount];
+    for (int i=0; i<pointCount; ++i) {
+        fp[i] = points[i];
     }
+    drawPolygon(fp, pointCount, mode);
+    qt_polygon_recursion = 0;
 }
 
 /*!
@@ -299,7 +299,11 @@ void QPaintEngine::drawPolygon(const QPoint *points, int pointCount, PolygonDraw
 
     \value X11
     \value PostScript
+    \value SVG Scalable Vector Graphics XML format
     \value Raster
+    \value Pdf Portable Document Format
+    \value User First user type ID
+    \value MaxUser Last user type ID
 */
 
 /*!
@@ -651,12 +655,13 @@ void QPaintEngine::drawTextItem(const QPointF &p, const QTextItem &textItem)
     QPainterPath path;
     path.setFillRule(Qt::WindingFill);
     if (ti.glyphs.numGlyphs)
-        ti.fontEngine->addOutlineToPath(p.x(), p.y(), ti.glyphs, &path);
+        ti.fontEngine->addOutlineToPath(0, 0, ti.glyphs, &path, ti.flags);
     if (!path.isEmpty()) {
         painter()->save();
         painter()->setRenderHint(QPainter::Antialiasing,
                                  bool((painter()->renderHints() & QPainter::TextAntialiasing)
-                                      && !(painter()->font().hintingPreference() & QFont::PreferNoHinting)));
+                                      && !(painter()->font().styleStrategy() & QFont::NoAntialias)));
+        painter()->translate(p.x(), p.y());
         painter()->fillPath(path, state->pen().brush());
         painter()->restore();
     }
@@ -835,4 +840,37 @@ QRect QPaintEngine::systemRect() const
     return d_func()->systemRect;
 }
 
+void QPaintEnginePrivate::drawBoxTextItem(const QPointF &p, const QTextItemInt &ti)
+{
+    if (!ti.glyphs.numGlyphs)
+        return;
+
+    // any fixes here should probably also be done in QFontEngineBox::draw
+    const int size = qRound(ti.fontEngine->ascent());
+    QVarLengthArray<QFixedPoint> positions;
+    QVarLengthArray<glyph_t> glyphs;
+    QTransform matrix = QTransform::fromTranslate(p.x(), p.y() - size);
+    ti.fontEngine->getGlyphPositions(ti.glyphs, matrix, ti.flags, glyphs, positions);
+    if (glyphs.size() == 0)
+        return;
+
+    QSize s(size - 3, size - 3);
+
+    QPainter *painter = q_func()->state->painter();
+    painter->save();
+    painter->setBrush(Qt::NoBrush);
+    QPen pen = painter->pen();
+    pen.setWidthF(ti.fontEngine->lineThickness().toReal());
+    painter->setPen(pen);
+    for (int k = 0; k < positions.size(); k++)
+        painter->drawRect(QRectF(positions[k].toPointF(), s));
+    painter->restore();
+}
+
 QT_END_NAMESPACE
+
+
+
+
+
+

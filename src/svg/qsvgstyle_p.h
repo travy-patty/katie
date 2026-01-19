@@ -34,6 +34,9 @@
 //
 
 #include "QtGui/qpainter.h"
+
+#ifndef QT_NO_SVG
+
 #include "QtGui/qpen.h"
 #include "QtGui/qbrush.h"
 #include "QtGui/qmatrix.h"
@@ -134,6 +137,7 @@ class QSvgStyleProperty : public QSvgRefCounted
 public:
     enum Type
     {
+        QUALITY,
         FILL,
         VIEWPORT_FILL,
         FONT,
@@ -141,6 +145,8 @@ public:
         SOLID_COLOR,
         GRADIENT,
         TRANSFORM,
+        ANIMATE_TRANSFORM,
+        ANIMATE_COLOR,
         OPACITY,
         COMP_OP
     };
@@ -158,6 +164,38 @@ public:
     virtual void apply(QPainter *p, const QSvgNode *node, QSvgExtraStates &states);
     virtual void revert(QPainter *p, QSvgExtraStates &states);
 };
+
+class QSvgQualityStyle : public QSvgStyleProperty
+{
+public:
+    QSvgQualityStyle(int color);
+    virtual void apply(QPainter *p, const QSvgNode *node, QSvgExtraStates &states);
+    virtual void revert(QPainter *p, QSvgExtraStates &states);
+    virtual Type type() const;
+private:
+    // color-render ing v 	v 	'auto' | 'optimizeSpeed' |
+    //                                  'optimizeQuality' | 'inherit'
+    //int m_colorRendering;
+
+    // shape-rendering v 	v 	'auto' | 'optimizeSpeed' | 'crispEdges' |
+    //                                  'geometricPrecision' | 'inherit'
+    //QSvgShapeRendering m_shapeRendering;
+
+
+    // text-rendering    v 	v 	'auto' | 'optimizeSpeed' | 'optimizeLegibility'
+    //                                | 'geometricPrecision' | 'inherit'
+    //QSvgTextRendering m_textRendering;
+
+
+    // vector-effect         v 	x 	'default' | 'non-scaling-stroke' | 'inherit'
+    //QSvgVectorEffect m_vectorEffect;
+
+    // image-rendering v 	v 	'auto' | 'optimizeSpeed' | 'optimizeQuality' |
+    //                                      'inherit'
+    //QSvgImageRendering m_imageRendering;
+};
+
+
 
 class QSvgOpacityStyle : public QSvgStyleProperty
 {
@@ -301,6 +339,12 @@ public:
         m_styleSet = true;
     }
 
+    void setVariant(QFont::Capitalization fontVariant)
+    {
+        m_qfont.setCapitalization(fontVariant);
+        m_variantSet = true;
+    }
+
     static int SVGToQtWeight(int weight);
 
     void setWeight(int weight)
@@ -337,6 +381,7 @@ private:
     bool m_familySet;
     bool m_sizeSet;
     bool m_styleSet;
+    bool m_variantSet;
     bool m_weightSet;
     bool m_textAnchorSet;
 };
@@ -567,6 +612,102 @@ private:
 };
 
 
+class QSvgAnimateTransform : public QSvgStyleProperty
+{
+public:
+    enum TransformType
+    {
+        Empty,
+        Translate,
+        Scale,
+        Rotate,
+        SkewX,
+        SkewY
+    };
+    enum Additive
+    {
+        Sum,
+        Replace
+    };
+public:
+    QSvgAnimateTransform(int startMs, int endMs, int by = 0);
+    void setArgs(TransformType type, Additive additive, const QVector<qreal> &args);
+    void setFreeze(bool freeze);
+    void setRepeatCount(qreal repeatCount);
+    virtual void apply(QPainter *p, const QSvgNode *node, QSvgExtraStates &states);
+    virtual void revert(QPainter *p, QSvgExtraStates &states);
+    virtual Type type() const;
+    QSvgAnimateTransform::Additive additiveType() const
+    {
+        return m_additive;
+    }
+
+    bool animActive(qreal totalTimeElapsed)
+    {
+        if (totalTimeElapsed < m_from)
+            return false;
+        if (m_freeze || m_repeatCount < 0) // fill="freeze" or repeat="indefinite"
+            return true;
+        if (m_totalRunningTime == 0)
+            return false;
+        qreal animationFrame = (totalTimeElapsed - m_from) / m_totalRunningTime;
+        if (animationFrame > m_repeatCount)
+            return false;
+        return true;
+    }
+
+    bool transformApplied() const
+    {
+        return m_transformApplied;
+    }
+
+    // Call this instead of revert if you know that revert is unnecessary.
+    void clearTransformApplied()
+    {
+        m_transformApplied = false;
+    }
+
+protected:
+    void resolveMatrix(const QSvgNode *node);
+private:
+    qreal m_from, m_to;
+    qreal m_totalRunningTime;
+    TransformType m_type;
+    Additive m_additive;
+    QVector<qreal> m_args;
+    int m_count;
+    QTransform m_transform;
+    QTransform m_oldWorldTransform;
+    bool m_finished;
+    bool m_freeze;
+    qreal m_repeatCount;
+    bool m_transformApplied;
+};
+
+
+class QSvgAnimateColor : public QSvgStyleProperty
+{
+public:
+    QSvgAnimateColor(int startMs, int endMs, int by = 0);
+    void setArgs(bool fill, const QList<QColor> &colors);
+    void setFreeze(bool freeze);
+    void setRepeatCount(qreal repeatCount);
+    virtual void apply(QPainter *p, const QSvgNode *node, QSvgExtraStates &states);
+    virtual void revert(QPainter *p, QSvgExtraStates &states);
+    virtual Type type() const;
+private:
+    qreal m_from, m_to;
+    qreal m_totalRunningTime;
+    QList<QColor> m_colors;
+    QBrush m_oldBrush;
+    QPen   m_oldPen;
+    bool m_fill;
+    bool m_finished;
+    bool m_freeze;
+    qreal m_repeatCount;
+};
+
+
 class QSvgCompOpStyle : public QSvgStyleProperty
 {
 public:
@@ -591,13 +732,15 @@ class QSvgStyle
 {
 public:
     QSvgStyle()
-        : fill(0),
+        : quality(0),
+          fill(0),
           viewportFill(0),
           font(0),
           stroke(0),
           solidColor(0),
           gradient(0),
           transform(0),
+          animateColor(0),
           opacity(0),
           compop(0)
     {}
@@ -605,7 +748,7 @@ public:
 
     void apply(QPainter *p, const QSvgNode *node, QSvgExtraStates &states);
     void revert(QPainter *p, QSvgExtraStates &states);
-
+    QSvgRefCounter<QSvgQualityStyle>      quality;
     QSvgRefCounter<QSvgFillStyle>         fill;
     QSvgRefCounter<QSvgViewportFillStyle> viewportFill;
     QSvgRefCounter<QSvgFontStyle>         font;
@@ -613,6 +756,8 @@ public:
     QSvgRefCounter<QSvgSolidColorStyle>   solidColor;
     QSvgRefCounter<QSvgGradientStyle>     gradient;
     QSvgRefCounter<QSvgTransformStyle>    transform;
+    QSvgRefCounter<QSvgAnimateColor>      animateColor;
+    QList<QSvgRefCounter<QSvgAnimateTransform> >   animateTransforms;
     QSvgRefCounter<QSvgOpacityStyle>      opacity;
     QSvgRefCounter<QSvgCompOpStyle>       compop;
 };
@@ -657,4 +802,5 @@ public:
 
 QT_END_NAMESPACE
 
+#endif // QT_NO_SVG
 #endif // QSVGSTYLE_P_H

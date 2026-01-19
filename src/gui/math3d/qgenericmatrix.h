@@ -26,6 +26,7 @@
 #include <QtCore/qdebug.h>
 #include <QtCore/qdatastream.h>
 
+
 QT_BEGIN_NAMESPACE
 
 
@@ -324,45 +325,47 @@ typedef QGenericMatrix<4, 2> QMatrix4x2;
 typedef QGenericMatrix<4, 3> QMatrix4x3;
 
 #ifndef QT_NO_DEBUG_STREAM
+
 template <int N, int M>
 QDebug operator<<(QDebug dbg, const QGenericMatrix<N, M> &m)
 {
     dbg.nospace() << "QGenericMatrix<" << N << ", " << M
-        << ">(\n";
+        << ">(" << endl << qSetFieldWidth(10);
     for (int row = 0; row < M; ++row) {
-        for (int spc = 0; spc < 10; ++spc)
-            dbg.space();
         for (int col = 0; col < N; ++col)
             dbg << m(row, col);
-        dbg.nospace() << "\n";
+        dbg << endl;
     }
-    dbg.nospace() << ')';
+    dbg << qSetFieldWidth(0) << ')';
     return dbg.space();
 }
+
 #endif
 
 #ifndef QT_NO_DATASTREAM
+
 template <int N, int M>
 QDataStream &operator<<(QDataStream &stream, const QGenericMatrix<N, M> &matrix)
 {
     for (int row = 0; row < M; ++row)
         for (int col = 0; col < N; ++col)
-            stream << qreal(matrix(row, col));
+            stream << double(matrix(row, col));
     return stream;
 }
 
 template <int N, int M>
 QDataStream &operator>>(QDataStream &stream, QGenericMatrix<N, M> &matrix)
 {
-    qreal x = 0.0;
+    double x;
     for (int row = 0; row < M; ++row) {
         for (int col = 0; col < N; ++col) {
             stream >> x;
-            matrix(row, col) = x;
+            matrix(row, col) = qreal(x);
         }
     }
     return stream;
 }
+
 #endif
 
 QT_END_NAMESPACE
@@ -375,5 +378,6 @@ Q_DECLARE_METATYPE(QMatrix3x3)
 Q_DECLARE_METATYPE(QMatrix3x4)
 Q_DECLARE_METATYPE(QMatrix4x2)
 Q_DECLARE_METATYPE(QMatrix4x3)
+
 
 #endif

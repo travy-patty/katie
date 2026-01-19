@@ -38,9 +38,10 @@ QT_BEGIN_NAMESPACE
     The Image element is used to display images in a declarative user interface.
 
     The source of the image is specified as a URL using the \l source property.
-    Images can be supplied in any of the standard image formats supported by Katie,
-    including bitmap formats such as PNG and vector graphics formats such as SVG.
-    If you need to display animated images, use the \l AnimatedImage element.
+    Images can be supplied in any of the standard image formats supported by Qt,
+    including bitmap formats such as PNG and JPEG, and vector graphics formats
+    such as SVG. If you need to display animated images, use the \l AnimatedImage
+    element.
 
     If the \l{Item::width}{width} and \l{Item::height}{height} properties are not
     specified, the Image element automatically uses the size of the loaded image.
@@ -334,7 +335,7 @@ qreal QDeclarativeImage::paintedHeight() const
 
         Image {
            anchors.fill: parent
-           source: "reallyBigImage.png"
+           source: "reallyBigImage.jpg"
            sourceSize.width: 1024
            sourceSize.height: 1024
         }
@@ -351,8 +352,9 @@ qreal QDeclarativeImage::paintedHeight() const
     Avoid changing this property dynamically; rendering an SVG is \e slow compared
     to an image.
 
-    If the source is a non-scalable image (eg. PNG), the loaded image will
-    be no greater than this property specifies.
+    If the source is a non-scalable image (eg. JPEG), the loaded image will
+    be no greater than this property specifies. For some formats (currently only JPEG),
+    the whole image will never actually be loaded into memory.
 
     Since QtQuick 1.1 the sourceSize can be cleared to the natural size of the image
     by setting sourceSize to \c undefined.

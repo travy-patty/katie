@@ -27,11 +27,10 @@
 #include <QtCore/QSet>
 #include <QtCore/QStack>
 #include <QtCore/QMap>
+#include <QtCore/QLinkedList>
 #include <QtCore/QString>
 #include <QtCore/QTextStream>
 #include <QtCore/QPair>
-
-#include <vector>
 
 QT_BEGIN_NAMESPACE
 
@@ -128,21 +127,21 @@ public:
 };
 
 // names
-typedef std::vector<QString>::iterator Name;
-typedef std::vector<Name> NameList;
+typedef QLinkedList<QString>::iterator Name;
+typedef QLinkedList<Name> NameList;
 typedef OrderedSet<Name> NameSet;
 
 // items
-typedef std::vector<Item> ItemList;
+typedef QLinkedList<Item> ItemList;
 typedef ItemList::iterator ItemPointer;
 
 // rules
-typedef std::vector<Rule> debug_infot;
+typedef QLinkedList<Rule> debug_infot;
 typedef debug_infot::iterator RulePointer;
 typedef QMultiMap<Name, RulePointer> RuleMap;
 
 // states
-typedef std::vector<State> StateList;
+typedef QLinkedList<State> StateList;
 typedef StateList::iterator StatePointer;
 
 // arrows
@@ -240,7 +239,7 @@ class Node
 public:
   typedef OrderedSet<Node<_Tp> > Repository;
   typedef typename Repository::iterator iterator;
-  typedef typename std::vector<iterator>::iterator edge_iterator;
+  typedef typename QLinkedList<iterator>::iterator edge_iterator;
 
 public:
   static iterator get (_Tp data);
@@ -278,7 +277,7 @@ public: // attributes
   mutable bool root;
   mutable int dfn;
   mutable _Tp data;
-  mutable std::vector<iterator> outs;
+  mutable QLinkedList<iterator> outs;
 
 protected:
   inline Node () {}
@@ -300,7 +299,7 @@ typename Node<_Tp>::iterator Node<_Tp>::get (_Tp data)
 }
 
 template <typename _Tp>
-QPair<typename std::vector<typename Node<_Tp>::iterator>::iterator, bool> Node<_Tp>::insertEdge (typename Node<_Tp>::iterator other) const
+QPair<typename QLinkedList<typename Node<_Tp>::iterator>::iterator, bool> Node<_Tp>::insertEdge (typename Node<_Tp>::iterator other) const
 {
   edge_iterator it = qFind (outs.begin (), outs.end (), other);
 
@@ -336,7 +335,7 @@ public:
   QString decl_file_name;
   QString impl_file_name;
   QString token_prefix;
-  std::vector<QString> names;
+  QLinkedList<QString> names;
   Name start;
   NameSet terminals;
   NameSet non_terminals;

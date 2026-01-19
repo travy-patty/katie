@@ -30,6 +30,7 @@
 #include "qevent.h"
 #include "qstring.h"
 #include "qdebug.h"
+#include "qtextengine_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -164,6 +165,14 @@ QAbstractItemDelegate::QAbstractItemDelegate(QObject *parent)
 */
 QAbstractItemDelegate::QAbstractItemDelegate(QObjectPrivate &dd, QObject *parent)
     : QObject(dd, parent)
+{
+
+}
+
+/*!
+    Destroys the abstract item delegate.
+*/
+QAbstractItemDelegate::~QAbstractItemDelegate()
 {
 
 }

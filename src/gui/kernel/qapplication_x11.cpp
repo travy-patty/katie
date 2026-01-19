@@ -20,6 +20,7 @@
 ****************************************************************************/
 
 #include "qplatformdefs.h"
+#include "qcolormap.h"
 #include "qdesktopwidget.h"
 #include "qapplication.h"
 #include "qapplication_p.h"
@@ -36,6 +37,7 @@
 #include "qsessionmanager.h"
 #include "qclipboard.h"
 #include "qwhatsthis.h"
+#include "qsettings.h"
 #include "qstylefactory.h"
 #include "qfileinfo.h"
 #include "qdir.h"
@@ -159,7 +161,12 @@ static const char* X11AtomsTbl[QX11Data::NPredefinedAtoms] = {
     "_NET_WM_WINDOW_TYPE_DND\0",
     "_NET_WM_WINDOW_TYPE_NORMAL\0",
 
+    "_NET_STARTUP_INFO\0",
+    "_NET_STARTUP_INFO_BEGIN\0",
+
     "_NET_SUPPORTING_WM_CHECK\0",
+
+    "_NET_WM_CM_S0\0",
 
     "_NET_SYSTEM_TRAY_VISUAL\0",
     "_NET_SYSTEM_TRAY_OPCODE\0",
@@ -197,7 +204,7 @@ static const char* X11AtomsTbl[QX11Data::NPredefinedAtoms] = {
     "_QT_SETTINGS_TIMESTAMP\0"
 };
 
-Q_AUTOTEST_EXPORT QX11Data *qt_x11Data = nullptr;
+Q_GUI_EXPORT QX11Data *qt_x11Data = 0;
 
 /*****************************************************************************
   Internal variables and functions
@@ -215,6 +222,9 @@ static Window      curWin = 0;                          // current window
 
 // function to update the workarea of the screen - in qdesktopwidget_x11.cpp
 extern void qt_desktopwidget_update_workarea();
+
+// Function to change the window manager state (from qwidget_x11.cpp)
+extern void qt_change_net_wm_state(const QWidget *w, bool set, Atom one, Atom two);
 
 // flags for extensions for special Languages, currently only for RTL languages
 bool qt_use_rtl_extensions = false;
@@ -253,11 +263,7 @@ QWidget *qt_button_down = 0; // last widget to be pressed with the mouse
 QPointer<QWidget> qt_last_mouse_receiver = 0;
 static QWidget *qt_popup_down = 0;  // popup that contains the pressed widget
 
-#ifndef QT_NO_DRAGANDDROP
 extern bool qt_xdnd_dragging;
-#else
-static bool qt_xdnd_dragging = false;
-#endif
 
 #ifndef QT_NO_XFIXES
 
@@ -405,12 +411,10 @@ static int qt_x_errhandler(Display *dpy, XErrorEvent *err)
                     return 0;
                 }
             }
-#ifndef QT_NO_DRAGANDDROP
             if (qt_x11Data->xdndHandleBadwindow()) {
                 qDebug("xdndHandleBadwindow returned true");
                 return 0;
             }
-#endif // QT_NO_DRAGANDDROP
         }
         if (qt_x11Data->ignore_badwindow)
             return 0;
@@ -471,12 +475,9 @@ static int qt_x_errhandler(Display *dpy, XErrorEvent *err)
 
 static int qt_xio_errhandler(Display *)
 {
-    // NOTE: this handler can be called if the application receives SIGTERM
-    // which is not fatal
-    QByteArray appName = QApplication::applicationName().toLocal8Bit();
-    qWarning("%s: Fatal IO error: %s", appName.constData(), ::strerror(errno));
     QApplication::exit(1);
-    ::exit(1);
+    QByteArray appName = QApplication::applicationName().toLocal8Bit();
+    qFatal("%s: Fatal IO error: client killed", appName.constData());
     return 0;
 }
 
@@ -534,10 +535,6 @@ static void qt_x11_create_intern_atoms()
         qt_x11Data->atoms[i] = XInternAtom(qt_x11Data->display, const_cast<char*>(X11AtomsTbl[i]), False);
     }
 #endif
-
-    QSTACKARRAY(char, snprintfbuf, 32);
-    ::snprintf(snprintfbuf, sizeof(snprintfbuf), "_NET_WM_CM_S%i", qt_x11Data->defaultScreen);
-    qt_x11Data->compositorAtom = XInternAtom(qt_x11Data->display, snprintfbuf, False);
 }
 
 Q_GUI_EXPORT void qt_x11_apply_settings_in_all_apps()
@@ -556,6 +553,12 @@ Q_GUI_EXPORT void qt_x11_apply_settings_in_all_apps()
 */
 bool QApplicationPrivate::x11_apply_settings()
 {
+    if (!QApplication::desktopSettingsAware()) {
+        return true;
+    }
+
+    QSettings *settings = QCoreApplicationPrivate::staticConf();
+
     /*
       Qt settings. This is now they are written into the datastream.
 
@@ -571,26 +574,126 @@ bool QApplicationPrivate::x11_apply_settings()
       globalStrut/width          - int
       globalStrut/height         - int
       GUIEffects                 - QStringList
+      Font Substitutions/ *      - QStringList
+      Font Substitutions/...     - QStringList
     */
 
-    QPalette pal = qt_guiPlatformPlugin()->palette();
-    if (pal != QPalette()) {
-        QApplicationPrivate::setSystemPalette(pal);
+    QPalette pal(Qt::black);
+    int groupCount = 0;
+    QStringList strlist = settings->value(QLatin1String("Qt/Palette/active")).toStringList();
+    if (!strlist.isEmpty()) {
+        ++groupCount;
+        for (int i = 0; i < qMin(strlist.count(), int(QPalette::NColorRoles)); i++)
+            pal.setColor(QPalette::Active, (QPalette::ColorRole) i,
+                         QColor(strlist[i]));
+    }
+    strlist = settings->value(QLatin1String("Qt/Palette/inactive")).toStringList();
+    if (!strlist.isEmpty()) {
+        ++groupCount;
+        for (int i = 0; i < qMin(strlist.count(), int(QPalette::NColorRoles)); i++)
+            pal.setColor(QPalette::Inactive, (QPalette::ColorRole) i,
+                         QColor(strlist[i]));
+    }
+    strlist = settings->value(QLatin1String("Qt/Palette/disabled")).toStringList();
+    if (!strlist.isEmpty()) {
+        ++groupCount;
+        for (int i = 0; i < qMin(strlist.count(), int(QPalette::NColorRoles)); i++)
+            pal.setColor(QPalette::Disabled, (QPalette::ColorRole) i,
+                         QColor(strlist[i]));
     }
 
-    QString stylename;
-    if (QApplicationPrivate::styleOverride.isEmpty()) {
+    // ### Fix properly for 4.6
+    if (groupCount == QPalette::NColorGroups)
+        QApplicationPrivate::setSystemPalette(pal);
+
+    QString fontDescription = settings->value(QLatin1String("Qt/font")).toString();
+    if (!fontDescription.isEmpty()) {
+        QFont font(QApplication::font());
+        font.fromString(fontDescription );
+        QApplicationPrivate::setSystemFont(font);
+    }
+
+    // read library (ie. plugin) path list
+    QStringList pathlist = settings->value(QLatin1String("Qt/libraryPath")).toString().split(QLatin1Char(':'));
+    if (! pathlist.isEmpty()) {
+        QStringList::ConstIterator it = pathlist.constBegin();
+        while (it != pathlist.constEnd())
+            QApplication::addLibraryPath(*it++);
+    }
+
+    // read new QStyle
+    QString stylename = settings->value(QLatin1String("Qt/style")).toString();
+
+    if (stylename.isEmpty() && QApplicationPrivate::styleOverride.isNull() && qt_x11Data->use_xrender) {
         stylename = qt_guiPlatformPlugin()->styleName();
     }
-    if (!stylename.isEmpty() && QApplicationPrivate::styleOverride.isEmpty()) {
+
+    if (QCoreApplication::startingUp()) {
+        if (!stylename.isEmpty() && QApplicationPrivate::styleOverride.isNull())
+            QApplicationPrivate::styleOverride = stylename;
+    } else {
         if (stylename.compare(QApplication::style()->objectName(), Qt::CaseInsensitive) != 0) {
             QApplication::setStyle(stylename);
         }
     }
 
-#ifndef QT_NO_ICON
-    QIconLoader::instance()->updateSystemTheme();
+    int num = settings->value(QLatin1String("Qt/doubleClickInterval"),
+                             QApplication::doubleClickInterval()).toInt();
+    QApplication::setDoubleClickInterval(num);
+
+    num = settings->value(QLatin1String("Qt/cursorFlashTime"),
+                         QApplication::cursorFlashTime()).toInt();
+    QApplication::setCursorFlashTime(num);
+
+#ifndef QT_NO_WHEELEVENT
+    num = settings->value(QLatin1String("Qt/wheelScrollLines"),
+                         QApplication::wheelScrollLines()).toInt();
+    QApplication::setWheelScrollLines(num);
 #endif
+
+    QString defaultcodec = settings->value(QLatin1String("Qt/defaultCodec"),
+                                          QVariant(QLatin1String("none"))).toString();
+    if (defaultcodec != QLatin1String("none")) {
+        QTextCodec *codec = QTextCodec::codecForName(defaultcodec.toLatin1());
+        if (codec)
+            QTextCodec::setCodecForTr(codec);
+    }
+
+    int w = settings->value(QLatin1String("Qt/globalStrut/width")).toInt();
+    int h = settings->value(QLatin1String("Qt/globalStrut/height")).toInt();
+    QSize strut(w, h);
+    if (strut.isValid())
+        QApplication::setGlobalStrut(strut);
+
+    QStringList effects = settings->value(QLatin1String("Qt/GUIEffects")).toStringList();
+    QApplication::setEffectEnabled(Qt::UI_General,
+                                   effects.contains(QLatin1String("general")));
+    QApplication::setEffectEnabled(Qt::UI_AnimateMenu,
+                                   effects.contains(QLatin1String("animatemenu")));
+    QApplication::setEffectEnabled(Qt::UI_FadeMenu,
+                                   effects.contains(QLatin1String("fademenu")));
+    QApplication::setEffectEnabled(Qt::UI_AnimateCombo,
+                                   effects.contains(QLatin1String("animatecombo")));
+    QApplication::setEffectEnabled(Qt::UI_AnimateTooltip,
+                                   effects.contains(QLatin1String("animatetooltip")));
+    QApplication::setEffectEnabled(Qt::UI_FadeTooltip,
+                                   effects.contains(QLatin1String("fadetooltip")));
+    QApplication::setEffectEnabled(Qt::UI_AnimateToolBox,
+                                   effects.contains(QLatin1String("animatetoolbox")));
+
+    if (!qt_x11Data->has_fontconfig) {
+        foreach (const QString &fam, settings->keys()) {
+            if (!fam.startsWith(QLatin1String("Qt/Font Substitutions/"))) {
+                continue;
+            }
+            QStringList subs = settings->value(fam).toStringList();
+            QFont::insertSubstitutions(fam, subs);
+        }
+    }
+
+    qt_use_rtl_extensions = settings->value(QLatin1String("Qt/useRtlExtensions"), false).toBool();
+
+    QIconLoader::instance()->updateSystemTheme();
 
     return true;
 }
@@ -778,6 +881,29 @@ static void getXDefault(const char *group, const char *key, int *val)
             FcNameConstant((FcChar8 *) str, val);
     }
 }
+
+static void getXDefault(const char *group, const char *key, bool *val)
+{
+    char *str = XGetDefault(qt_x11Data->display, group, key);
+    if (str) {
+        char c = str[0];
+        if (isupper((int)c))
+            c = tolower(c);
+        if (c == 't' || c == 'y' || c == '1')
+            *val = true;
+        else if (c == 'f' || c == 'n' || c == '0')
+            *val = false;
+        if (c == 'o') {
+            c = str[1];
+            if (isupper((int)c))
+                c = tolower(c);
+            if (c == 'n')
+                *val = true;
+            if (c == 'f')
+                *val = false;
+        }
+    }
+}
 #endif // QT_NO_FONTCONFIG
 
 #if !defined(QT_NO_DEBUG) && defined(QT_HAVE_PROC_CMDLINE) && defined(QT_HAVE_PROC_EXE)
@@ -847,17 +973,34 @@ void qt_init(QApplicationPrivate *priv, Display *display,
     qt_x11Data->ignore_badwindow = false;
     qt_x11Data->seen_badwindow = false;
 
+    // colormap control
+    qt_x11Data->visual_class = -1;
+    qt_x11Data->visual_id = -1;
+    qt_x11Data->color_count = 0;
+    qt_x11Data->custom_cmap = false;
+
     // outside visual/colormap
     qt_x11Data->visual = reinterpret_cast<Visual *>(visual);
     qt_x11Data->colormap = colormap;
 
     // Fontconfig
     qt_x11Data->has_fontconfig = false;
-    qt_x11Data->fc_hint_style = -1;
 #if !defined(QT_NO_FONTCONFIG)
     if (qgetenv("QT_X11_NO_FONTCONFIG").isNull())
         qt_x11Data->has_fontconfig = FcInit();
+    qt_x11Data->fc_antialias = true;
 #endif
+
+#ifndef QT_NO_XRENDER
+    memset(qt_x11Data->solid_fills, 0, sizeof(qt_x11Data->solid_fills));
+    for (int i = 0; i < qt_x11Data->solid_fill_count; ++i)
+        qt_x11Data->solid_fills[i].screen = -1;
+    memset(qt_x11Data->pattern_fills, 0, sizeof(qt_x11Data->pattern_fills));
+    for (int i = 0; i < qt_x11Data->pattern_fill_count; ++i)
+        qt_x11Data->pattern_fills[i].screen = -1;
+#endif
+
+    qt_x11Data->startupId = 0;
 
     int argc = priv->argc;
     char **argv = priv->argv;
@@ -885,6 +1028,30 @@ void qt_init(QApplicationPrivate *priv, Display *display,
         } else if (arg == "-geometry") {
             if (++i < argc)
                 mwGeometry = argv[i];
+        } else if (arg == "-ncols") {   // xv and netscape use this name
+            if (++i < argc)
+                qt_x11Data->color_count = qMax(0,atoi(argv[i]));
+        } else if (arg == "-visual") {  // xv and netscape use this name
+            if (++i < argc && !qt_x11Data->visual) {
+                QString s = QString::fromLocal8Bit(argv[i]).toLower();
+                if (s == QLatin1String("staticgray"))
+                    qt_x11Data->visual_class = StaticGray;
+                else if (s == QLatin1String("grayscale"))
+                    qt_x11Data->visual_class = XGrayScale;
+                else if (s == QLatin1String("staticcolor"))
+                    qt_x11Data->visual_class = StaticColor;
+                else if (s == QLatin1String("pseudocolor"))
+                    qt_x11Data->visual_class = PseudoColor;
+                else if (s == QLatin1String("truecolor"))
+                    qt_x11Data->visual_class = TrueColor;
+                else if (s == QLatin1String("directcolor"))
+                    qt_x11Data->visual_class = DirectColor;
+                else
+                    qt_x11Data->visual_id = static_cast<int>(strtol(argv[i], 0, 0));
+            }
+        } else if (arg == "-cmap") {    // xv uses this name
+            if (!qt_x11Data->colormap)
+                qt_x11Data->custom_cmap = true;
         }
         else if (arg == "-sync")
             appSync = !appSync;
@@ -907,11 +1074,10 @@ void qt_init(QApplicationPrivate *priv, Display *display,
     // Connect to X server
     if (!qt_x11Data->display) {
         if ((qt_x11Data->display = XOpenDisplay(qt_x11Data->displayName)) == 0) {
-            QByteArray appName = QApplication::applicationName().toLocal8Bit();
-            qWarning("%s: cannot connect to X server %s", appName.constData(),
-                     XDisplayName(qt_x11Data->displayName));
             QApplication::exit(1);
-            ::exit(1);
+            QByteArray appName = QApplication::applicationName().toLocal8Bit();
+            qFatal("%s: cannot connect to X server %s", appName.constData(),
+                     XDisplayName(qt_x11Data->displayName));
         }
 
         if (appSync)                                // if "-sync" argument
@@ -925,17 +1091,13 @@ void qt_init(QApplicationPrivate *priv, Display *display,
     qt_x11Data->screenCount = ScreenCount(qt_x11Data->display);
 
     qt_x11Data->screens = new QX11InfoData[qt_x11Data->screenCount];
+    qt_x11Data->argbVisuals = new Visual *[qt_x11Data->screenCount];
+    qt_x11Data->argbColormaps = new Colormap[qt_x11Data->screenCount];
 
     for (int s = 0; s < qt_x11Data->screenCount; s++) {
         QX11InfoData *screen = qt_x11Data->screens + s;
         screen->ref = 1; // ensures it doesn't get deleted
         screen->screen = s;
-        screen->depth = DefaultDepth(qt_x11Data->display, s);
-        screen->colormap = DefaultColormap(qt_x11Data->display, s);
-        screen->defaultColormap = true;
-        screen->visual = DefaultVisual(qt_x11Data->display, s);
-        screen->defaultVisual = true;
-        screen->cells = screen->visual->map_entries;
 
         int widthMM = DisplayWidthMM(qt_x11Data->display, s);
         if (widthMM != 0) {
@@ -950,7 +1112,11 @@ void qt_init(QApplicationPrivate *priv, Display *display,
         } else {
             screen->dpiY = 72;
         }
+
+        qt_x11Data->argbVisuals[s] = 0;
+        qt_x11Data->argbColormaps[s] = 0;
     }
+
 
 #ifndef QT_NO_XRENDER
     int xrender_eventbase,  xrender_errorbase;
@@ -979,52 +1145,10 @@ void qt_init(QApplicationPrivate *priv, Display *display,
     }
 #endif
 
-#ifndef QT_NO_XRENDER
-    if (qt_x11Data->use_xrender) {
-        qt_x11Data->argbVisuals = new Visual *[qt_x11Data->screenCount];
-        qt_x11Data->argbColormaps = new Colormap[qt_x11Data->screenCount];
-        for (int s = 0; s < qt_x11Data->screenCount; s++) {
-            qt_x11Data->argbVisuals[s] = 0;
-            qt_x11Data->argbColormaps[s] = 0;
-
-            Visual *argbVisual = nullptr;
-
-            int nvi = 0;
-            XVisualInfo templ;
-            templ.screen  = s;
-            templ.depth   = 32;
-            templ.c_class = TrueColor;
-            XVisualInfo *xvi = XGetVisualInfo(
-                qt_x11Data->display,
-                VisualScreenMask | VisualDepthMask | VisualClassMask,
-                &templ, &nvi
-            );
-            for (int idx = 0; idx < nvi; ++idx) {
-                XRenderPictFormat *format = XRenderFindVisualFormat(qt_x11Data->display,
-                                                                    xvi[idx].visual);
-                if (format->type == PictTypeDirect && format->direct.alphaMask) {
-                    argbVisual = xvi[idx].visual;
-                    break;
-                }
-            }
-            XFree(xvi);
-
-            if (argbVisual) {
-                qt_x11Data->argbVisuals[s] = argbVisual;
-                qt_x11Data->argbColormaps[s] = XCreateColormap(
-                    qt_x11Data->display,
-                    RootWindow(qt_x11Data->display, s),
-                    argbVisual, AllocNone
-                );
-            }
-        }
-    }
-#endif
+    QColormap::initialize();
 
     // Support protocols
-#ifndef QT_NO_DRAGANDDROP
     qt_x11Data->xdndSetup();
-#endif // QT_NO_DRAGANDDROP
 
     // Finally create all atoms
     qt_x11_create_intern_atoms();
@@ -1035,7 +1159,7 @@ void qt_init(QApplicationPrivate *priv, Display *display,
 
 #ifndef QT_NO_XRANDR
     // See if XRandR is supported on the connected display
-    int xrandr_errorbase = 0;
+    int xrandr_errorbase;
     if (qgetenv("QT_X11_NO_XRANDR").isNull()
         && XQueryExtension(qt_x11Data->display, "RANDR", &qt_x11Data->xrandr_major,
                            &qt_x11Data->xrandr_eventbase, &xrandr_errorbase)) {
@@ -1102,13 +1226,76 @@ void qt_init(QApplicationPrivate *priv, Display *display,
             QX11Info::setAppDpiY(s, dpi);
         }
     }
+    for (int s = 0; s < ScreenCount(qt_x11Data->display); ++s) {
+        int subpixel = FC_RGBA_UNKNOWN;
+#if !defined(QT_NO_XRENDER) && (RENDER_MAJOR > 0 || RENDER_MINOR >= 6)
+        if (qt_x11Data->use_xrender) {
+            int rsp = XRenderQuerySubpixelOrder(qt_x11Data->display, s);
+            switch (rsp) {
+            case SubPixelHorizontalRGB:
+                subpixel = FC_RGBA_RGB;
+                break;
+            case SubPixelHorizontalBGR:
+                subpixel = FC_RGBA_BGR;
+                break;
+            case SubPixelVerticalRGB:
+                subpixel = FC_RGBA_VRGB;
+                break;
+            case SubPixelVerticalBGR:
+                subpixel = FC_RGBA_VBGR;
+                break;
+            case SubPixelNone:
+                subpixel = FC_RGBA_NONE;
+                break;
+            case SubPixelUnknown:
+            default:
+                subpixel = FC_RGBA_UNKNOWN;
+                break;
+            }
+        }
+#endif // QT_NO_XRENDER
+
+        char *rgba = XGetDefault(qt_x11Data->display, "Xft", FC_RGBA);
+        if (rgba) {
+            char *end = 0;
+            int v = strtol(rgba, &end, 0);
+            if (rgba != end) {
+                subpixel = v;
+            } else if (qstrncmp(rgba, "unknown", 7) == 0) {
+                subpixel = FC_RGBA_UNKNOWN;
+            } else if (qstrncmp(rgba, "rgb", 3) == 0) {
+                subpixel = FC_RGBA_RGB;
+            } else if (qstrncmp(rgba, "bgr", 3) == 0) {
+                subpixel = FC_RGBA_BGR;
+            } else if (qstrncmp(rgba, "vrgb", 4) == 0) {
+                subpixel = FC_RGBA_VRGB;
+            } else if (qstrncmp(rgba, "vbgr", 4) == 0) {
+                subpixel = FC_RGBA_VBGR;
+            } else if (qstrncmp(rgba, "none", 4) == 0) {
+                subpixel = FC_RGBA_NONE;
+            }
+        }
+        qt_x11Data->screens[s].subpixel = subpixel;
+    }
+    getXDefault("Xft", FC_ANTIALIAS, &qt_x11Data->fc_antialias);
 #ifdef FC_HINT_STYLE
+    qt_x11Data->fc_hint_style = -1;
     getXDefault("Xft", FC_HINT_STYLE, &qt_x11Data->fc_hint_style);
+#endif
+#if 0
+    // ###### these are implemented by Xft, not sure we need them
+    getXDefault("Xft", FC_AUTOHINT, &qt_x11Data->fc_autohint);
+    getXDefault("Xft", FC_HINTING, &qt_x11Data->fc_autohint);
+    getXDefault("Xft", FC_MINSPACE, &qt_x11Data->fc_autohint);
 #endif
 #endif // QT_NO_FONTCONFIG
 
     // initialize key mapper
     QKeyMapper::changeKeyboard();
+
+    // Misc. initialization
+    QCursorData::initialize();
+    QFont::initialize();
 
     qApp->setObjectName(qApp->applicationName());
 
@@ -1122,18 +1309,19 @@ void qt_init(QApplicationPrivate *priv, Display *display,
 #endif // QT_NO_XRANDR
     }
 
-    // Attempt to determine if compositor is active
+        // Attempt to determine if compositor is active
 #ifndef QT_NO_XFIXES
-    XFixesSelectSelectionInput(qt_x11Data->display, QX11Info::appRootWindow(), qt_x11Data->compositorAtom,
+    XFixesSelectSelectionInput(qt_x11Data->display, QX11Info::appRootWindow(), ATOM(_NET_WM_CM_S0),
                                XFixesSetSelectionOwnerNotifyMask
                                | XFixesSelectionWindowDestroyNotifyMask
                                | XFixesSelectionClientCloseNotifyMask);
 #endif // QT_NO_XFIXES
-    qt_x11Data->compositingManagerRunning = XGetSelectionOwner(qt_x11Data->display, qt_x11Data->compositorAtom);
+    qt_x11Data->compositingManagerRunning = XGetSelectionOwner(qt_x11Data->display,
+                                                               ATOM(_NET_WM_CM_S0));
 
     QApplicationPrivate::x11_apply_settings();
 
-    // be smart about the size of the default font. most X servers have font
+    // be smart about the size of the default font. most X servers have helvetica
     // 12 point available at 2 resolutions:
     //     75dpi (12 pixels) and 100dpi (17 pixels).
     // At 95 DPI, a 12 point font should be 16 pixels tall - in which case a 17
@@ -1145,8 +1333,14 @@ void qt_init(QApplicationPrivate *priv, Display *display,
 
     if (!QApplicationPrivate::sys_font) {
         // no font from settings, provide a fallback
-        QFont f(QFont::lastResortFamily(), ptsz);
+        QFont f(qt_x11Data->has_fontconfig ? QLatin1String("Sans Serif") : QLatin1String("Helvetica"),
+                ptsz);
         QApplicationPrivate::setSystemFont(f);
+    }
+
+    qt_x11Data->startupId = getenv("DESKTOP_STARTUP_ID");
+    if (qt_x11Data->startupId) {
+        ::unsetenv("DESKTOP_STARTUP_ID");
     }
 }
 
@@ -1156,13 +1350,21 @@ void qt_init(QApplicationPrivate *priv, Display *display,
 
 void qt_cleanup()
 {
-#if !defined(QT_NO_DEBUG) && !defined(QT_NO_FONTCONFIG) && FC_MAJOR >= 2 && FC_MINOR >= 8
-    if (qt_x11Data->has_fontconfig) {
-        FcFini();
+    QPixmapCache::clear();
+    QCursorData::cleanup();
+    QFont::cleanup();
+    QColormap::cleanup();
+
+#ifndef QT_NO_XRENDER
+    for (int i = 0; i < qt_x11Data->solid_fill_count; ++i) {
+        if (qt_x11Data->solid_fills[i].picture)
+            XRenderFreePicture(qt_x11Data->display, qt_x11Data->solid_fills[i].picture);
+    }
+    for (int i = 0; i < qt_x11Data->pattern_fill_count; ++i) {
+        if (qt_x11Data->pattern_fills[i].picture)
+            XRenderFreePicture(qt_x11Data->display, qt_x11Data->pattern_fills[i].picture);
     }
 #endif
-
-    QPixmapCache::clear();
 
     // Reset the error handlers
     XSync(qt_x11Data->display, False); // sync first to process all possible errors
@@ -1230,8 +1432,8 @@ void QApplicationPrivate::applyX11SpecificCommandLineArguments(QWidget *main_wid
                         PropModeReplace, (unsigned char *)net_wm_name.data(), net_wm_name.size());
     }
     if (mwGeometry) { // parse geometry
-        int x, y = 0;
-        int w, h = 0;
+        int x, y;
+        int w, h;
         int m = XParseGeometry((char*)mwGeometry, &x, &y, (uint*)&w, (uint*)&h);
         QSize minSize = main_widget->minimumSize();
         QSize maxSize = main_widget->maximumSize();
@@ -1243,10 +1445,10 @@ void QApplicationPrivate::applyX11SpecificCommandLineArguments(QWidget *main_wid
             w = main_widget->width();
         if ((m & HeightValue) == 0)
             h = main_widget->height();
-        w = qMin(w, maxSize.width());
-        h = qMin(h, maxSize.height());
-        w = qMax(w, minSize.width());
-        h = qMax(h, minSize.height());
+        w = qMin(w,maxSize.width());
+        h = qMin(h,maxSize.height());
+        w = qMax(w,minSize.width());
+        h = qMax(h,minSize.height());
         if ((m & XNegative)) {
             x = QApplication::desktop()->width()  + x - w;
         }
@@ -1394,7 +1596,54 @@ void QApplication::beep()
     if (qt_x11Data->display)
         XBell(qt_x11Data->display, 0);
     else
-        ::printf("\7");
+        printf("\7");
+}
+
+void QApplication::alert(QWidget *widget, int msec)
+{
+    if (!QApplicationPrivate::checkInstance("alert"))
+        return;
+
+    QWidgetList windowsToMark;
+    if (!widget) {
+        windowsToMark += topLevelWidgets();
+    } else {
+        windowsToMark.append(widget->window());
+    }
+
+    foreach (QWidget *window, windowsToMark) {
+        if (!window->isActiveWindow()) {
+            qt_change_net_wm_state(window, true, ATOM(_NET_WM_STATE_DEMANDS_ATTENTION), 0);
+            if (msec != 0) {
+                QTimer *timer = new QTimer(qApp);
+                timer->setSingleShot(true);
+                connect(timer, SIGNAL(timeout()), qApp, SLOT(_q_alertTimeOut()));
+                if (QTimer *oldTimer = qApp->d_func()->alertTimerHash.value(window)) {
+                    qApp->d_func()->alertTimerHash.remove(window);
+                    delete oldTimer;
+                }
+                qApp->d_func()->alertTimerHash.insert(window, timer);
+                timer->start(msec);
+            }
+        }
+    }
+}
+
+void QApplicationPrivate::_q_alertTimeOut()
+{
+    if (QTimer *timer = qobject_cast<QTimer *>(q_func()->sender())) {
+        QHash<QWidget *, QTimer *>::iterator it = alertTimerHash.begin();
+        while (it != alertTimerHash.end()) {
+            if (it.value() == timer) {
+                QWidget *window = it.key();
+                qt_change_net_wm_state(window, false, ATOM(_NET_WM_STATE_DEMANDS_ATTENTION), 0);
+                alertTimerHash.erase(it);
+                timer->deleteLater();
+                break;
+            }
+            ++it;
+        }
+    }
 }
 
 Qt::KeyboardModifiers QApplication::queryKeyboardModifiers()
@@ -1508,7 +1757,6 @@ int QApplication::x11ClientMessage(QWidget* w, XEvent* event, bool passive_only)
             }
         } else if (event->xclient.message_type == ATOM(_QT_SCROLL_DONE)) {
             widget->translateScrollDoneEvent(event);
-#ifndef QT_NO_DRAGANDDROP
         } else if (event->xclient.message_type == ATOM(XdndPosition)) {
             qt_x11Data->xdndHandlePosition(widget, event, passive_only);
         } else if (event->xclient.message_type == ATOM(XdndEnter)) {
@@ -1521,7 +1769,6 @@ int QApplication::x11ClientMessage(QWidget* w, XEvent* event, bool passive_only)
             qt_x11Data->xdndHandleDrop(event, passive_only);
         } else if (event->xclient.message_type == ATOM(XdndFinished)) {
             qt_x11Data->xdndHandleFinished(event, passive_only);
-#endif // QT_NO_DRAGANDDROP
         }
         // All other are interactions
     }
@@ -1615,7 +1862,7 @@ int QApplication::x11ProcessEvent(XEvent* event)
         XFixesSelectionNotifyEvent *req =
             reinterpret_cast<XFixesSelectionNotifyEvent *>(event);
         qt_x11Data->time = req->selection_timestamp;
-        if (req->selection == qt_x11Data->compositorAtom)
+        if (req->selection == ATOM(_NET_WM_CM_S0))
             qt_x11Data->compositingManagerRunning = req->owner;
     }
 #endif
@@ -1736,7 +1983,6 @@ int QApplication::x11ProcessEvent(XEvent* event)
                 break;
         }
 
-#ifndef QT_NO_CLIPBOARD
         if (req->selection == ATOM(CLIPBOARD)) {
             if (qt_xfixes_clipboard_changed(req->owner, req->selection_timestamp)) {
                 emit clipboard()->changed(QClipboard::Clipboard);
@@ -1748,7 +1994,6 @@ int QApplication::x11ProcessEvent(XEvent* event)
                 emit clipboard()->selectionChanged();
             }
         }
-#endif // QT_NO_CLIPBOARD
     }
 #endif // QT_NO_XFIXES
 
@@ -2094,14 +2339,11 @@ int QApplication::x11ProcessEvent(XEvent* event)
             break;
 
         if (ATOM(XdndSelection) && req->selection == ATOM(XdndSelection)) {
-#ifndef QT_NO_DRAGANDDROP
             qt_x11Data->xdndHandleSelectionRequest(req);
-#endif // QT_NO_DRAGANDDROP
-#ifndef QT_NO_CLIPBOARD
+
         } else if (qt_clipboard) {
             QClipboardEvent e(event);
             QApplication::sendSpontaneousEvent(qt_clipboard, &e);
-#endif // QT_NO_CLIPBOARD
         }
         break;
     }
@@ -2111,12 +2353,10 @@ int QApplication::x11ProcessEvent(XEvent* event)
         if (! req || (ATOM(XdndSelection) && req->selection == ATOM(XdndSelection)))
             break;
 
-#ifndef QT_NO_CLIPBOARD
         if (qt_clipboard && !qt_x11Data->use_xfixes) {
             QClipboardEvent e(event);
             QApplication::sendSpontaneousEvent(qt_clipboard, &e);
         }
-#endif // QT_NO_CLIPBOARD
         break;
     }
 
@@ -2126,19 +2366,16 @@ int QApplication::x11ProcessEvent(XEvent* event)
         if (! req || (ATOM(XdndSelection) && req->selection == ATOM(XdndSelection)))
             break;
 
-#ifndef QT_NO_CLIPBOARD
         if (qt_clipboard) {
             QClipboardEvent e(event);
             QApplication::sendSpontaneousEvent(qt_clipboard, &e);
         }
-#endif // QT_NO_CLIPBOARD
         break;
     }
     case PropertyNotify:
         // some properties changed
         if (event->xproperty.window == QX11Info::appRootWindow(0)) {
             // root properties for the first screen
-#ifndef QT_NO_CLIPBOARD
             if (!qt_x11Data->use_xfixes && event->xproperty.atom == ATOM(_QT_CLIPBOARD_SENTINEL)) {
                 if (qt_check_clipboard_sentinel()) {
                     emit clipboard()->changed(QClipboard::Clipboard);
@@ -2149,9 +2386,7 @@ int QApplication::x11ProcessEvent(XEvent* event)
                     emit clipboard()->changed(QClipboard::Selection);
                     emit clipboard()->selectionChanged();
                 }
-            }
-#endif // QT_NO_CLIPBOARD
-            if (event->xproperty.atom == ATOM(_QT_SETTINGS_TIMESTAMP)) {
+            } else if (QApplicationPrivate::obey_desktop_settings &&event->xproperty.atom == ATOM(_QT_SETTINGS_TIMESTAMP)) {
                 QApplicationPrivate::x11_apply_settings();
             }
         }
@@ -2580,7 +2815,7 @@ bool QETWidget::translateMouseEvent(const XEvent *event)
                 pos = popup->mapFromGlobal(globalPos);
         }
         bool releaseAfter = false;
-        QWidget *popupChild = popup->childAt(pos);
+        QWidget *popupChild  = popup->childAt(pos);
 
         if (popup != qt_popup_down){
             qt_button_down = 0;
@@ -3163,7 +3398,14 @@ bool QETWidget::translateConfigEvent(const XEvent *event)
     if (wasResize) {
         if (isVisible() && data->crect.size() != oldSize) {
             Q_ASSERT(d->extra->topextra);
-            d->extra->topextra->inTopLevelResize = true;
+            QWidgetBackingStore *bs = d->extra->topextra->backingStore.data();
+            const bool hasStaticContents = bs && bs->hasStaticContents();
+            // If we have a backing store with static contents, we have to disable the top-level
+            // resize optimization in order to get invalidated regions for resized widgets.
+            // The optimization discards all invalidateBuffer() calls since we're going to
+            // repaint everything anyways, but that's not the case with static contents.
+            if (!hasStaticContents)
+                d->extra->topextra->inTopLevelResize = true;
             QResizeEvent e(data->crect.size(), oldSize);
             QApplication::sendSpontaneousEvent(this, &e);
         }
@@ -3171,7 +3413,10 @@ bool QETWidget::translateConfigEvent(const XEvent *event)
         const bool waitingForMapNotify = d->extra->topextra && d->extra->topextra->waitingForMapNotify;
         if (!waitingForMapNotify) {
             if (d->paintOnScreen()) {
-                d->syncBackingStore(rect());
+                QRegion updateRegion(rect());
+                if (testAttribute(Qt::WA_StaticContents))
+                    updateRegion -= QRect(0, 0, oldSize.width(), oldSize.height());
+                d->syncBackingStore(updateRegion);
             } else {
                 d->syncBackingStore();
             }
@@ -3252,11 +3497,29 @@ int QApplication::wheelScrollLines()
 void QApplication::setEffectEnabled(Qt::UIEffect effect, bool enable)
 {
     switch (effect) {
+    case Qt::UI_AnimateMenu:
+        if (enable) QApplicationPrivate::fade_menu = false;
+        QApplicationPrivate::animate_menu = enable;
+        break;
     case Qt::UI_FadeMenu:
+        if (enable)
+            QApplicationPrivate::animate_menu = true;
         QApplicationPrivate::fade_menu = enable;
         break;
+    case Qt::UI_AnimateCombo:
+        QApplicationPrivate::animate_combo = enable;
+        break;
+    case Qt::UI_AnimateTooltip:
+        if (enable) QApplicationPrivate::fade_tooltip = false;
+        QApplicationPrivate::animate_tooltip = enable;
+        break;
     case Qt::UI_FadeTooltip:
+        if (enable)
+            QApplicationPrivate::animate_tooltip = true;
         QApplicationPrivate::fade_tooltip = enable;
+        break;
+    case Qt::UI_AnimateToolBox:
+        QApplicationPrivate::animate_toolbox = enable;
         break;
     default:
         QApplicationPrivate::animate_ui = enable;
@@ -3266,14 +3529,22 @@ void QApplication::setEffectEnabled(Qt::UIEffect effect, bool enable)
 
 bool QApplication::isEffectEnabled(Qt::UIEffect effect)
 {
-    if (!QApplicationPrivate::animate_ui)
+    if (QColormap::instance().depth() < 16 || !QApplicationPrivate::animate_ui)
         return false;
 
     switch(effect) {
+    case Qt::UI_AnimateMenu:
+        return QApplicationPrivate::animate_menu;
     case Qt::UI_FadeMenu:
         return QApplicationPrivate::fade_menu;
+    case Qt::UI_AnimateCombo:
+        return QApplicationPrivate::animate_combo;
+    case Qt::UI_AnimateTooltip:
+        return QApplicationPrivate::animate_tooltip;
     case Qt::UI_FadeTooltip:
         return QApplicationPrivate::fade_tooltip;
+    case Qt::UI_AnimateToolBox:
+        return QApplicationPrivate::animate_toolbox;
     default:
         return QApplicationPrivate::animate_ui;
     }
@@ -3327,9 +3598,10 @@ static bool sm_in_phase2 = false;
 static QSmSocketReceiver* sm_receiver = 0;
 
 static void resetSmState();
-static void sm_setProperty(const char* name, const char* type, SmPropValue* vals);
+static void sm_setProperty(const char* name, const char* type,
+                            int num_vals, SmPropValue* vals);
 static void sm_saveYourselfCallback(SmcConn smcConn, SmPointer clientData,
-                                    int saveType, Bool shutdown , int interactStyle, Bool fast);
+                                  int saveType, Bool shutdown , int interactStyle, Bool fast);
 static void sm_saveYourselfPhase2Callback(SmcConn smcConn, SmPointer clientData) ;
 static void sm_dieCallback(SmcConn smcConn, SmPointer clientData) ;
 static void sm_shutdownCancelledCallback(SmcConn smcConn, SmPointer clientData);
@@ -3352,17 +3624,25 @@ static void resetSmState()
 
 // theoretically it's possible to set several properties at once. For
 // simplicity, however, we do just one property at a time
-static void sm_setProperty(const char* name, const char* type, SmPropValue* vals)
+static void sm_setProperty(const char* name, const char* type,
+                            int num_vals, SmPropValue* vals)
 {
-    SmProp prop;
-    prop.name = (char*)name;
-    prop.type = (char*)type;
-    prop.num_vals = 1;
-    prop.vals = vals;
+    if (num_vals) {
+      SmProp prop;
+      prop.name = (char*)name;
+      prop.type = (char*)type;
+      prop.num_vals = num_vals;
+      prop.vals = vals;
 
-    SmProp* props[1];
-    props[0] = &prop;
-    SmcSetProperties(smcConnection, 1, props);
+      SmProp* props[1];
+      props[0] = &prop;
+      SmcSetProperties(smcConnection, 1, props);
+    }
+    else {
+      char* names[1];
+      names[0] = (char*) name;
+      SmcDeleteProperties(smcConnection, 1, names);
+    }
 }
 
 static void sm_setProperty(const QString& name, const QString& value)
@@ -3371,20 +3651,11 @@ static void sm_setProperty(const QString& name, const QString& value)
     SmPropValue prop;
     prop.length = v.length();
     prop.value = (SmPointer) v.constData();
-    sm_setProperty(name.toLatin1().data(), SmARRAY8, &prop);
+    sm_setProperty(name.toLatin1().data(), SmARRAY8, 1, &prop);
 }
 
 static void sm_setProperty(const QString& name, const QStringList& value)
 {
-    QByteArray ln = name.toLatin1();
-
-    if (value.isEmpty()) {
-        char* names[1];
-        names[0] = (char*) ln.data();
-        SmcDeleteProperties(smcConnection, 1, names);
-        return;
-    }
-
     SmPropValue *prop = new SmPropValue[value.count()];
     int count = 0;
     QList<QByteArray> vl;
@@ -3394,17 +3665,7 @@ static void sm_setProperty(const QString& name, const QStringList& value)
       prop[count].value = (char*)vl.last().data();
       ++count;
     }
-
-    SmProp prop2;
-    prop2.name = (char*)ln.data();
-    prop2.type = (char*)SmLISTofARRAY8;
-    prop2.num_vals = count;
-    prop2.vals = prop;
-
-    SmProp* props[1];
-    props[0] = &prop2;
-    SmcSetProperties(smcConnection, 1, props);
-
+    sm_setProperty(name.toLatin1().data(), SmLISTofARRAY8, count, prop);
     delete [] prop;
 }
 
@@ -3500,7 +3761,7 @@ static void sm_performSaveYourself(QSessionManagerPrivate* smd)
         prop.length = sizeof(int);
         int value = sm->restartHint();
         prop.value = (SmPointer) &value;
-        sm_setProperty(SmRestartStyleHint, SmCARD8, &prop);
+        sm_setProperty(SmRestartStyleHint, SmCARD8, 1, &prop);
 
         // we are done
         SmcSaveYourselfDone(smcConnection, !sm_cancel);
@@ -3561,15 +3822,10 @@ QSessionManager::QSessionManager(QApplication * app, QString &id, QString& key)
     d->restartHint = RestartIfRunning;
 
     resetSmState();
-
-    // avoid showing a warning message below
-    if (qgetenv("SESSION_MANAGER").isEmpty()) {
-        return;
-    }
-
     QSTACKARRAY(char, cerror, 256);
     char* myId = 0;
-    const QByteArray b_id = id.toLatin1();
+    QByteArray b_id = id.toLatin1();
+    char* prevId = b_id.data();
 
     SmcCallbacks cb;
     cb.save_yourself.callback = sm_saveYourselfCallback;
@@ -3581,23 +3837,28 @@ QSessionManager::QSessionManager(QApplication * app, QString &id, QString& key)
     cb.shutdown_cancelled.callback = sm_shutdownCancelledCallback;
     cb.shutdown_cancelled.client_data = (SmPointer) d;
 
+    // avoid showing a warning message below
+    if (qgetenv("SESSION_MANAGER").isEmpty())
+        return;
+
     smcConnection = SmcOpenConnection(0, 0, 1, 0,
                                        SmcSaveYourselfProcMask |
                                        SmcDieProcMask |
                                        SmcSaveCompleteProcMask |
                                        SmcShutdownCancelledProcMask,
                                        &cb,
-                                       b_id.constData(),
+                                       prevId,
                                        &myId,
                                        256, cerror);
 
     id = QString::fromLatin1(myId);
     ::free(myId); // it was allocated by C
 
-    if (Q_UNLIKELY(!smcConnection)) {
-        const QString error = QString::fromLocal8Bit(cerror);
+    QString error = QString::fromLocal8Bit(cerror);
+    if (!smcConnection) {
         qWarning("Qt: Session management error: %s", qPrintable(error));
-    } else {
+    }
+    else {
         sm_receiver = new QSmSocketReceiver(IceConnectionNumber(SmcGetIceConnection(smcConnection)));
     }
 }

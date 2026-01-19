@@ -120,19 +120,39 @@ struct QDBusLockerBase
 #endif
 };
 
-struct QDBusLocker: QDBusLockerBase
+struct QDBusReadLocker: QDBusLockerBase
 {
     QDBusConnectionPrivate *self;
     ThreadAction action;
-    inline QDBusLocker(ThreadAction a, QDBusConnectionPrivate *s)
+    inline QDBusReadLocker(ThreadAction a, QDBusConnectionPrivate *s)
         : self(s), action(a)
     {
         reportThreadAction(action, BeforeLock, self);
-        self->lock.lock();
+        self->lock.lockForRead();
         reportThreadAction(action, AfterLock, self);
     }
 
-    inline ~QDBusLocker()
+    inline ~QDBusReadLocker()
+    {
+        reportThreadAction(action, BeforeUnlock, self);
+        self->lock.unlock();
+        reportThreadAction(action, AfterUnlock, self);
+    }
+};
+
+struct QDBusWriteLocker: QDBusLockerBase
+{
+    QDBusConnectionPrivate *self;
+    ThreadAction action;
+    inline QDBusWriteLocker(ThreadAction a, QDBusConnectionPrivate *s)
+        : self(s), action(a)
+    {
+        reportThreadAction(action, BeforeLock, self);
+        self->lock.lockForWrite();
+        reportThreadAction(action, AfterLock, self);
+    }
+
+    inline ~QDBusWriteLocker()
     {
         reportThreadAction(action, BeforeUnlock, self);
         self->lock.unlock();

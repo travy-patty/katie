@@ -26,49 +26,88 @@
 
 QT_BEGIN_NAMESPACE
 
-QString QFileInfoPrivate::getFileName(const QFileInfoPrivate::FileName name) const
+QString QFileInfoPrivate::getFileName(QAbstractFileEngine::FileName name) const
 {
     if (cache_enabled && !fileNames[(int)name].isNull())
         return fileNames[(int)name];
 
     QString ret;
-    switch (name) {
-        case FileName::CanonicalName:
-        case FileName::CanonicalPathName: {
-            QFileSystemEntry entry = QFileSystemEngine::canonicalName(fileEntry, metaData);
-            if (cache_enabled) { // be smart and store both
-                fileNames[FileName::CanonicalName] = entry.filePath();
-                fileNames[FileName::CanonicalPathName] = entry.path();
+    if (fileEngine == 0) { // local file; use the QFileSystemEngine directly
+        switch (name) {
+            case QAbstractFileEngine::CanonicalName:
+            case QAbstractFileEngine::CanonicalPathName: {
+                QFileSystemEntry entry = QFileSystemEngine::canonicalName(fileEntry, metaData);
+                if (cache_enabled) { // be smart and store both
+                    fileNames[QAbstractFileEngine::CanonicalName] = entry.filePath();
+                    fileNames[QAbstractFileEngine::CanonicalPathName] = entry.path();
+                }
+                if (name == QAbstractFileEngine::CanonicalName)
+                    ret = entry.filePath();
+                else
+                    ret = entry.path();
+                break;
             }
-            if (name == FileName::CanonicalName)
-                ret = entry.filePath();
-            else
-                ret = entry.path();
-            break;
-        }
-        case FileName::LinkName:
-            ret = QFileSystemEngine::linkTarget(fileEntry, metaData);
-            break;
-        case FileName::AbsoluteName:
-        case FileName::AbsolutePathName: {
-            QFileSystemEntry entry = QFileSystemEngine::absoluteName(fileEntry);
-            if (cache_enabled) { // be smart and store both
-                fileNames[FileName::AbsoluteName] = entry.filePath();
-                fileNames[FileName::AbsolutePathName] = entry.path();
+            case QAbstractFileEngine::LinkName:
+                ret = QFileSystemEngine::getLinkTarget(fileEntry, metaData).filePath();
+                break;
+            case QAbstractFileEngine::AbsoluteName:
+            case QAbstractFileEngine::AbsolutePathName: {
+                QFileSystemEntry entry = QFileSystemEngine::absoluteName(fileEntry);
+                if (cache_enabled) { // be smart and store both
+                    fileNames[QAbstractFileEngine::AbsoluteName] = entry.filePath();
+                    fileNames[QAbstractFileEngine::AbsolutePathName] = entry.path();
+                }
+                if (name == QAbstractFileEngine::AbsoluteName)
+                    ret = entry.filePath();
+                else
+                    ret = entry.path();
+                break;
             }
-            if (name == FileName::AbsoluteName)
-                ret = entry.filePath();
-            else
-                ret = entry.path();
-            break;
+            default: break;
         }
-        default: {
-            break;
-        }
+    } else {
+        ret = fileEngine->fileName(name);
     }
     if (cache_enabled)
         fileNames[(int)name] = ret;
     return ret;
+}
+
+QString QFileInfoPrivate::getFileOwner(QAbstractFileEngine::FileOwner own) const
+{
+    if (!fileEngine) {
+        switch (own) {
+        case QAbstractFileEngine::OwnerUser:
+            return QFileSystemEngine::resolveUserName(fileEntry, metaData);
+        case QAbstractFileEngine::OwnerGroup:
+            return QFileSystemEngine::resolveGroupName(fileEntry, metaData);
+        }
+    }
+    return fileEngine->owner(own);
+}
+
+uint QFileInfoPrivate::getFileFlags(QAbstractFileEngine::FileFlags request) const
+{
+    Q_ASSERT(fileEngine); // should never be called when using the native FS
+
+    QAbstractFileEngine::FileFlags req = request;
+
+    if (req) {
+        if (cache_enabled)
+            req &= (~QAbstractFileEngine::Refresh);
+        else
+            req |= QAbstractFileEngine::Refresh;
+    }
+
+    return fileEngine->fileFlags(req) & request;
+}
+
+QDateTime QFileInfoPrivate::getFileTime(QAbstractFileEngine::FileTime request) const
+{
+    Q_ASSERT(fileEngine); // should never be called when using the native FS
+    if (!cache_enabled)
+        clearFlags();
+    return fileEngine->fileTime(request);
 }
 
 //************* QFileInfo
@@ -90,14 +129,14 @@ QString QFileInfoPrivate::getFileName(const QFileInfoPrivate::FileName name) con
 
     A QFileInfo can point to a file with either a relative or an
     absolute file path. Absolute file paths begin with the directory
-    separator "/". Relative file names begin with a directory name or
-    a file name and specify a path relative to the current working
-    directory. An example of an absolute path is the string
-    "/tmp/quartz". A relative path might look like "src/fatlib". You
-    can use the function isRelative() to check whether a QFileInfo is
-    using a relative or an absolute file path. You can call the
-    function makeAbsolute() to convert a relative QFileInfo's path to
-    an absolute path.
+    separator "/" (or with a drive specification on Windows). Relative
+    file names begin with a directory name or a file name and specify
+    a path relative to the current working directory. An example of an
+    absolute path is the string "/tmp/quartz". A relative path might
+    look like "src/fatlib". You can use the function isRelative() to
+    check whether a QFileInfo is using a relative or an absolute file
+    path. You can call the function makeAbsolute() to convert a
+    relative QFileInfo's path to an absolute path.
 
     The file that the QFileInfo works on is set in the constructor or
     later with setFile(). Use exists() to see if the file exists and
@@ -107,11 +146,19 @@ QString QFileInfoPrivate::getFileName(const QFileInfoPrivate::FileName name) con
     isSymLink(). The readLink() function provides the name of the file
     the symlink points to.
 
-    On Unix, the symlink has the same size() has the file it points to,
-    because Unix handles symlinks transparently; similarly, opening a
-    symlink using QFile effectively opens the link's target. For example:
+    On Unix (including Mac OS X), the symlink has the same size() has
+    the file it points to, because Unix handles symlinks
+    transparently; similarly, opening a symlink using QFile
+    effectively opens the link's target. For example:
 
     \snippet doc/src/snippets/code/src_corelib_io_qfileinfo.cpp 0
+
+    On Windows, symlinks (shortcuts) are \c .lnk files. The reported
+    size() is that of the symlink (not the link's target), and
+    opening a symlink using QFile opens the \c .lnk file. For
+    example:
+
+    \snippet doc/src/snippets/code/src_corelib_io_qfileinfo.cpp 1
 
     Elements of the file's name can be extracted with path() and
     fileName(). The fileName()'s parts can be extracted with
@@ -270,11 +317,23 @@ bool QFileInfo::operator==(const QFileInfo &fileinfo) const
     if (d->fileEntry.filePath() == fileinfo.d_ptr->fileEntry.filePath())
         return true;
 
+    Qt::CaseSensitivity sensitive;
+    if (!d->fileEngine || !fileinfo.d_ptr->fileEngine) {
+        if (d->fileEngine != fileinfo.d_ptr->fileEngine) // one is native, the other is a custom file-engine
+            return false;
+
+        sensitive = Qt::CaseSensitive;
+    } else {
+        if (d->fileEngine->caseSensitive() != fileinfo.d_ptr->fileEngine->caseSensitive())
+            return false;
+        sensitive = d->fileEngine->caseSensitive() ? Qt::CaseSensitive : Qt::CaseInsensitive;
+    }
+
     if (fileinfo.size() != size()) //if the size isn't the same...
         return false;
 
    // Fallback to expensive canonical path computation
-   return canonicalFilePath().compare(fileinfo.canonicalFilePath(), Qt::CaseSensitive) == 0;
+   return canonicalFilePath().compare(fileinfo.canonicalFilePath(), sensitive) == 0;
 }
 
 /*!
@@ -292,8 +351,9 @@ QFileInfo &QFileInfo::operator=(const QFileInfo &fileinfo)
 
     The \a file can also include an absolute or relative file path.
     Absolute paths begin with the directory separator (e.g. "/" under
-    Unix). Relative file names begin with a directory name or a file
-    name and specify a path relative to the current directory.
+    Unix) or a drive specification (under Windows). Relative file
+    names begin with a directory name or a file name and specify a
+    path relative to the current directory.
 
     Example:
     \snippet doc/src/snippets/code/src_corelib_io_qfileinfo.cpp 2
@@ -344,7 +404,13 @@ void QFileInfo::setFile(const QDir &dir, const QString &file)
 
     The absolute path name consists of the full path and the file
     name. On Unix this will always begin with the root, '/',
-    directory.
+    directory. On Windows this will always begin 'D:/' where D is a
+    drive letter, except for network shares that are not mapped to a
+    drive letter, in which case the path will begin '//sharename/'.
+    QFileInfo will uppercase drive letters. Note that QDir does not do
+    this. The code snippet below shows this.
+
+    \snippet doc/src/snippets/code/src_corelib_io_qfileinfo.cpp newstuff
 
     This function returns the same as filePath(), unless isRelative()
     is true. In contrast to canonicalFilePath(), symbolic links or
@@ -359,7 +425,7 @@ QString QFileInfo::absoluteFilePath() const
     Q_D(const QFileInfo);
     if (d->isDefaultConstructed)
         return QLatin1String("");
-    return d->getFileName(QFileInfoPrivate::AbsoluteName);
+    return d->getFileName(QAbstractFileEngine::AbsoluteName);
 }
 
 /*!
@@ -376,7 +442,7 @@ QString QFileInfo::canonicalFilePath() const
     Q_D(const QFileInfo);
     if (d->isDefaultConstructed)
         return QLatin1String("");
-    return d->getFileName(QFileInfoPrivate::CanonicalName);
+    return d->getFileName(QAbstractFileEngine::CanonicalName);
 }
 
 
@@ -385,7 +451,9 @@ QString QFileInfo::canonicalFilePath() const
     file name.
 
     On Unix the absolute path will always begin with the root, '/',
-    directory.
+    directory. On Windows this will always begin 'D:/' where D is a
+    drive letter, except for network shares that are not mapped to a
+    drive letter, in which case the path will begin '//sharename/'.
 
     In contrast to canonicalPath() symbolic links or redundant "." or
     ".." elements are not necessarily removed.
@@ -405,7 +473,7 @@ QString QFileInfo::absolutePath() const
         qWarning("QFileInfo::absolutePath: Constructed with empty filename");
         return QLatin1String("");
     }
-    return d->getFileName(QFileInfoPrivate::AbsolutePathName);
+    return d->getFileName(QAbstractFileEngine::AbsolutePathName);
 }
 
 /*!
@@ -421,7 +489,7 @@ QString QFileInfo::canonicalPath() const
     Q_D(const QFileInfo);
     if (d->isDefaultConstructed)
         return QLatin1String("");
-    return d->getFileName(QFileInfoPrivate::CanonicalPathName);
+    return d->getFileName(QAbstractFileEngine::CanonicalPathName);
 }
 
 /*!
@@ -462,7 +530,9 @@ bool QFileInfo::isRelative() const
     Q_D(const QFileInfo);
     if (d->isDefaultConstructed)
         return true;
-    return d->fileEntry.isRelative();
+    if (!d->fileEngine)
+        return d->fileEntry.isRelative();
+    return d->fileEngine->isRelativePath();
 }
 
 /*!
@@ -495,14 +565,20 @@ bool QFileInfo::exists() const
         return false;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::ExistsAttribute))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::ExistsAttribute);
-    return d->metaData.exists();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::ExistsAttribute))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::ExistsAttribute);
+        return d->metaData.exists();
+    }
+    return d->getFileFlags(QAbstractFileEngine::ExistsFlag);
 }
 
 /*!
     Refreshes the information about the file, i.e. reads in information
     from the file system the next time a cached property is fetched.
+
+   \note On Windows CE, there might be a delay for the file system driver
+    to detect changes on the file.
 */
 void QFileInfo::refresh()
 {
@@ -677,9 +753,12 @@ bool QFileInfo::isReadable() const
         return false;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::UserReadPermission))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserReadPermission);
-    return (d->metaData.permissions() & QFile::ReadUser) != 0;
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::UserReadPermission))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserReadPermission);
+        return (d->metaData.permissions() & QFile::ReadUser) != 0;
+    }
+    return d->getFileFlags(QAbstractFileEngine::ReadUserPerm);
 }
 
 /*!
@@ -694,9 +773,12 @@ bool QFileInfo::isWritable() const
         return false;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::UserWritePermission))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserWritePermission);
-    return (d->metaData.permissions() & QFile::WriteUser) != 0;
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::UserWritePermission))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserWritePermission);
+        return (d->metaData.permissions() & QFile::WriteUser) != 0;
+    }
+    return d->getFileFlags(QAbstractFileEngine::WriteUserPerm);
 }
 
 /*!
@@ -711,9 +793,12 @@ bool QFileInfo::isExecutable() const
         return false;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::UserExecutePermission))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserExecutePermission);
-    return (d->metaData.permissions() & QFile::ExeUser) != 0;
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::UserExecutePermission))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserExecutePermission);
+        return (d->metaData.permissions() & QFile::ExeUser) != 0;
+    }
+    return d->getFileFlags(QAbstractFileEngine::ExeUserPerm);
 }
 
 /*!
@@ -729,9 +814,12 @@ bool QFileInfo::isHidden() const
         return false;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::HiddenAttribute))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::HiddenAttribute);
-    return d->metaData.isHidden();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::HiddenAttribute))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::HiddenAttribute);
+        return d->metaData.isHidden();
+    }
+    return d->getFileFlags(QAbstractFileEngine::HiddenFlag);
 }
 
 /*!
@@ -748,9 +836,12 @@ bool QFileInfo::isFile() const
         return false;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::FileType))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::FileType);
-    return d->metaData.isFile();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::FileType))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::FileType);
+        return d->metaData.isFile();
+    }
+    return d->getFileFlags(QAbstractFileEngine::FileType);
 }
 
 /*!
@@ -766,17 +857,25 @@ bool QFileInfo::isDir() const
         return false;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::DirectoryType))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::DirectoryType);
-    return d->metaData.isDirectory();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::DirectoryType))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::DirectoryType);
+        return d->metaData.isDirectory();
+    }
+    return d->getFileFlags(QAbstractFileEngine::DirectoryType);
 }
 
 /*!
-    Returns true if this object points to a symbolic link; otherwise
-    returns false.
+    Returns true if this object points to a symbolic link (or to a
+    shortcut on Windows); otherwise returns false.
 
-    On Unix , opening a symlink effectively opens the
-    \l{readLink()}{link's target}.
+    On Unix (including Mac OS X), opening a symlink effectively opens
+    the \l{readLink()}{link's target}. On Windows, it opens the \c
+    .lnk file itself.
+
+    Example:
+
+    \snippet doc/src/snippets/code/src_corelib_io_qfileinfo.cpp 9
 
     \note If the symlink points to a non existing file, exists() returns
      false.
@@ -790,9 +889,12 @@ bool QFileInfo::isSymLink() const
         return false;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::LinkType))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::LinkType);
-    return d->metaData.isLink();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::LinkType))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::LinkType);
+        return d->metaData.isLink();
+    }
+    return d->getFileFlags(QAbstractFileEngine::LinkType);
 }
 
 /*!
@@ -805,15 +907,19 @@ bool QFileInfo::isRoot() const
     Q_D(const QFileInfo);
     if (d->isDefaultConstructed)
         return true;
-    return d->fileEntry.isRoot();
+    if (!d->fileEngine) {
+        return d->fileEntry.isRoot();
+    }
+    return d->getFileFlags(QAbstractFileEngine::RootFlag);
 }
 
 /*!
     \fn QString QFileInfo::readLink() const
     \since 4.2
 
-    Returns the absolute path to the file or directory a symlink points to,
-    or a an empty string if the object isn't a symbolic link.
+    Returns the absolute path to the file or directory a symlink (or shortcut
+    on Windows) points to, or a an empty string if the object isn't a symbolic
+    link.
 
     This name may not represent an existing file; it is only a string.
     QFileInfo::exists() returns true if the symlink points to an
@@ -827,7 +933,7 @@ QString QFileInfo::readLink() const
     Q_D(const QFileInfo);
     if (d->isDefaultConstructed)
         return QLatin1String("");
-    return d->getFileName(QFileInfoPrivate::LinkName);
+    return d->getFileName(QAbstractFileEngine::LinkName);
 }
 
 /*!
@@ -845,14 +951,14 @@ QString QFileInfo::owner() const
     Q_D(const QFileInfo);
     if (d->isDefaultConstructed)
         return QLatin1String("");
-    return QFileSystemEngine::resolveUserName(d->fileEntry, d->metaData);
+    return d->getFileOwner(QAbstractFileEngine::OwnerUser);
 }
 
 /*!
     Returns the id of the owner of the file.
 
-    On systems where files do not have owners this function returns
-    ((uint) -2).
+    On Windows and on systems where files do not have owners this
+    function returns ((uint) -2).
 
     \sa owner(), group(), groupId()
 */
@@ -863,14 +969,18 @@ uint QFileInfo::ownerId() const
         return 0;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::UserId))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserId);
-    return d->metaData.userId();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::UserId))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserId);
+        return d->metaData.userId();
+    }
+    return d->fileEngine->ownerId(QAbstractFileEngine::OwnerUser);
 }
 
 /*!
-    Returns the group of the file. On systems where files do not have
-    groups, or if an error occurs, an empty string is returned.
+    Returns the group of the file. On Windows, on systems where files
+    do not have groups, or if an error occurs, an empty string is
+    returned.
 
     This function can be time consuming under Unix (in the order of
     milliseconds).
@@ -882,14 +992,14 @@ QString QFileInfo::group() const
     Q_D(const QFileInfo);
     if (d->isDefaultConstructed)
         return QLatin1String("");
-    return QFileSystemEngine::resolveGroupName(d->fileEntry, d->metaData);
+    return d->getFileOwner(QAbstractFileEngine::OwnerGroup);
 }
 
 /*!
     Returns the id of the group the file belongs to.
 
-    On systems where files do not have groups this function returns
-    (uint) -2.
+    On Windows and on systems where files do not have groups this
+    function always returns (uint) -2.
 
     \sa group(), owner(), ownerId()
 */
@@ -900,9 +1010,12 @@ uint QFileInfo::groupId() const
         return 0;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::GroupId))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::GroupId);
-    return d->metaData.groupId();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::GroupId))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::GroupId);
+        return d->metaData.groupId();
+    }
+    return d->fileEngine->ownerId(QAbstractFileEngine::OwnerGroup);
 }
 
 /*!
@@ -925,11 +1038,14 @@ bool QFileInfo::permission(QFile::Permissions permissions) const
         return false;
     if (!d->cache_enabled)
         d->clear();
-    // the QFileSystemMetaData::MetaDataFlag and QFile::Permissions overlap, so just static cast.
-    QFileSystemMetaData::MetaDataFlag permissionFlags = static_cast<QFileSystemMetaData::MetaDataFlag>((int)permissions);
-    if (!d->metaData.hasFlags(permissionFlags))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, permissionFlags);
-    return (d->metaData.permissions() & permissions) == permissions;
+    if (!d->fileEngine) {
+        // the QFileSystemMetaData::MetaDataFlag and QFile::Permissions overlap, so just static cast.
+        QFileSystemMetaData::MetaDataFlag permissionFlags = static_cast<QFileSystemMetaData::MetaDataFlag>((int)permissions);
+        if (!d->metaData.hasFlags(permissionFlags))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, permissionFlags);
+        return (d->metaData.permissions() & permissions) == permissions;
+    }
+    return d->getFileFlags(QAbstractFileEngine::FileFlags((int)permissions)) == (uint)permissions;
 }
 
 /*!
@@ -943,9 +1059,12 @@ QFile::Permissions QFileInfo::permissions() const
         return 0;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::Permissions))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::Permissions);
-    return d->metaData.permissions();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::Permissions))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::Permissions);
+        return d->metaData.permissions();
+    }
+    return QFile::Permissions(d->getFileFlags(QAbstractFileEngine::PermsMask) & QAbstractFileEngine::PermsMask);
 }
 
 
@@ -962,9 +1081,12 @@ qint64 QFileInfo::size() const
         return 0;
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::SizeAttribute))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::SizeAttribute);
-    return d->metaData.size();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::SizeAttribute))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::SizeAttribute);
+        return d->metaData.size();
+    }
+    return d->fileEngine->size();
 }
 
 /*!
@@ -987,9 +1109,12 @@ QDateTime QFileInfo::created() const
         return QDateTime();
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::CreationTime))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::CreationTime);
-    return d->metaData.creationTime();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::CreationTime))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::CreationTime);
+        return d->metaData.creationTime();
+    }
+    return d->getFileTime(QAbstractFileEngine::CreationTime);
 }
 
 /*!
@@ -1004,9 +1129,12 @@ QDateTime QFileInfo::lastModified() const
         return QDateTime();
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::ModificationTime))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::ModificationTime);
-    return d->metaData.modificationTime();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::ModificationTime))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::ModificationTime);
+        return d->metaData.modificationTime();
+    }
+    return d->getFileTime(QAbstractFileEngine::ModificationTime);
 }
 
 /*!
@@ -1024,9 +1152,12 @@ QDateTime QFileInfo::lastRead() const
         return QDateTime();
     if (!d->cache_enabled)
         d->clear();
-    if (!d->metaData.hasFlags(QFileSystemMetaData::AccessTime))
-        QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::AccessTime);
-    return d->metaData.accessTime();
+    if (!d->fileEngine) {
+        if (!d->metaData.hasFlags(QFileSystemMetaData::AccessTime))
+            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::AccessTime);
+        return d->metaData.accessTime();
+    }
+    return d->getFileTime(QAbstractFileEngine::AccessTime);
 }
 
 /*!

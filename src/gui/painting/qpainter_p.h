@@ -96,6 +96,7 @@ public:
     QPainterState();
     QPainterState(const QPainterState *s);
     virtual ~QPainterState();
+    void init(QPainter *p);
 
     QPointF brushOrigin;
     QFont font;
@@ -141,7 +142,8 @@ public:
     QPainterPrivate(QPainter *painter)
     : q_ptr(painter), d_ptrs(nullptr), state(nullptr), dummyState(nullptr), txinv(false),
         inDestructor(false), d_ptrs_size(0), refcount(1), device(nullptr),
-        original_device(nullptr), engine(nullptr), extended(nullptr)
+        original_device(nullptr), helper_device(nullptr), engine(nullptr),
+        extended(nullptr)
     {
     }
 
@@ -186,6 +188,7 @@ public:
 
     QPaintDevice *device;
     QPaintDevice *original_device;
+    QPaintDevice *helper_device;
     QPaintEngine *engine;
     QPaintEngineEx *extended;
 };

@@ -87,9 +87,10 @@ public:
     };
 
     enum OptimizationFlag {
-        DontSavePainterState = 0x1,
-        DontAdjustForAntialiasing = 0x2,
-        IndirectPainting = 0x4
+        DontClipPainter = 0x1, // obsolete
+        DontSavePainterState = 0x2,
+        DontAdjustForAntialiasing = 0x4,
+        IndirectPainting = 0x8
     };
     Q_DECLARE_FLAGS(OptimizationFlags, OptimizationFlag)
 
@@ -219,6 +220,7 @@ protected:
     void dragMoveEvent(QDragMoveEvent *event);
     void dropEvent(QDropEvent *event);
     void focusInEvent(QFocusEvent *event);
+    bool focusNextPrevChild(bool next);
     void focusOutEvent(QFocusEvent *event);
     void keyPressEvent(QKeyEvent *event);
     void keyReleaseEvent(QKeyEvent *event);

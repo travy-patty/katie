@@ -62,15 +62,15 @@ QByteArray QDBusArgumentPrivate::createSignature(int id)
     bool ok = marshaller->ok;
     delete marshaller;
 
-    if (Q_UNLIKELY(signature.isEmpty() || !ok || !QDBusUtil::isValidSingleSignature(QString::fromLatin1(signature)))) {
+    if (signature.isEmpty() || !ok || !QDBusUtil::isValidSingleSignature(QString::fromLatin1(signature))) {
         qWarning("QDBusMarshaller: type `%s' produces invalid D-BUS signature `%s' "
                  "(Did you forget to call beginStructure() ?)",
                  QVariant::typeToName( QVariant::Type(id) ),
                  signature.isEmpty() ? "<empty>" : signature.constData());
         return "";
-    } else if (Q_UNLIKELY((signature.at(0) != DBUS_TYPE_ARRAY && signature.at(0) != DBUS_STRUCT_BEGIN_CHAR) ||
+    } else if ((signature.at(0) != DBUS_TYPE_ARRAY && signature.at(0) != DBUS_STRUCT_BEGIN_CHAR) ||
                (signature.at(0) == DBUS_TYPE_ARRAY && (signature.at(1) == DBUS_TYPE_BYTE ||
-                                                       signature.at(1) == DBUS_TYPE_STRING)))) {
+                                                       signature.at(1) == DBUS_TYPE_STRING))) {
         qWarning("QDBusMarshaller: type `%s' attempts to redefine basic D-BUS type '%s' (%s) "
                  "(Did you forget to call beginStructure() ?)",
                  QVariant::typeToName( QVariant::Type(id) ),
@@ -1101,9 +1101,7 @@ const QDBusArgument &operator>>(const QDBusArgument &a, QVariant &v)
 #ifndef QDBUS_NO_SPECIALTYPES
 const QDBusArgument &operator>>(const QDBusArgument &a, QDate &date)
 {
-    int y = 0;
-    int m = 0;
-    int d = 0;
+    int y, m, d;
     a.beginStructure();
     a >> y >> m >> d;
     a.endStructure();
@@ -1128,10 +1126,7 @@ QDBusArgument &operator<<(QDBusArgument &a, const QDate &date)
 
 const QDBusArgument &operator>>(const QDBusArgument &a, QTime &time)
 {
-    int h = 0;
-    int m = 0;
-    int s = 0;
-    int ms = 0;
+    int h, m, s, ms;
     a.beginStructure();
     a >> h >> m >> s >> ms;
     a.endStructure();
@@ -1158,7 +1153,7 @@ const QDBusArgument &operator>>(const QDBusArgument &a, QDateTime &dt)
 {
     QDate date;
     QTime time;
-    int timespec = int(Qt::LocalTime);
+    int timespec;
 
     a.beginStructure();
     a >> date >> time >> timespec;
@@ -1178,10 +1173,7 @@ QDBusArgument &operator<<(QDBusArgument &a, const QDateTime &dt)
 
 const QDBusArgument &operator>>(const QDBusArgument &a, QRect &rect)
 {
-    int x = 0;
-    int y = 0;
-    int width = 0;
-    int height = 0;
+    int x, y, width, height;
     a.beginStructure();
     a >> x >> y >> width >> height;
     a.endStructure();
@@ -1201,10 +1193,7 @@ QDBusArgument &operator<<(QDBusArgument &a, const QRect &rect)
 
 const QDBusArgument &operator>>(const QDBusArgument &a, QRectF &rect)
 {
-    double x = 0.0;
-    double y = 0.0;
-    double width = 0.0;
-    double height = 0.0;
+    double x, y, width, height;
     a.beginStructure();
     a >> x >> y >> width >> height;
     a.endStructure();
@@ -1242,8 +1231,7 @@ QDBusArgument &operator<<(QDBusArgument &a, const QSize &size)
 
 const QDBusArgument &operator>>(const QDBusArgument &a, QSizeF &size)
 {
-    double width = 0.0;
-    double height = 0.0;
+    double width, height;
     a.beginStructure();
     a >> width >> height;
     a.endStructure();
@@ -1282,9 +1270,7 @@ QDBusArgument &operator<<(QDBusArgument &a, const QPoint &pt)
 
 const QDBusArgument &operator>>(const QDBusArgument &a, QPointF &pt)
 {
-    // NOTE: D-Bus does not support float numbers
-    double x = 0.0;
-    double y = 0.0;
+    double x, y;
     a.beginStructure();
     a >> x >> y;
     a.endStructure();

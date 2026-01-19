@@ -30,7 +30,8 @@ QT_BEGIN_NAMESPACE
 
 QFileSystemIterator::QFileSystemIterator(const QFileSystemEntry &entry)
     : nativePath(entry.nativeFilePath())
-    , dir(nullptr)
+    , dir(0)
+    , dirEntry(0)
 {
     dir = QT_OPENDIR(nativePath.constData());
 
@@ -41,21 +42,20 @@ QFileSystemIterator::QFileSystemIterator(const QFileSystemEntry &entry)
 
 QFileSystemIterator::~QFileSystemIterator()
 {
-    if (dir) {
+    if (dir)
         QT_CLOSEDIR(dir);
-    }
 }
 
 bool QFileSystemIterator::advance(QFileSystemEntry &fileEntry, QFileSystemMetaData &metaData)
 {
-    if (!dir) {
+    if (!dir)
         return false;
-    }
 
-    const QT_DIRENT *dirEntry = QT_READDIR(dir);
+    dirEntry = QT_READDIR(dir);
+
     if (dirEntry) {
         fileEntry = QFileSystemEntry(nativePath + QByteArray(dirEntry->d_name), QFileSystemEntry::FromNativePath());
-        metaData.fillFromDirEnt(dirEntry, fileEntry.nativeFilePath());
+        metaData.fillFromDirEnt(*dirEntry, fileEntry.nativeFilePath());
         return true;
     }
 

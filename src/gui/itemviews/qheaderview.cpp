@@ -311,6 +311,14 @@ QHeaderView::QHeaderView(QHeaderViewPrivate &dd,
 }
 
 /*!
+  Destroys the header.
+*/
+
+QHeaderView::~QHeaderView()
+{
+}
+
+/*!
   \internal
 */
 void QHeaderView::initialize()

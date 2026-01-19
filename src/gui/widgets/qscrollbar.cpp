@@ -31,9 +31,11 @@
 
 #ifndef QT_NO_SCROLLBAR
 
-#include "qabstractslider_p.h"
-
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
 #include <limits.h>
+#include "qabstractslider_p.h"
 
 QT_BEGIN_NAMESPACE
 

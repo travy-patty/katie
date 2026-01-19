@@ -15,6 +15,10 @@ endif()
 
 project(Katie C CXX)
 
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo)
+endif()
+
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules")
 set(CMAKE_AUTOMOC FALSE)
 set(CMAKE_AUTOUIC FALSE)
@@ -31,6 +35,21 @@ set(CMAKE_UNITY_BUILD_BATCH_SIZE 300)
 # enable symbols visibility preset for all targets
 cmake_policy(SET CMP0063 NEW)
 
+# LLVM linker does not have a default library search path, add some directories known to contain
+# system wide libraries. the headers search path is also incomplete
+if(CMAKE_SYSTEM_NAME MATCHES "BSD")
+    foreach(incdir /usr/X11R6/include /usr/X11R7/include /usr/pkg/include /usr/local/include /usr/include)
+        if(EXISTS "${incdir}")
+            include_directories(${incdir})
+        endif()
+    endforeach()
+    foreach(linkdir /usr/X11R6/lib /usr/X11R7/lib /usr/pkg/lib /usr/local/lib /usr/lib /lib)
+        if(EXISTS "${linkdir}")
+            link_directories(${linkdir})
+        endif()
+    endforeach()
+endif()
+
 include(CheckCXXCompilerFlag)
 include(GNUInstallDirs)
 include(CheckIncludeFileCXX)
@@ -44,9 +63,13 @@ include(KatieBuildMacros)
 
 # disable some compiler warnings
 set(KATIE_NO_WARNINGS
+    # placement new used in private QVariant functions
+    -Wno-placement-new
+    # QVector does not always use new/delete
+    -Wno-class-memaccess
     # hot attribute used in function prototypes
     -Wno-attributes
-    # deprecated X11 and CUPS API used
+    # deprecated X11, CUPS and OpenSSL API used
     -Wno-deprecated -Wno-deprecated-declarations
 )
 foreach(nowarning ${KATIE_NO_WARNINGS})
@@ -64,15 +87,14 @@ if(CMAKE_SYSTEM_NAME MATCHES "(Linux|GNU)")
 elseif(CMAKE_SYSTEM_NAME MATCHES "(FreeBSD|DragonFly)")
     katie_definition(-D_THREAD_SAFE)
 elseif(NOT CMAKE_SYSTEM_NAME MATCHES "(OpenBSD|NetBSD|Solaris|SunOS)")
-    # if it is not open-source it is not supported, don't even bother requesting support for such
     message(FATAL_ERROR "Unknown platform '${CMAKE_SYSTEM_NAME}'")
 endif()
 
 # mostly relevant to the build process, also stored in the version file for CMake and in qconfig.h.cmake
 set(KATIE_MAJOR "4")
-set(KATIE_MINOR "14")
-set(KATIE_MICRO "0")
-set(KATIE_HEX "0x041400")
+set(KATIE_MINOR "11")
+set(KATIE_MICRO "1")
+set(KATIE_HEX "0x041101")
 set(KATIE_VERSION "${KATIE_MAJOR}.${KATIE_MINOR}.${KATIE_MICRO}")
 
 # only for the build process
@@ -88,7 +110,7 @@ if(NOT KATIE_UNIFDEF)
     message(WARNING "Could not find unifdef, headers will not be optimized")
 endif()
 
-# used as shebang for profile, exec and dbg scripts
+# used as shebang for profile, exec, dbus, xvfb and dbg scripts
 find_program(KATIE_SHELL NAMES sh dash mksh ksh ash)
 if(NOT KATIE_SHELL)
     message(FATAL_ERROR "Could not detect shell, supported are: sh, dash, mksh, ksh and ash")
@@ -98,15 +120,19 @@ endif()
 set(KATIE_TYPE SHARED CACHE STRING "Build type")
 
 # components and tools that will be build, changed depending on the requirements availability
-set(KATIE_COMPONENTS "Core Gui Declarative Network Svg Xml Script Test UiTools")
-set(KATIE_TOOLS "moc uic qscript")
+# NOTE: excluding DesignerComponents as it was never used as public component, currently only
+# used by the the designer tool. if it is ever needed for something it can just be added here,
+# Q_DESIGNER_COMPONENTS_EXPORT must be introduced and genmap.py adjusted - the rest of the
+# build system has everything in place.
+set(KATIE_COMPONENTS "Core Gui Declarative Designer Network Svg Xml Script ScriptTools Test UiTools")
+set(KATIE_TOOLS "moc uic rcc designer qscript qtconfig")
 
 set(KATIE_HEADERS_PATH "${CMAKE_INSTALL_FULL_INCLUDEDIR}/katie" CACHE PATH "Headers installation path")
 set(KATIE_LIBRARIES_PATH "${CMAKE_INSTALL_FULL_LIBDIR}" CACHE PATH "Libraries installation path")
 set(KATIE_BINARIES_PATH "${CMAKE_INSTALL_FULL_BINDIR}" CACHE PATH "Binaries installation path")
 set(KATIE_PLUGINS_PATH "${KATIE_LIBRARIES_PATH}/katie/plugins" CACHE PATH "Plugins installation path")
 set(KATIE_IMPORTS_PATH "${KATIE_LIBRARIES_PATH}/katie/imports" CACHE PATH "Declarative imports installation path")
-set(KATIE_TRANSLATIONS_PATH "${CMAKE_INSTALL_FULL_DATADIR}/translations" CACHE PATH "Translations installation path")
+set(KATIE_TRANSLATIONS_PATH "${CMAKE_INSTALL_FULL_LOCALEDIR}" CACHE PATH "Translations installation path")
 set(KATIE_CMAKE_PATH "${KATIE_LIBRARIES_PATH}/cmake/Katie" CACHE PATH "CMake aware modules installation path")
 set(KATIE_LDCONF_PATH "${CMAKE_INSTALL_FULL_SYSCONFDIR}/ld.so.conf.d" CACHE PATH "Run-time linker/loader configs installation path")
 set(KATIE_PROFILE_PATH "${CMAKE_INSTALL_FULL_SYSCONFDIR}/profile.d" CACHE PATH "Shell profile scripts installation path")
@@ -114,15 +140,17 @@ set(KATIE_MAN_PATH "${CMAKE_INSTALL_FULL_MANDIR}" CACHE PATH "Manual pages insta
 set(KATIE_APPLICATIONS_PATH "${CMAKE_INSTALL_FULL_DATADIR}/applications" CACHE PATH "Desktop applications register installation path")
 set(KATIE_PIXMAPS_PATH "${CMAKE_INSTALL_FULL_DATADIR}/pixmaps" CACHE PATH "Desktop applications icon installation path")
 set(KATIE_PKGCONFIG_PATH "${KATIE_LIBRARIES_PATH}/pkgconfig" CACHE PATH "pkg-config installation path")
-set(KATIE_TOOLS_SUFFIX "" CACHE STRING "Tools (moc, uic, etc.) suffix")
+set(KATIE_TOOLS_SUFFIX "" CACHE STRING "Tools (moc, uic, rcc, etc.) suffix")
 
-# bundled packages
-option(WITH_XXHASH "Build with external xxHash" OFF)
-add_feature_info(xxhash WITH_XXHASH "build with external xxHash")
-
-# optional packages
+# optional package
 option(WITH_CUPS "Build CUPS support" ON)
 add_feature_info(cups WITH_CUPS "build CUPS support")
+
+option(WITH_JPEG "Build JPEG support" ON)
+add_feature_info(jpeg WITH_JPEG "build JPEG support")
+
+option(WITH_TIFF "Build TIFF support" ON)
+add_feature_info(tiff WITH_TIFF "build TIFF support")
 
 option(WITH_DBUS "Build D-Bus support" ON)
 add_feature_info(dbus WITH_DBUS "build D-Bus support")
@@ -130,13 +158,19 @@ add_feature_info(dbus WITH_DBUS "build D-Bus support")
 option(WITH_FONTCONFIG "Build Fontconfig support" ON)
 add_feature_info(fontconfig WITH_FONTCONFIG "build Fontconfig support")
 
-option(WITH_GETTEXTPO "Build Gettext support" ON)
-add_feature_info(gettextpo WITH_GETTEXTPO "build Gettext support")
+option(WITH_ODBC "Build ODBC database plugin" ON)
+add_feature_info(odbc WITH_ODBC "build ODBC support")
+
+option(WITH_INTL "Build Intl support" ON)
+add_feature_info(intl WITH_INTL "build Intl support")
 
 option(WITH_EXECINFO "Build ExecInfo support" OFF)
 add_feature_info(execinfo WITH_EXECINFO "build ExecInfo support")
 
 # optional features
+option(WITH_ACCESSIBILITY "Build accessibility support" ON)
+add_feature_info(accessibility WITH_ACCESSIBILITY "build accessibility support")
+
 option(KATIE_TESTS "Build automatic tests" OFF)
 add_feature_info(tests KATIE_TESTS "build automatic tests")
 
@@ -146,12 +180,30 @@ add_feature_info(benchmarks KATIE_BENCHMARKS "build automatic benchmarks")
 option(KATIE_UTILS "Build maintainance utilities" OFF)
 add_feature_info(utils KATIE_UTILS "build maintainance utilities")
 
+# v0.4+ required for inflateInit2() but that is pre-release
+find_package(ZLIB)
+set_package_properties(ZLIB PROPERTIES
+    PURPOSE "Required for compression support"
+    DESCRIPTION "A Massively Spiffy Yet Delicately Unobtrusive Compression Library"
+    URL "https://zlib.net"
+    TYPE REQUIRED
+)
+
 # v4.6+ required for unorm2_getDecomposition()
 find_package(ICU 4.6)
 set_package_properties(ICU PROPERTIES
     PURPOSE "Required for locales support"
     DESCRIPTION "Mature, widely used libraries providing Unicode and Globalization support"
     URL "http://site.icu-project.org/"
+    TYPE REQUIRED
+)
+
+# v1.1.3+ required for exported ZSTD_getErrorString() and ZSTD_getErrorCode()
+find_package(ZSTD 1.1.3)
+set_package_properties(ZSTD PROPERTIES
+    PURPOSE "Required for compression support"
+    DESCRIPTION "Fast real-time compression algorithm"
+    URL "https://github.com/facebook/zstd"
     TYPE REQUIRED
 )
 
@@ -164,6 +216,24 @@ set_package_properties(Jansson PROPERTIES
     TYPE REQUIRED
 )
 
+# v1.1.0+ required for thread-safety without use of locking callbacks
+find_package(OpenSSL 1.1.0)
+set_package_properties(OpenSSL PROPERTIES
+    PURPOSE "Required for HTTPS support"
+    DESCRIPTION "Robust, commercial-grade, and full-featured toolkit for SSL and TLS"
+    URL "https://openssl.org"
+    TYPE REQUIRED
+)
+
+# v7.7+ required for JavaScript compatibility
+find_package(PCRE 7.7)
+set_package_properties(PCRE PROPERTIES
+    PURPOSE "Required for regexp support in script component"
+    DESCRIPTION "Perl Compatible Regular Expressions"
+    URL "https://www.pcre.org/"
+    TYPE REQUIRED
+)
+
 find_package(X11)
 set_package_properties(X11 PROPERTIES
     PURPOSE "Required for X11/X.Org integration support"
@@ -172,7 +242,8 @@ set_package_properties(X11 PROPERTIES
     TYPE REQUIRED
 )
 
-find_package(Freetype)
+# v2.1.10+ required for FT_GlyphSlot_Embolden()
+find_package(Freetype 2.1.10)
 set_package_properties(Freetype PROPERTIES
     PURPOSE "Required for fonts configuration support"
     DESCRIPTION "Freely available software library to render fonts"
@@ -189,7 +260,8 @@ set_package_properties(Threads PROPERTIES
     TYPE REQUIRED
 )
 
-find_package(PNG)
+# v1.5.4+ required for png_longjmp_ptr() without noreturn attribute
+find_package(PNG 1.5.4)
 set_package_properties(PNG PROPERTIES
     PURPOSE "PNG format handler"
     DESCRIPTION "A collection of routines used to create PNG format graphics files"
@@ -197,19 +269,20 @@ set_package_properties(PNG PROPERTIES
     TYPE REQUIRED
 )
 
-find_package(Deflate)
-set_package_properties(Deflate PROPERTIES
-    PURPOSE "Required for compression and decompression support"
-    DESCRIPTION "Heavily optimized library for DEFLATE/zlib/gzip compression and decompression"
-    URL "https://github.com/ebiggers/libdeflate"
-    TYPE REQUIRED
+find_package(JPEG)
+set_package_properties(JPEG PROPERTIES
+    PURPOSE "JPEG format handler"
+    DESCRIPTION "JPEG image codec with accelerated baseline compression and decompression"
+    URL "https://libjpeg-turbo.virtualgl.org/"
+    TYPE RECOMMENDED
 )
 
-find_package(xxHash)
-set_package_properties(xxHash PROPERTIES
-    PURPOSE "Required for the custom hash algorithm"
-    DESCRIPTION "Extremely fast non-cryptographic hash algorithm"
-    URL "https://cyan4973.github.io/xxHash/"
+# v3.6.0+ required for TIFFReadRGBAImageOriented()
+find_package(TIFF 3.6.0)
+set_package_properties(TIFF PROPERTIES
+    PURPOSE "TIFF format handler"
+    DESCRIPTION "Library for manipulation of TIFF images"
+    URL "http://www.libtiff.org/"
     TYPE RECOMMENDED
 )
 
@@ -239,10 +312,10 @@ set_package_properties(DBus PROPERTIES
     TYPE RECOMMENDED
 )
 
-find_package(GettextPO)
-set_package_properties(GettextPO PROPERTIES
+find_package(Intl)
+set_package_properties(Intl PROPERTIES
     PURPOSE "Required for translations support"
-    DESCRIPTION "GNU gettext PO files processsor"
+    DESCRIPTION "GNU gettext runtime library"
     URL "https://www.gnu.org/software/gettext/gettext.html"
     TYPE RECOMMENDED
 )
@@ -291,12 +364,41 @@ else()
     message(FATAL_ERROR "Unknown platform '${CMAKE_SYSTEM_NAME}'")
 endif()
 
-try_run(
-    KATIE_ARCH_RUN_RESULT KATIE_ARCH_COMPILE_RESULT
-    "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/cmake/arch.cpp"
-    RUN_OUTPUT_VARIABLE KATIE_ARCH
-)
-if(NOT KATIE_ARCH_RUN_RESULT EQUAL 0 OR NOT KATIE_ARCH_COMPILE_RESULT)
+# https://en.wikipedia.org/wiki/Uname
+if(KATIE_PROCESSOR MATCHES "^alpha")
+    set(KATIE_ARCH "ALPHA")
+elseif(KATIE_PROCESSOR MATCHES "^arm64")
+    set(KATIE_ARCH "ARM64")
+elseif(KATIE_PROCESSOR MATCHES "^arm")
+    set(KATIE_ARCH "ARM")
+elseif(KATIE_PROCESSOR MATCHES "^avr")
+    set(KATIE_ARCH "AVR32")
+elseif(KATIE_PROCESSOR MATCHES "^blackfin")
+    set(KATIE_ARCH "BFIN")
+elseif(KATIE_PROCESSOR MATCHES "^ia64")
+    set(KATIE_ARCH "IA64")
+elseif(KATIE_PROCESSOR MATCHES "^m68k")
+    set(KATIE_ARCH "M68K")
+elseif(KATIE_PROCESSOR MATCHES "^mips")
+    set(KATIE_ARCH "MIPS")
+elseif(KATIE_PROCESSOR MATCHES "^hppa")
+    set(KATIE_ARCH "PARISC")
+elseif(KATIE_PROCESSOR MATCHES "^ppc64")
+    set(KATIE_ARCH "POWERPC64")
+elseif(KATIE_PROCESSOR MATCHES "^ppc")
+    set(KATIE_ARCH "POWERPC")
+elseif(KATIE_PROCESSOR MATCHES "^s390")
+    set(KATIE_ARCH "S390")
+elseif(KATIE_PROCESSOR MATCHES "^sparc")
+    set(KATIE_ARCH "SPARC")
+elseif(KATIE_PROCESSOR MATCHES "^sh")
+    # TODO: SH4A
+    set(KATIE_ARCH "SH")
+elseif(KATIE_PROCESSOR MATCHES "(x86_64|amd64)")
+    set(KATIE_ARCH "X86_64")
+elseif(KATIE_PROCESSOR MATCHES "(x86|i[3-6]86|i86pc)")
+    set(KATIE_ARCH "I386")
+else()
     message(FATAL_ERROR "Unknown CPU '${KATIE_PROCESSOR}'")
 endif()
 
@@ -330,8 +432,6 @@ katie_check_function(timegm "time.h")
 katie_check_function(pipe2 "unistd.h")
 katie_check_function(getdomainname "unistd.h")
 katie_check_function(renameat2 "stdio.h")
-katie_check_function(program_invocation_short_name "errno.h")
-katie_check_function(flock "sys/file.h")
 katie_check_struct(tm tm_gmtoff "time.h")
 katie_check_struct(tm tm_zone "time.h")
 katie_check_struct(dirent d_type "dirent.h")
@@ -357,7 +457,7 @@ if(KATIE_TESTS OR KATIE_BENCHMARKS)
     add_definitions(-DQT_BUILD_INTERNAL)
 endif()
 
-foreach(script exec dbg)
+foreach(script exec dbus xvfb dbg)
     configure_file(
         ${CMAKE_SOURCE_DIR}/cmake/${script}.sh.cmake
         ${CMAKE_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/${script}.sh
@@ -371,23 +471,23 @@ foreach(script exec dbg)
 endforeach()
 
 # optional packages
-if(WITH_DBUS AND DBUS_FOUND)
-    set(KATIE_COMPONENTS "${KATIE_COMPONENTS} DBus")
-    set(KATIE_TOOLS "${KATIE_TOOLS} qdbus qdbusxml2cpp qdbuscpp2xml qdbusviewer")
-endif()
-
 if(NOT WITH_FONTCONFIG OR NOT FONTCONFIG_FOUND)
     katie_config(QT_NO_FONTCONFIG)
+endif()
+
+if(NOT WITH_DBUS OR NOT DBUS_FOUND)
+    katie_config(QT_NO_DBUS)
+else()
+    set(KATIE_COMPONENTS "${KATIE_COMPONENTS} DBus")
+    set(KATIE_TOOLS "${KATIE_TOOLS} qdbus qdbusxml2cpp qdbuscpp2xml qdbusviewer")
 endif()
 
 if(NOT WITH_CUPS OR NOT CUPS_FOUND)
     katie_config(QT_NO_CUPS)
 endif()
 
-if(NOT WITH_GETTEXTPO OR NOT GETTEXTPO_FOUND)
+if(NOT WITH_INTL OR NOT INTL_FOUND)
     katie_config(QT_NO_TRANSLATION)
-else()
-    set(KATIE_TOOLS "${KATIE_TOOLS} trc")
 endif()
 
 if(NOT WITH_EXECINFO OR NOT EXECINFO_FOUND)
@@ -397,6 +497,10 @@ endif()
 # optional and conditional features
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     katie_config(QT_NO_DEBUG)
+endif()
+
+if(NOT WITH_ACCESSIBILITY)
+    katie_config(QT_NO_ACCESSIBILITY)
 endif()
 
 add_library(pic_test ${KATIE_TYPE}  EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/cmake/pic.cpp")
@@ -419,7 +523,7 @@ if(NOT X11_Xext_FOUND)
     katie_config(QT_NO_XSHAPE)
 endif()
 if(NOT X11_SM_FOUND OR NOT X11_ICE_FOUND)
-    message(WARNING "The X11 SM/ICE was not found thus disabling session manager support")
+    message(WARNING "X11 SM/ICE was not found thus disabling session manager support")
     katie_config(QT_NO_SESSIONMANAGER)
 endif()
 
@@ -432,24 +536,28 @@ configure_file(
     ${CMAKE_BINARY_DIR}/include/qconfig.cpp
 )
 
+add_subdirectory(src/shared)
+
 add_subdirectory(src/core)
 add_subdirectory(src/xml)
 if(WITH_DBUS AND DBUS_FOUND)
     add_subdirectory(src/dbus)
 endif()
 add_subdirectory(src/declarative)
+add_subdirectory(src/designer)
 add_subdirectory(src/gui)
 add_subdirectory(src/imports)
 add_subdirectory(src/network)
 add_subdirectory(src/plugins)
 add_subdirectory(src/script)
+add_subdirectory(src/scripttools)
 add_subdirectory(src/svg)
 add_subdirectory(src/test)
 add_subdirectory(src/uitools)
 
 add_subdirectory(src/tools)
 
-if(WITH_GETTEXTPO AND GETTEXTPO_FOUND)
+if(WITH_INTL AND INTL_FOUND)
     add_subdirectory(translations)
 endif()
 
@@ -462,14 +570,39 @@ if(KATIE_UTILS)
 endif()
 
 # the macro calls bellow are generated via the incfsck script
+katie_generate_obsolete(QAbstractExtensionFactory QtDesigner extension.h)
+katie_generate_obsolete(QAbstractExtensionManager QtDesigner extension.h)
+katie_generate_obsolete(QAbstractFileEngineIterator QtCore qabstractfileengine.h)
+katie_generate_obsolete(QAbstractFormBuilder QtDesigner abstractformbuilder.h)
 katie_generate_obsolete(QAbstractGraphicsShapeItem QtGui qgraphicsitem.h)
 katie_generate_obsolete(QAbstractListModel QtCore qabstractitemmodel.h)
 katie_generate_obsolete(QAbstractTableModel QtCore qabstractitemmodel.h)
 katie_generate_obsolete(QAbstractUndoItem QtGui qtextdocument.h)
+katie_generate_obsolete(QAccessible2Interface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleActionInterface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleApplication QtGui qaccessibleobject.h)
+katie_generate_obsolete(QAccessibleBridgeFactoryInterface QtGui qaccessiblebridge.h)
+katie_generate_obsolete(QAccessibleBridgePlugin QtGui qaccessiblebridge.h)
+katie_generate_obsolete(QAccessibleEditableTextInterface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleEvent QtGui qaccessible.h)
+katie_generate_obsolete(QAccessibleFactoryInterface QtGui qaccessibleplugin.h)
+katie_generate_obsolete(QAccessibleImageInterface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleInterfaceEx QtGui qaccessible.h)
+katie_generate_obsolete(QAccessibleInterface QtGui qaccessible.h)
+katie_generate_obsolete(QAccessibleObjectEx QtGui qaccessibleobject.h)
+katie_generate_obsolete(QAccessibleSimpleEditableTextInterface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleTable2CellInterface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleTable2Interface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleTableInterface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleTextInterface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleValueInterface QtGui qaccessible2.h)
+katie_generate_obsolete(QAccessibleWidgetEx QtGui qaccessiblewidget.h)
 katie_generate_obsolete(QActionEvent QtGui qevent.h)
+katie_generate_obsolete(QAnimationDriver QtGui qabstractanimation.h)
 katie_generate_obsolete(QArgument QtCore qobjectdefs.h)
 katie_generate_obsolete(QAtomicInt QtCore qatomic.h)
 katie_generate_obsolete(QAtomicPointer QtCore qatomic.h)
+katie_generate_obsolete(QBasicAtomicInt QtCore qbasicatomic.h)
 katie_generate_obsolete(QBitRef QtCore qbitarray.h)
 katie_generate_obsolete(QBrushData QtGui qbrush.h)
 katie_generate_obsolete(QByteRef QtCore qbytearray.h)
@@ -477,9 +610,10 @@ katie_generate_obsolete(QCharRef QtCore qstring.h)
 katie_generate_obsolete(QChildEvent QtCore qcoreevent.h)
 katie_generate_obsolete(QClipboardEvent QtGui qevent.h)
 katie_generate_obsolete(QCloseEvent QtGui qevent.h)
+katie_generate_obsolete(QConicalGradient QtGui qbrush.h)
 katie_generate_obsolete(QContextMenuEvent QtGui qevent.h)
-katie_generate_obsolete(QCustomWidgetPlugin QtUiTools customwidget.h)
-katie_generate_obsolete(QCustomWidget QtUiTools customwidget.h)
+katie_generate_obsolete(QContiguousCacheData QtCore qcontiguouscache.h)
+katie_generate_obsolete(QContiguousCacheTypedData QtCore qcontiguouscache.h)
 katie_generate_obsolete(QDateEdit QtGui qdatetimeedit.h)
 katie_generate_obsolete(QDate QtCore qdatetime.h)
 katie_generate_obsolete(QDBusAbstractInterfaceBase QtDBus qdbusabstractinterface.h)
@@ -493,6 +627,38 @@ katie_generate_obsolete(QDeclarativeListProperty QtDeclarative qdeclarativelist.
 katie_generate_obsolete(QDeclarativeListReference QtDeclarative qdeclarativelist.h)
 katie_generate_obsolete(QDeclarativeProperties QtDeclarative qdeclarativeproperty.h)
 katie_generate_obsolete(QDeclarativeTypeInfo QtDeclarative qdeclarativeprivate.h)
+katie_generate_obsolete(QDesignerActionEditorInterface QtDesigner abstractactioneditor.h)
+katie_generate_obsolete(QDesignerBrushManagerInterface QtDesigner abstractbrushmanager.h)
+katie_generate_obsolete(QDesignerComponents QtDesigner qdesigner_components.h)
+katie_generate_obsolete(QDesignerContainerExtension QtDesigner container.h)
+katie_generate_obsolete(QDesignerCustomWidgetCollectionInterface QtDesigner customwidget.h)
+katie_generate_obsolete(QDesignerCustomWidgetInterface QtDesigner customwidget.h)
+katie_generate_obsolete(QDesignerDnDItemInterface QtDesigner abstractdnditem.h)
+katie_generate_obsolete(QDesignerDynamicPropertySheetExtension QtDesigner dynamicpropertysheet.h)
+katie_generate_obsolete(QDesignerExtraInfoExtension QtDesigner extrainfo.h)
+katie_generate_obsolete(QDesignerFormEditorInterface QtDesigner abstractformeditor.h)
+katie_generate_obsolete(QDesignerFormEditorPluginInterface QtDesigner abstractformeditorplugin.h)
+katie_generate_obsolete(QDesignerFormWindowCursorInterface QtDesigner abstractformwindowcursor.h)
+katie_generate_obsolete(QDesignerFormWindowInterface QtDesigner abstractformwindow.h)
+katie_generate_obsolete(QDesignerFormWindowManagerInterface QtDesigner abstractformwindowmanager.h)
+katie_generate_obsolete(QDesignerFormWindowToolInterface QtDesigner abstractformwindowtool.h)
+katie_generate_obsolete(QDesignerIconCacheInterface QtDesigner abstracticoncache.h)
+katie_generate_obsolete(QDesignerIntegrationInterface QtDesigner abstractintegration.h)
+katie_generate_obsolete(QDesignerLanguageExtension QtDesigner abstractlanguage.h)
+katie_generate_obsolete(QDesignerLayoutDecorationExtension QtDesigner layoutdecoration.h)
+katie_generate_obsolete(QDesignerMemberSheetExtension QtDesigner membersheet.h)
+katie_generate_obsolete(QDesignerMetaDataBaseInterface QtDesigner abstractmetadatabase.h)
+katie_generate_obsolete(QDesignerMetaDataBaseItemInterface QtDesigner abstractmetadatabase.h)
+katie_generate_obsolete(QDesignerObjectInspectorInterface QtDesigner abstractobjectinspector.h)
+katie_generate_obsolete(QDesignerPromotionInterface QtDesigner abstractpromotioninterface.h)
+katie_generate_obsolete(QDesignerPropertyEditorInterface QtDesigner abstractpropertyeditor.h)
+katie_generate_obsolete(QDesignerPropertySheetExtension QtDesigner propertysheet.h)
+katie_generate_obsolete(QDesignerResourceBrowserInterface QtDesigner abstractresourcebrowser.h)
+katie_generate_obsolete(QDesignerTaskMenuExtension QtDesigner taskmenu.h)
+katie_generate_obsolete(QDesignerWidgetBoxInterface QtDesigner abstractwidgetbox.h)
+katie_generate_obsolete(QDesignerWidgetDataBaseInterface QtDesigner abstractwidgetdatabase.h)
+katie_generate_obsolete(QDesignerWidgetDataBaseItemInterface QtDesigner abstractwidgetdatabase.h)
+katie_generate_obsolete(QDesignerWidgetFactoryInterface QtDesigner abstractwidgetfactory.h)
 katie_generate_obsolete(QDomAttr QtXml qdom.h)
 katie_generate_obsolete(QDomCDATASection QtXml qdom.h)
 katie_generate_obsolete(QDomCharacterData QtXml qdom.h)
@@ -520,21 +686,32 @@ katie_generate_obsolete(QDynamicPropertyChangeEvent QtCore qcoreevent.h)
 katie_generate_obsolete(QEvent QtCore qcoreevent.h)
 katie_generate_obsolete(QEventSizeOfChecker QtTest qtestspontaneevent.h)
 katie_generate_obsolete(QExplicitlySharedDataPointer QtCore qsharedpointer.h)
+katie_generate_obsolete(QExtensionFactory QtDesigner default_extensionfactory.h)
 katie_generate_obsolete(QFileInfoList QtCore qfileinfo.h)
 katie_generate_obsolete(QFlag QtCore qglobal.h)
 katie_generate_obsolete(QFlags QtCore qglobal.h)
 katie_generate_obsolete(QFocusEvent QtGui qevent.h)
 katie_generate_obsolete(QFontMetricsF QtGui qfontmetrics.h)
+katie_generate_obsolete(QFormBuilder QtDesigner formbuilder.h)
+katie_generate_obsolete(QFutureInterfaceBase QtCore qfutureinterface.h)
+katie_generate_obsolete(QFutureIterator QtCore qfuture.h)
+katie_generate_obsolete(QFutureWatcherBase QtCore qfuturewatcher.h)
 katie_generate_obsolete(QGenericArgument QtCore qobjectdefs.h)
 katie_generate_obsolete(QGenericReturnArgument QtCore qobjectdefs.h)
+katie_generate_obsolete(QGlobalStaticDeleter QtCore qglobal.h)
+katie_generate_obsolete(QGlobalStatic QtCore qglobal.h)
 katie_generate_obsolete(QGradient QtGui qbrush.h)
 katie_generate_obsolete(QGradientStop QtGui qbrush.h)
 katie_generate_obsolete(QGradientStops QtGui qbrush.h)
 katie_generate_obsolete(QGraphicsAnchor QtGui qgraphicsanchorlayout.h)
+katie_generate_obsolete(QGraphicsBlurEffect QtGui qgraphicseffect.h)
+katie_generate_obsolete(QGraphicsColorizeEffect QtGui qgraphicseffect.h)
+katie_generate_obsolete(QGraphicsDropShadowEffect QtGui qgraphicseffect.h)
 katie_generate_obsolete(QGraphicsEllipseItem QtGui qgraphicsitem.h)
 katie_generate_obsolete(QGraphicsItemGroup QtGui qgraphicsitem.h)
 katie_generate_obsolete(QGraphicsLineItem QtGui qgraphicsitem.h)
 katie_generate_obsolete(QGraphicsObject QtGui qgraphicsitem.h)
+katie_generate_obsolete(QGraphicsOpacityEffect QtGui qgraphicseffect.h)
 katie_generate_obsolete(QGraphicsPathItem QtGui qgraphicsitem.h)
 katie_generate_obsolete(QGraphicsPixmapItem QtGui qgraphicsitem.h)
 katie_generate_obsolete(QGraphicsPolygonItem QtGui qgraphicsitem.h)
@@ -558,7 +735,15 @@ katie_generate_obsolete(QHBoxLayout QtGui qboxlayout.h)
 katie_generate_obsolete(QHelpEvent QtGui qevent.h)
 katie_generate_obsolete(QHideEvent QtGui qevent.h)
 katie_generate_obsolete(QHoverEvent QtGui qevent.h)
+katie_generate_obsolete(QHttpHeader QtNetwork qhttp.h)
+katie_generate_obsolete(QHttpPart QtNetwork qhttpmultipart.h)
+katie_generate_obsolete(QHttpRequestHeader QtNetwork qhttp.h)
+katie_generate_obsolete(QHttpResponseHeader QtNetwork qhttp.h)
+katie_generate_obsolete(QIconEngineFactoryInterface QtGui qiconengineplugin.h)
+katie_generate_obsolete(QIconEngineFactoryInterfaceV2 QtGui qiconengineplugin.h)
+katie_generate_obsolete(QIconEnginePluginV2 QtGui qiconengineplugin.h)
 katie_generate_obsolete(QIconEngineV2 QtGui qiconengine.h)
+katie_generate_obsolete(QImageIOHandlerFactoryInterface QtGui qimageiohandler.h)
 katie_generate_obsolete(QImageIOPlugin QtGui qimageiohandler.h)
 katie_generate_obsolete(QIncompatibleFlag QtCore qglobal.h)
 katie_generate_obsolete(QInputEvent QtGui qevent.h)
@@ -575,6 +760,9 @@ katie_generate_obsolete(QLatin1Char QtCore qchar.h)
 katie_generate_obsolete(QLatin1String QtCore qstring.h)
 katie_generate_obsolete(QLinearGradient QtGui qbrush.h)
 katie_generate_obsolete(QLineF QtCore qline.h)
+katie_generate_obsolete(QLinkedListData QtCore qlinkedlist.h)
+katie_generate_obsolete(QLinkedListIterator QtCore qlinkedlist.h)
+katie_generate_obsolete(QLinkedListNode QtCore qlinkedlist.h)
 katie_generate_obsolete(QListData QtCore qlist.h)
 katie_generate_obsolete(QListIterator QtCore qlist.h)
 katie_generate_obsolete(QListWidgetItem QtGui qlistwidget.h)
@@ -603,7 +791,9 @@ katie_generate_obsolete(QMouseEvent QtGui qevent.h)
 katie_generate_obsolete(QMoveEvent QtGui qevent.h)
 katie_generate_obsolete(QMultiHash QtCore qhash.h)
 katie_generate_obsolete(QMultiMap QtCore qmap.h)
+katie_generate_obsolete(QMutableFutureIterator QtCore qfuture.h)
 katie_generate_obsolete(QMutableHashIterator QtCore qhash.h)
+katie_generate_obsolete(QMutableLinkedListIterator QtCore qlist.h)
 katie_generate_obsolete(QMutableListIterator QtCore qlist.h)
 katie_generate_obsolete(QMutableMapIterator QtCore qmap.h)
 katie_generate_obsolete(QMutableSetIterator QtCore qset.h)
@@ -611,6 +801,10 @@ katie_generate_obsolete(QMutableStringListIterator QtCore qstringlist.h)
 katie_generate_obsolete(QMutableVectorIterator QtCore qvector.h)
 katie_generate_obsolete(QMutexLocker QtCore qmutex.h)
 katie_generate_obsolete(QNetworkAddressEntry QtNetwork qnetworkinterface.h)
+katie_generate_obsolete(QNetworkCacheMetaData QtNetwork qabstractnetworkcache.h)
+katie_generate_obsolete(QNetworkProxyFactory QtNetwork qnetworkproxy.h)
+katie_generate_obsolete(QNetworkProxyQuery QtNetwork qnetworkproxy.h)
+katie_generate_obsolete(QNoDebug QtCore qdebug.h)
 katie_generate_obsolete(QObjectData QtCore qobject.h)
 katie_generate_obsolete(QObjectList QtCore qobject.h)
 katie_generate_obsolete(QPaintEngineState QtGui qpaintengine.h)
@@ -624,10 +818,13 @@ katie_generate_obsolete(QPointF QtCore qpoint.h)
 katie_generate_obsolete(QPolygonF QtGui qpolygon.h)
 katie_generate_obsolete(QProcessEnvironment QtCore qprocess.h)
 katie_generate_obsolete(QRadialGradient QtGui qbrush.h)
+katie_generate_obsolete(QReadLocker QtCore qreadwritelock.h)
 katie_generate_obsolete(QRectF QtCore qrect.h)
 katie_generate_obsolete(QRegExpValidator QtGui qvalidator.h)
 katie_generate_obsolete(QResizeEvent QtGui qevent.h)
 katie_generate_obsolete(QReturnArgument QtCore qobjectdefs.h)
+katie_generate_obsolete(QScopedArrayPointer QtCore qscopedpointer.h)
+katie_generate_obsolete(QScopedPointerArrayDeleter QtCore qscopedpointer.h)
 katie_generate_obsolete(QScopedPointerPodDeleter QtCore qscopedpointer.h)
 katie_generate_obsolete(QSetIterator QtCore qset.h)
 katie_generate_obsolete(QSharedDataPointer QtCore qshareddata.h)
@@ -642,6 +839,7 @@ katie_generate_obsolete(QStandardItem QtGui qstandarditemmodel.h)
 katie_generate_obsolete(QStatusTipEvent QtGui qevent.h)
 katie_generate_obsolete(QStringListIterator QtCore qstringlist.h)
 katie_generate_obsolete(QStringRef QtCore qstring.h)
+katie_generate_obsolete(QStyleFactoryInterface QtGui qstyleplugin.h)
 katie_generate_obsolete(QStyleHintReturnMask QtGui qstyleoption.h)
 katie_generate_obsolete(QStyleHintReturn QtGui qstyleoption.h)
 katie_generate_obsolete(QStyleHintReturnVariant QtGui qstyleoption.h)
@@ -688,6 +886,8 @@ katie_generate_obsolete(QtConfig QtCore qconfig.h)
 katie_generate_obsolete(QtContainerFwd QtCore qcontainerfwd.h)
 katie_generate_obsolete(QtDebug QtCore qdebug.h)
 katie_generate_obsolete(QtEndian QtCore qendian.h)
+katie_generate_obsolete(QTestAccessibilityEvent QtTest qtestaccessible.h)
+katie_generate_obsolete(QTestAccessibility QtTest qtestaccessible.h)
 katie_generate_obsolete(QTestDelayEvent QtTest qtestevent.h)
 katie_generate_obsolete(QTestEventList QtTest qtestevent.h)
 katie_generate_obsolete(QTestKeyClicksEvent QtTest qtestevent.h)
@@ -699,7 +899,8 @@ katie_generate_obsolete(QTextBlockGroup QtGui qtextobject.h)
 katie_generate_obsolete(QTextBlock QtGui qtextobject.h)
 katie_generate_obsolete(QTextBlockUserData QtGui qtextobject.h)
 katie_generate_obsolete(QTextCharFormat QtGui qtextformat.h)
-katie_generate_obsolete(QTextConverter QtCore qtextcodec.h)
+katie_generate_obsolete(QTextDecoder QtCore qtextcodec.h)
+katie_generate_obsolete(QTextEncoder QtCore qtextcodec.h)
 katie_generate_obsolete(QTextFragment QtGui qtextobject.h)
 katie_generate_obsolete(QTextFrameFormat QtGui qtextformat.h)
 katie_generate_obsolete(QTextFrameLayoutData QtGui qtextobject.h)
@@ -712,6 +913,7 @@ katie_generate_obsolete(QTextLine QtGui qtextlayout.h)
 katie_generate_obsolete(QTextListFormat QtGui qtextformat.h)
 katie_generate_obsolete(QTextObjectInterface QtGui qabstracttextdocumentlayout.h)
 katie_generate_obsolete(QTextStreamFunction QtCore qtextstream.h)
+katie_generate_obsolete(QTextStreamManipulator QtCore qtextstream.h)
 katie_generate_obsolete(QTextTableCellFormat QtGui qtextformat.h)
 katie_generate_obsolete(QTextTableCell QtGui qtexttable.h)
 katie_generate_obsolete(QTextTableFormat QtGui qtextformat.h)
@@ -742,11 +944,13 @@ katie_generate_obsolete(QWhatsThisClickedEvent QtGui qevent.h)
 katie_generate_obsolete(QWheelEvent QtGui qevent.h)
 katie_generate_obsolete(QWidgetData QtGui qwidget.h)
 katie_generate_obsolete(QWidgetItem QtGui qlayoutitem.h)
+katie_generate_obsolete(QWidgetItemV2 QtGui qlayoutitem.h)
 katie_generate_obsolete(QWidgetList QtGui qwindowdefs.h)
 katie_generate_obsolete(QWidgetMapper QtGui qwindowdefs.h)
 katie_generate_obsolete(QWidgetSet QtGui qwindowdefs.h)
 katie_generate_obsolete(QWindowStateChangeEvent QtGui qevent.h)
 katie_generate_obsolete(QWizardPage QtGui qwizard.h)
+katie_generate_obsolete(QWriteLocker QtCore qreadwritelock.h)
 katie_generate_obsolete(QX11EmbedContainer QtGui qx11embed_x11.h)
 katie_generate_obsolete(QX11EmbedWidget QtGui qx11embed_x11.h)
 katie_generate_obsolete(QX11Info QtGui qx11info_x11.h)
@@ -775,6 +979,10 @@ katie_generate_obsolete(QXmlStreamNotationDeclaration QtXml qxmlstream.h)
 katie_generate_obsolete(QXmlStreamNotationDeclarations QtXml qxmlstream.h)
 katie_generate_obsolete(QXmlStreamReader QtXml qxmlstream.h)
 katie_generate_obsolete(QXmlStreamWriter QtXml qxmlstream.h)
+# those have shuffled from QtDesigner to QtUiTools
+katie_generate_obsolete(formbuilder.h QtDesigner ../QtUiTools/formbuilder.h)
+katie_generate_obsolete(customwidget.h QtDesigner ../QtUiTools/customwidget.h)
+katie_generate_obsolete(qdesignercustomwidgetinterface.h QtDesigner ../QtUiTools/customwidget.h)
 
 katie_string_wrap("${KATIE_DEFINITIONS}" KATIE_DEFINITIONS)
 

@@ -25,6 +25,7 @@
 #include "qdeclarativepixmapcache_p.h"
 #include <QAbstractAnimation>
 #include <QPainter>
+#include <QVarLengthArray>
 #include "qmath.h"
 
 #include <stdlib.h>

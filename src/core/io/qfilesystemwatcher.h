@@ -50,15 +50,13 @@ public:
     QStringList files() const;
     QStringList directories() const;
 
-    int interval() const;
-    void setInterval(int interval);
-
 Q_SIGNALS:
     void fileChanged(const QString &path);
     void directoryChanged(const QString &path);
 
 private:
-    Q_PRIVATE_SLOT(d_func(), void _q_timeout())
+    Q_PRIVATE_SLOT(d_func(), void _q_fileChanged(const QString &path, bool removed))
+    Q_PRIVATE_SLOT(d_func(), void _q_directoryChanged(const QString &path, bool removed))
 };
 
 QT_END_NAMESPACE

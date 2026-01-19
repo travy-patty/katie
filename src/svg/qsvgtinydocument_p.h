@@ -34,6 +34,9 @@
 //
 
 #include "qsvgstructure_p.h"
+
+#ifndef QT_NO_SVG
+
 #include "QtCore/qrect.h"
 #include "QtCore/qlist.h"
 #include "QtCore/qhash.h"
@@ -48,7 +51,7 @@ class QPainter;
 class QByteArray;
 class QSvgFont;
 
-class QSvgTinyDocument : public QSvgStructureNode
+class Q_SVG_EXPORT QSvgTinyDocument : public QSvgStructureNode
 {
 public:
     static QSvgTinyDocument * load(const QString &file);
@@ -84,6 +87,14 @@ public:
     void addNamedStyle(const QString &id, QSvgFillStyleProperty *style);
     QSvgFillStyleProperty *namedStyle(const QString &id) const;
 
+    void restartAnimation();
+    int currentElapsed() const;
+    bool animated() const;
+    void setAnimated(bool a);
+    int animationDuration() const;
+    int currentFrame() const;
+    void setCurrentFrame(int);
+    void setFramesPerSecond(int num);
 private:
     void mapSourceToTarget(QPainter *p, const QRectF &targetRect, const QRectF &sourceRect);
 
@@ -94,6 +105,11 @@ private:
     QHash<QString, QSvgRefCounter<QSvgFont> > m_fonts;
     QHash<QString, QSvgNode *> m_namedNodes;
     QHash<QString, QSvgRefCounter<QSvgFillStyleProperty> > m_namedStyles;
+
+    QTime m_time;
+    bool  m_animated;
+    int   m_animationDuration;
+    int   m_fps;
 
     QSvgExtraStates m_states;
 };
@@ -125,6 +141,17 @@ inline QRectF QSvgTinyDocument::viewBox() const
     return m_viewBox;
 }
 
+inline int QSvgTinyDocument::currentElapsed() const
+{
+    return m_time.elapsed();
+}
+
+inline int QSvgTinyDocument::animationDuration() const
+{
+    return m_animationDuration;
+}
+
 QT_END_NAMESPACE
 
+#endif // QT_NO_SVG
 #endif // QSVGTINYDOCUMENT_P_H

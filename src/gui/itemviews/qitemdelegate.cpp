@@ -45,7 +45,7 @@
 #include "qtextlayout.h"
 #include "qobject_p.h"
 #include "qdnd_p.h"
-#include "qfixed_p.h"
+#include "qtextengine_p.h"
 #include "qdebug.h"
 #include "qlocale.h"
 #include "qdialog.h"
@@ -218,6 +218,10 @@ QSizeF QItemDelegatePrivate::doTextLayout(int lineWidth) const
 
     \table
     \header \o Role \o Accepted Types
+    \omit
+    \row    \o \l Qt::AccessibleDescriptionRole \o QString
+    \row    \o \l Qt::AccessibleTextRole \o QString
+    \endomit
     \row    \o \l Qt::BackgroundRole \o QBrush
     \row    \o \l Qt::CheckStateRole \o Qt::CheckState
     \row    \o \l Qt::DecorationRole \o QIcon, QPixmap and QColor
@@ -281,6 +285,14 @@ QItemDelegate::QItemDelegate(QObject *parent)
     : QAbstractItemDelegate(*new QItemDelegatePrivate(), parent)
 {
 
+}
+
+/*!
+    Destroys the item delegate.
+*/
+
+QItemDelegate::~QItemDelegate()
+{
 }
 
 /*!
@@ -640,7 +652,7 @@ void QItemDelegate::drawDisplay(QPainter *painter, const QStyleOptionViewItem &o
     const int textMargin = style->pixelMetric(QStyle::PM_FocusFrameHMargin, 0, option.widget) + 1;
     QRect textRect = rect.adjusted(textMargin, 0, -textMargin, 0); // remove width padding
     const bool wrapText = option.features & QStyleOptionViewItemV2::WrapText;
-    d->textOption.setWrapMode(wrapText ? QTextOption::WordWrap : QTextOption::NoWrap);
+    d->textOption.setWrapMode(wrapText ? QTextOption::WordWrap : QTextOption::ManualWrap);
     d->textOption.setTextDirection(option.direction);
     d->textOption.setAlignment(QStyle::visualAlignment(option.direction, option.displayAlignment));
     d->textLayout.setTextOption(d->textOption);
@@ -997,11 +1009,12 @@ QPixmap *QItemDelegate::selected(const QPixmap &pixmap, const QPalette &palette,
         painter.fillRect(0, 0, img.width(), img.height(), color);
         painter.end();
 
+        QPixmap selected = QPixmap::fromImage(img);
         int n = (img.byteCount() >> 10) + 1;
         if (QPixmapCache::cacheLimit() < n)
             QPixmapCache::setCacheLimit(n);
 
-        QPixmapCache::insert(key, QPixmap::fromImage(img));
+        QPixmapCache::insert(key, selected);
         pm = QPixmapCache::find(key);
     }
     return pm;

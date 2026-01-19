@@ -88,6 +88,8 @@ private slots:
 
     void toHtmlBodyBgColor();
     void toHtmlRootFrameProperties();
+    void capitalizationHtmlInExport();
+    void wordspacingHtmlExport();
 
     void cursorPositionChanged();
     void cursorPositionChangedOnSetText();
@@ -193,6 +195,13 @@ void tst_QTextDocument::getSetCheck()
     obj1.setDocumentLayout((QAbstractTextDocumentLayout *)0);
     QVERIFY(var1.isNull());
     QVERIFY(obj1.documentLayout());
+
+    // bool QTextDocument::useDesignMetrics()
+    // void QTextDocument::setUseDesignMetrics(bool)
+    obj1.setUseDesignMetrics(false);
+    QCOMPARE(false, obj1.useDesignMetrics());
+    obj1.setUseDesignMetrics(true);
+    QCOMPARE(true, obj1.useDesignMetrics());
 }
 
 tst_QTextDocument::tst_QTextDocument()
@@ -572,7 +581,7 @@ void tst_QTextDocument::stylesheetFont_data()
         font.setPixelSize(64);
 
         QTest::newRow("Shorthand font specification")
-                << "font: normal bold 64px FreeSans;"
+                << "font: normal bold 64px Arial;"
                 << font;
     }
 
@@ -1697,6 +1706,72 @@ void tst_QTextDocument::toHtmlRootFrameProperties()
     QCOMPARE(doc.toHtml(), expectedOutput);
 }
 
+void tst_QTextDocument::capitalizationHtmlInExport()
+{
+    doc->setPlainText("Test");
+
+    QRegExp re(".*span style=\"(.*)\">Test.*");
+    QVERIFY(re.exactMatch(doc->toHtml()) == false); // no span
+
+    QTextCursor cursor(doc);
+    cursor.setPosition(4, QTextCursor::KeepAnchor);
+    QTextCharFormat cf;
+    cf.setFontCapitalization(QFont::SmallCaps);
+    cursor.mergeCharFormat(cf);
+
+    const QString smallcaps = doc->toHtml();
+    QVERIFY(re.exactMatch(doc->toHtml()));
+    QCOMPARE(re.captureCount(), 1);
+    QCOMPARE(re.cap(1).trimmed(), QString("font-variant:small-caps;"));
+
+    cf.setFontCapitalization(QFont::AllUppercase);
+    cursor.mergeCharFormat(cf);
+    const QString uppercase = doc->toHtml();
+    QVERIFY(re.exactMatch(doc->toHtml()));
+    QCOMPARE(re.captureCount(), 1);
+    QCOMPARE(re.cap(1).trimmed(), QString("text-transform:uppercase;"));
+
+    cf.setFontCapitalization(QFont::AllLowercase);
+    cursor.mergeCharFormat(cf);
+    const QString lowercase = doc->toHtml();
+    QVERIFY(re.exactMatch(doc->toHtml()));
+    QCOMPARE(re.captureCount(), 1);
+    QCOMPARE(re.cap(1).trimmed(), QString("text-transform:lowercase;"));
+
+    doc->setHtml(smallcaps);
+    cursor.setPosition(1);
+    QCOMPARE(cursor.charFormat().fontCapitalization(), QFont::SmallCaps);
+    doc->setHtml(uppercase);
+    QCOMPARE(cursor.charFormat().fontCapitalization(), QFont::AllUppercase);
+    doc->setHtml(lowercase);
+    QCOMPARE(cursor.charFormat().fontCapitalization(), QFont::AllLowercase);
+}
+
+void tst_QTextDocument::wordspacingHtmlExport()
+{
+    doc->setPlainText("Test");
+
+    QRegExp re(".*span style=\"(.*)\">Test.*");
+    QVERIFY(re.exactMatch(doc->toHtml()) == false); // no span
+
+    QTextCursor cursor(doc);
+    cursor.setPosition(4, QTextCursor::KeepAnchor);
+    QTextCharFormat cf;
+    cf.setFontWordSpacing(4);
+    cursor.mergeCharFormat(cf);
+
+    QVERIFY(re.exactMatch(doc->toHtml()));
+    QCOMPARE(re.captureCount(), 1);
+    QCOMPARE(re.cap(1).trimmed(), QString("word-spacing:4px;"));
+
+    cf.setFontWordSpacing(-8.5);
+    cursor.mergeCharFormat(cf);
+
+    QVERIFY(re.exactMatch(doc->toHtml()));
+    QCOMPARE(re.captureCount(), 1);
+    QCOMPARE(re.cap(1).trimmed(), QString("word-spacing:-8.5px;"));
+}
+
 class CursorPosSignalSpy : public QObject
 {
     Q_OBJECT
@@ -1782,7 +1857,7 @@ void tst_QTextDocument::codecForHtml()
     const QByteArray header("<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html;charset=utf-16\">");
     QTextCodec *c = QTextCodec::codecForHtml(header);
     QVERIFY(c);
-    QCOMPARE(c->name(), QByteArray("UTF-16"));
+    QCOMPARE(c->name(), QByteArray("utf-16"));
 }
 
 class TestSyntaxHighlighter : public QObject
@@ -1911,7 +1986,7 @@ void tst_QTextDocument::clonePreservesDefaultFont()
 
 void tst_QTextDocument::clonePreservesResources()
 {
-    QUrl testUrl("/foobar");
+    QUrl testUrl(":/foobar");
     QVariant testResource("hello world");
 
     doc->addResource(QTextDocument::ImageResource, testUrl, testResource);

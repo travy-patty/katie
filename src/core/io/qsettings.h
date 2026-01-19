@@ -22,17 +22,19 @@
 #ifndef QSETTINGS_H
 #define QSETTINGS_H
 
-#include <QStringList>
+#include <QtCore/qvariant.h>
 
 
 #ifndef QT_NO_SETTINGS
 
 QT_BEGIN_NAMESPACE
 
+class QIODevice;
 class QSettingsPrivate;
 
-class Q_CORE_EXPORT QSettings
+class Q_CORE_EXPORT QSettings : public QObject
 {
+    Q_OBJECT
     Q_DECLARE_PRIVATE(QSettings)
 
 public:
@@ -42,14 +44,41 @@ public:
         FormatError
     };
 
-    QSettings();
-    QSettings(const QString &fileNamet);
+    enum Format {
+        NativeFormat,
+        IniFormat,
+
+        InvalidFormat = 16,
+        CustomFormat1,
+        CustomFormat2,
+        CustomFormat3,
+        CustomFormat4,
+        CustomFormat5,
+        CustomFormat6,
+        CustomFormat7,
+        CustomFormat8,
+        CustomFormat9,
+        CustomFormat10,
+        CustomFormat11,
+        CustomFormat12,
+        CustomFormat13,
+        CustomFormat14,
+        CustomFormat15,
+        CustomFormat16
+    };
+
+    typedef QMap<QString, QVariant> SettingsMap;
+
+    explicit QSettings(QObject *parent = nullptr);
+    QSettings(Format format, QObject *parent = nullptr);
+    QSettings(const QString &fileName, Format format = NativeFormat, QObject *parent = nullptr);
     ~QSettings();
 
     void clear();
     void sync();
     SettingsStatus status() const;
 
+    SettingsMap map() const;
     QStringList keys() const;
     QString group() const;
     void beginGroup(const QString &prefix);
@@ -58,23 +87,22 @@ public:
 
     bool isWritable() const;
 
-    void setString(const QString &key, const QString &value);
-    QString string(const QString &key, const QString &defaultValue = QString()) const;
-    void setStringList(const QString &key, const QStringList &value);
-    QStringList stringList(const QString &key, const QStringList &defaultValue = QStringList()) const;
-    void setInteger(const QString &key, const qlonglong value);
-    qlonglong integer(const QString &key, const qlonglong defaultValue = 0) const;
-    void setBoolean(const QString &key, const bool value);
-    bool boolean(const QString &key, const bool defaultValue = false) const;
+    void setValue(const QString &key, const QVariant &value);
+    QVariant value(const QString &key, const QVariant &defaultValue = QVariant()) const;
 
     void remove(const QString &key);
     bool contains(const QString &key) const;
 
     QString fileName() const;
+    Format format() const;
+
+    typedef bool (*ReadFunc)(QIODevice &device, SettingsMap &map);
+    typedef bool (*WriteFunc)(QIODevice &device, const SettingsMap &map);
+
+    static Format registerFormat(const QString &extension, ReadFunc readFunc, WriteFunc writeFunc);
 
 private:
     Q_DISABLE_COPY(QSettings)
-    QSettingsPrivate *d_ptr;
 };
 
 QT_END_NAMESPACE

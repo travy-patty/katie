@@ -28,8 +28,8 @@
 #include <QtCore/QRegExp>
 #include <QtCore/QDebug>
 #include <QtCore/QMetaType>
-#include <QtCore/QTextStream>
-
+// Network test unnecessary?
+#include <QtNetwork/QHostInfo>
 #include <stdlib.h>
 
 #ifdef QT_NO_PROCESS
@@ -385,7 +385,7 @@ void tst_QProcess::echoTest()
              msgStartProcessFailed(binary, process->errorString()).constData());
     process->write(input);
 
-    QElapsedTimer stopWatch;
+    QTime stopWatch;
     stopWatch.start();
     do {
         QVERIFY(process->isOpen());
@@ -440,7 +440,7 @@ void tst_QProcess::echoTest2()
     QSignalSpy spy1(process, SIGNAL(readyReadStandardOutput()));
     QSignalSpy spy2(process, SIGNAL(readyReadStandardError()));
 
-    QElapsedTimer stopWatch;
+    QTime stopWatch;
     stopWatch.start();
     forever {
         QTestEventLoop::instance().enterLoop(1);
@@ -486,7 +486,7 @@ void tst_QProcess::echoTest_performance()
 
     QVERIFY(process.waitForStarted());
 
-    QElapsedTimer stopWatch;
+    QTime stopWatch;
     stopWatch.start();
 
     qint64 totalBytes = 0;
@@ -1587,6 +1587,7 @@ void tst_QProcess::lockupsInStartDetached()
     // doesn't exist. Before Qt 4.2, this used to lock up on Unix due
     // to calling ::exit instead of ::_exit if execve failed.
 
+    QHostInfo::lookupHost(QString("something.invalid"), 0, 0);
     QProcess::execute("yjhbrty");
     QProcess::startDetached("yjhbrty");
 }
@@ -1785,7 +1786,7 @@ void tst_QProcess::fileWriterProcess()
     for (int i = 0; i < 5000; ++i)
         stdinStr += QString::fromLatin1("%1 -- testing testing 1 2 3\n").arg(i);
 
-    QElapsedTimer stopWatch;
+    QTime stopWatch;
     stopWatch.start();
     do {
         QFile::remove("fileWriterProcess.txt");

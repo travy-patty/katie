@@ -1793,7 +1793,7 @@ bool QDeclarativeCompiler::buildAttachedProperty(QDeclarativeParser::Property *p
 // Build "grouped" properties. In this example:
 // Text {
 //     font.pointSize: 12
-//     font.family: "FreeSans"
+//     font.family: "Helvetica"
 // }
 // font is a nested property.  pointSize and family are not.
 bool QDeclarativeCompiler::buildGroupedProperty(QDeclarativeParser::Property *prop,
@@ -2836,8 +2836,8 @@ int QDeclarativeCompiler::genContextCache()
 
     QDeclarativeIntegerCache *cache = new QDeclarativeIntegerCache(engine);
 
-    for (QHash<QString, QDeclarativeParser::Object *>::ConstIterator iter = compileState.ids.constBegin();
-         iter != compileState.ids.constEnd();
+    for (QHash<QString, QDeclarativeParser::Object *>::ConstIterator iter = compileState.ids.begin();
+         iter != compileState.ids.end();
          ++iter) 
         cache->add(iter.key(), (*iter)->idIndex);
 

@@ -32,6 +32,11 @@
 #include "qstyleoption.h"
 #include "qsizegrip.h"
 #include "qmainwindow.h"
+
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
+
 #include "qlayoutengine_p.h"
 #include "qwidget_p.h"
 
@@ -616,6 +621,11 @@ void QStatusBar::hideOrShow()
     }
 
     emit messageChanged(d->tempItem);
+
+#ifndef QT_NO_ACCESSIBILITY
+    if (QAccessible::isActive())
+        QAccessible::updateAccessibility(this, 0, QAccessible::NameChanged);
+#endif
 
     repaint(d->messageRect());
 }

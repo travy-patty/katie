@@ -29,8 +29,6 @@ QT_BEGIN_NAMESPACE
 class QPageSetupWidget;
 class QCUPSSupport;
 
-#ifndef QT_NO_PRINTDIALOG
-
 class QPageSetupDialogPrivate : public QAbstractPageSetupDialogPrivate
 {
     Q_DECLARE_PUBLIC(QPageSetupDialog)
@@ -44,8 +42,6 @@ public:
     QCUPSSupport *cups;
 #endif
 };
-
-#endif // QT_NO_PRINTDIALOG
 
 QT_END_NAMESPACE
 

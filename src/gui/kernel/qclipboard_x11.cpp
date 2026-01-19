@@ -44,6 +44,7 @@
 #include "qdesktopwidget.h"
 #include "qbitmap.h"
 #include "qiodevice.h"
+#include "qbuffer.h"
 #include "qtextcodec.h"
 #include "qlist.h"
 #include "qmap.h"

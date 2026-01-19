@@ -36,8 +36,9 @@
 #include "../text/qtextdocumentlayout_p.h"
 #include "qtoolbutton.h"
 #include "qdebug.h"
-#include "qguiimages_p.h"
-
+#ifndef QT_NO_ACCESSIBILITY
+#include "qaccessible.h"
+#endif
 #if defined(Q_WS_X11)
 #include "qx11info_x11.h"
 #include "qwidget.h"
@@ -191,9 +192,9 @@ QWhatsThat::QWhatsThat(const QString& txt, QWidget* parent, QWidget *showTextFor
         else if (sw > 300)
             sw = 300;
 
-        r = fontMetrics().boundingRect(QRect(0, 0, sw, 1000),
+        r = fontMetrics().boundingRect(0, 0, sw, 1000,
                                         Qt::AlignLeft + Qt::AlignTop
-                                        + Qt::TextWordWrap,
+                                        + Qt::TextWordWrap + Qt::TextExpandTabs,
                                         text);
     }
     resize(r.width() + 2*hMargin + shadowWidth, r.height() + 2*vMargin + shadowWidth);
@@ -305,9 +306,31 @@ void QWhatsThat::paintEvent(QPaintEvent*)
     }
     else
     {
-        p.drawText(r, Qt::AlignLeft + Qt::AlignTop + Qt::TextWordWrap, text);
+        p.drawText(r, Qt::AlignLeft + Qt::AlignTop + Qt::TextWordWrap + Qt::TextExpandTabs, text);
     }
 }
+
+static const char * const button_image[] = {
+"16 16 3 1",
+"         c None",
+"o        c #000000",
+"a        c #000080",
+"o        aaaaa  ",
+"oo      aaa aaa ",
+"ooo    aaa   aaa",
+"oooo   aa     aa",
+"ooooo  aa     aa",
+"oooooo  a    aaa",
+"ooooooo     aaa ",
+"oooooooo   aaa  ",
+"ooooooooo aaa   ",
+"ooooo     aaa   ",
+"oo ooo          ",
+"o  ooo    aaa   ",
+"    ooo   aaa   ",
+"    ooo         ",
+"     ooo        ",
+"     ooo        "};
 
 class QWhatsThisPrivate : public QObject
 {
@@ -350,6 +373,9 @@ QWhatsThisPrivate::QWhatsThisPrivate()
         QApplication::setOverrideCursor(Qt::WhatsThisCursor);
 #endif
     }
+#ifndef QT_NO_ACCESSIBILITY
+    QAccessible::updateAccessibility(this, 0, QAccessible::ContextHelpStart);
+#endif
 }
 
 QWhatsThisPrivate::~QWhatsThisPrivate()
@@ -358,6 +384,9 @@ QWhatsThisPrivate::~QWhatsThisPrivate()
         action->setChecked(false);
 #ifndef QT_NO_CURSOR
     QApplication::restoreOverrideCursor();
+#endif
+#ifndef QT_NO_ACCESSIBILITY
+    QAccessible::updateAccessibility(this, 0, QAccessible::ContextHelpEnd);
 #endif
     instance = 0;
 }
@@ -369,16 +398,19 @@ bool QWhatsThisPrivate::eventFilter(QObject *o, QEvent *e)
     QWidget * w = static_cast<QWidget *>(o);
     bool customWhatsThis = w->testAttribute(Qt::WA_CustomWhatsThis);
     switch (e->type()) {
-    case QEvent::MouseButtonPress: {
+    case QEvent::MouseButtonPress:
+    {
         QMouseEvent *me = static_cast<QMouseEvent*>(e);
         if (me->button() == Qt::RightButton || customWhatsThis)
             return false;
         QHelpEvent e(QEvent::WhatsThis, me->pos(), me->globalPos());
         if (!QApplication::sendEvent(w, &e) || !e.isAccepted())
             leaveOnMouseRelease = true;
-        break;
-    }
-    case QEvent::MouseMove: {
+
+    } break;
+
+    case QEvent::MouseMove:
+    {
         QMouseEvent *me = static_cast<QMouseEvent*>(e);
         QHelpEvent e(QEvent::QueryWhatsThis, me->pos(), me->globalPos());
         bool sentEvent = QApplication::sendEvent(w, &e);
@@ -388,17 +420,17 @@ bool QWhatsThisPrivate::eventFilter(QObject *o, QEvent *e)
         QApplication::changeOverrideCursor((!sentEvent || !e.isAccepted())?
                                            Qt::ForbiddenCursor:Qt::WhatsThisCursor);
 #endif
-        // fall through
     }
+    // fall through
     case QEvent::MouseButtonRelease:
-    case QEvent::MouseButtonDblClick: {
+    case QEvent::MouseButtonDblClick:
         if (leaveOnMouseRelease && e->type() == QEvent::MouseButtonRelease)
             QWhatsThis::leaveWhatsThisMode();
         if (static_cast<QMouseEvent*>(e)->button() == Qt::RightButton || customWhatsThis)
             return false; // ignore RMB release
         break;
-    }
-    case QEvent::KeyPress: {
+    case QEvent::KeyPress:
+    {
         QKeyEvent* kev = (QKeyEvent*)e;
 
         if (kev->key() == Qt::Key_Escape) {
@@ -415,8 +447,7 @@ bool QWhatsThisPrivate::eventFilter(QObject *o, QEvent *e)
                    && kev->key() != Qt::Key_Control && kev->key() != Qt::Key_Meta) {
             QWhatsThis::leaveWhatsThisMode();
         }
-        break;
-    }
+    } break;
     default:
         return false;
     }
@@ -436,9 +467,10 @@ private slots:
 
 QWhatsThisAction::QWhatsThisAction(QObject *parent) : QAction(tr("What's This?"), parent)
 {
-    QPixmap p;
-    p.loadFromData(button_image_png, button_image_png_len, qt_images_format);
+#ifndef QT_NO_IMAGEFORMAT_XPM
+    QPixmap p((const char**)button_image);
     setIcon(p);
+#endif
     setCheckable(true);
     connect(this, SIGNAL(triggered()), this, SLOT(actionTriggered()));
 #ifndef QT_NO_SHORTCUT

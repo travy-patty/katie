@@ -34,7 +34,10 @@
 #include <QtScript/qscriptvalueiterator.h>
 #include <QtCore/qfile.h>
 #include <QtCore/qdatetime.h>
+#include <QtNetwork/qnetworkaccessmanager.h>
 #include <QtDeclarative/qdeclarativeinfo.h>
+#include "qdeclarativenetworkaccessmanagerfactory.h"
+
 
 QT_BEGIN_NAMESPACE
 
@@ -107,9 +110,21 @@ public:
 
     struct ScriptEngine : public QDeclarativeScriptEngine
     {
-        ScriptEngine(QDeclarativeWorkerScriptEnginePrivate *parent) : QDeclarativeScriptEngine(0), p(parent) {}
-        ~ScriptEngine() { }
+        ScriptEngine(QDeclarativeWorkerScriptEnginePrivate *parent) : QDeclarativeScriptEngine(0), p(parent), accessManager(0) {}
+        ~ScriptEngine() { delete accessManager; }
         QDeclarativeWorkerScriptEnginePrivate *p;
+        QNetworkAccessManager *accessManager;
+
+        virtual QNetworkAccessManager *networkAccessManager() {
+            if (!accessManager) {
+                if (p->qmlengine && p->qmlengine->networkAccessManagerFactory()) {
+                    accessManager = p->qmlengine->networkAccessManagerFactory()->create(this);
+                } else {
+                    accessManager = new QNetworkAccessManager(this);
+                }
+            }
+            return accessManager;
+        }
     };
     ScriptEngine *workerEngine;
     static QDeclarativeWorkerScriptEnginePrivate *get(QScriptEngine *e) {
@@ -201,9 +216,9 @@ QScriptValue QDeclarativeWorkerScriptEnginePrivate::sendMessage(QScriptContext *
 
 QScriptValue QDeclarativeWorkerScriptEnginePrivate::getWorker(int id)
 {
-    QHash<int, WorkerScript *>::ConstIterator iter = workers.constFind(id);
+    QHash<int, WorkerScript *>::ConstIterator iter = workers.find(id);
 
-    if (iter == workers.constEnd())
+    if (iter == workers.end())
         return workerEngine->nullValue();
 
     WorkerScript *script = *iter;
@@ -270,7 +285,7 @@ void QDeclarativeWorkerScriptEnginePrivate::processLoad(int id, const QUrl &url)
     QString fileName = QDeclarativeEnginePrivate::urlToLocalFile(url);
 
     QFile f(fileName);
-    if (Q_LIKELY(f.open(QIODevice::ReadOnly))) {
+    if (f.open(QIODevice::ReadOnly)) {
         QByteArray data = f.readAll();
         QString sourceCode = QString::fromUtf8(data);
 
@@ -407,7 +422,7 @@ QScriptValue QDeclarativeWorkerScriptEnginePrivate::variantToScriptValue(const Q
 
         QScriptValue rv = engine->newObject();
 
-        for (QVariantHash::ConstIterator iter = hash.constBegin(); iter != hash.constEnd(); ++iter)
+        for (QVariantHash::ConstIterator iter = hash.begin(); iter != hash.end(); ++iter)
             rv.setProperty(iter.key(), variantToScriptValue(iter.value(), engine));
 
         return rv;

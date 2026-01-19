@@ -70,22 +70,19 @@ static inline bool qIsUpper(char ch)
     return (ch >= 'A' && ch <= 'Z');
 }
 
-template <class T>
-inline bool qIsDigit(const T ch)
+static inline bool qIsDigit(char ch)
 {
     return (ch >= '0' && ch <= '9');
 }
 
-template <class T>
-inline T qToLower(const T ch)
+static inline char qToLower(char ch)
 {
     if (ch >= 'A' && ch <= 'Z')
         return (ch + 32);
     return ch;
 }
 
-template <class T>
-inline T qToUpper(const T ch)
+static inline char qToUpper(char ch)
 {
     if (ch >= 'a' && ch <= 'z')
         return (ch - 32);
@@ -95,14 +92,14 @@ inline T qToUpper(const T ch)
 // Removes thousand-group separators in "C" locale.
 bool removeGroupSeparators(QLocalePrivate::CharBuff *num);
 
-bool qt_initLocale(const QByteArray &locale);
+bool qt_initLocale(const QString &locale);
 bool qt_ucol_strcoll(const QChar *source, int sourceLength, const QChar *target, int targetLength, int *result);
 bool qt_u_strToUpper(const QString &str, QString *out, const QLocale &locale);
 bool qt_u_strToLower(const QString &str, QString *out, const QLocale &locale);
 
-#define QECVT_BUFFSIZE 17
-char *qFcvt(double x, int n, int *dp, int *sign, char* buf);
-char *qEcvt(double x, int n, int *dp, int *sign, char* buf);
+#define QECVT_BUFFSIZE 16
+char *qfcvt(double x, int n, int *dp, int *sign, char* buf);
+char *qecvt(double x, int n, int *dp, int *sign, char* buf);
 
 QT_END_NAMESPACE
 

@@ -29,7 +29,6 @@
 #include "qpainter.h"
 #include "qevent.h"
 #include "qapplication.h"
-#include "qfontdatabase.h"
 #include "qcombobox_p.h"
 #include "qdebug.h"
 
@@ -51,14 +50,13 @@ public:
 
     QIcon truetype;
     QIcon bitmap;
-    QFontDatabase fdb;
 };
 
 QFontFamilyDelegate::QFontFamilyDelegate(QObject *parent)
     : QAbstractItemDelegate(parent)
 {
-    truetype = QIcon::fromTheme(QLatin1String("application-x-font-ttf"));
-    bitmap = QIcon::fromTheme(QLatin1String("application-x-font-bdf"));
+    truetype = QIcon(QLatin1String(":/trolltech/styles/commonstyle/images/fonttruetype-16.png"));
+    bitmap = QIcon(QLatin1String(":/trolltech/styles/commonstyle/images/fontbitmap-16.png"));
 }
 
 void QFontFamilyDelegate::paint(QPainter *painter,
@@ -67,8 +65,7 @@ void QFontFamilyDelegate::paint(QPainter *painter,
 {
     QString text = index.data(Qt::DisplayRole).toString();
     QFont font(option.font);
-    QFont systemfont = fdb.font(font.family(), font.styleName(), font.pointSize());
-    font.setPointSize(systemfont.pointSize() * 3 / 2);
+    font.setPointSize(QFontInfo(font).pointSize() * 3 / 2);
     font.setFamily(text);
 
     QRect r = option.rect;
@@ -82,7 +79,7 @@ void QFontFamilyDelegate::paint(QPainter *painter,
     }
 
     const QIcon *icon = &bitmap;
-    if (fdb.isScalable(text)) {
+    if (QFontDatabase().isSmoothlyScalable(text)) {
         icon = &truetype;
     }
     QSize actualSize = icon->actualSize(r.size());
@@ -96,7 +93,17 @@ void QFontFamilyDelegate::paint(QPainter *painter,
     QFont old = painter->font();
     painter->setFont(font);
 
-    painter->drawText(r, Qt::AlignVCenter|Qt::AlignLeft|Qt::TextSingleLine, text);
+    // If the ascent of the font is larger than the height of the rect,
+    // we will clip the text, so it's better to align the tight bounding rect in this case
+    // This is specifically for fonts where the ascent is very large compared to
+    // the descent, like certain of the Stix family.
+    QFontMetricsF fontMetrics(font);
+    if (fontMetrics.ascent() > r.height()) {
+        QRectF tbr = fontMetrics.tightBoundingRect(text);
+        painter->drawText(r.x(), r.y() + (r.height() + tbr.height()) / 2.0, text);
+    } else {
+        painter->drawText(r, Qt::AlignVCenter|Qt::AlignLeft|Qt::TextSingleLine, text);
+    }
 
     painter->setFont(old);
 
@@ -110,9 +117,8 @@ QSize QFontFamilyDelegate::sizeHint(const QStyleOptionViewItem &option,
 {
     QString text = index.data(Qt::DisplayRole).toString();
     QFont font(option.font);
-    // font.setFamily(text);
-    QFont systemfont = fdb.font(font.family(), font.styleName(), font.pointSize());
-    font.setPointSize(systemfont.pointSize() * 3/2);
+//     font.setFamily(text);
+    font.setPointSize(QFontInfo(font).pointSize() * 3/2);
     QFontMetrics fontMetrics(font);
     return QSize(fontMetrics.width(text), fontMetrics.height());
 }
@@ -148,11 +154,11 @@ void QFontComboBoxPrivate::_q_updateModel()
     QStringList result;
 
     int offset = 0;
-    QFont sf = fdb.font(currentFont.family(), currentFont.styleName(), currentFont.pointSize());
+    QFontInfo fi(currentFont);
 
     for (int i = 0; i < list.size(); ++i) {
         if ((filters & scalableMask) && (filters & scalableMask) != scalableMask) {
-            if (bool(filters & QFontComboBox::ScalableFonts) != fdb.isScalable(list.at(i)))
+            if (bool(filters & QFontComboBox::ScalableFonts) != fdb.isSmoothlyScalable(list.at(i)))
                 continue;
         }
         if ((filters & spacingMask) && (filters & spacingMask) != spacingMask) {
@@ -160,7 +166,7 @@ void QFontComboBoxPrivate::_q_updateModel()
                 continue;
         }
         result += list.at(i);
-        if (list.at(i) == sf.family() || list.at(i).startsWith(sf.family() + QLatin1String(" [")))
+        if (list.at(i) == fi.family() || list.at(i).startsWith(fi.family() + QLatin1String(" [")))
             offset = result.count() - 1;
     }
     list = result;
@@ -202,7 +208,7 @@ void QFontComboBoxPrivate::_q_currentChanged(const QString &text)
     \ingroup basicwidgets
 
     The combobox is populated with an alphabetized list of font
-    family names, such as FreeMono, FreeSans and FreeSerif.
+    family names, such as Arial, Helvetica, and Times New Roman.
     Family names are displayed using the actual font when possible.
     For fonts such as Symbol, where the name is not representable in
     the font itself, a sample of the font is displayed next to the
@@ -220,7 +226,7 @@ void QFontComboBoxPrivate::_q_currentChanged(const QString &text)
 
     \image windowsxp-fontcombobox.png Screenshot of QFontComboBox on Windows XP
 
-    \sa QComboBox, QFont, QFontMetrics, QFontDatabase, {Character Map Example}
+    \sa QComboBox, QFont, QFontInfo, QFontMetrics, QFontDatabase, {Character Map Example}
 */
 
 /*!
@@ -247,7 +253,8 @@ QFontComboBox::QFontComboBox(QWidget *parent)
     connect(this, SIGNAL(currentIndexChanged(QString)),
             this, SLOT(_q_currentChanged(QString)));
 
-    d->_q_updateModel();
+    connect(qApp, SIGNAL(fontDatabaseChanged()),
+            this, SLOT(_q_updateModel()));
 }
 
 

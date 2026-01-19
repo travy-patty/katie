@@ -53,17 +53,22 @@ public:
     QWidgetBackingStore(QWidget *t);
     ~QWidgetBackingStore();
 
+    static void showYellowThing(QWidget *widget, const QRegion &rgn, int msec, bool);
+
     void sync(QWidget *exposedWidget, const QRegion &exposedRegion);
     void sync();
     void flush(QWidget *widget = 0, QWindowSurface *surface = 0);
 
-    inline QWindowSurface *surface() const { return windowSurface; }
+    inline QPoint topLevelOffset() const { return tlwOffset; }
+
+    QWindowSurface *surface() const { return windowSurface; }
 
     inline bool isDirty() const
     {
         return !(dirtyWidgets.isEmpty() && dirty.isEmpty());
     }
 
+    // ### Qt 4.6: Merge into a template function (after MSVC isn't supported anymore).
     void markDirty(const QRegion &rgn, QWidget *widget, bool updateImmediately = false,
                    bool invalidateBuffer = false);
     void markDirty(const QRect &rect, QWidget *widget, bool updateImmediately = false,
@@ -75,6 +80,7 @@ private:
     QRegion dirty; // needsRepaint
     QVector<QWidget *> dirtyWidgets;
     QVector<QWidget *> dirtyOnScreenWidgets;
+    QList<QWidget *> staticWidgets;
     QWindowSurface *windowSurface;
 
     QPoint tlwOffset;
@@ -87,15 +93,24 @@ private:
     void beginPaint(QRegion &toClean, QWindowSurface *windowSurface, BeginPaintInfo *returnInfo);
     void endPaint(const QRegion &cleaned, QWindowSurface *windowSurface, BeginPaintInfo *beginPaintInfo);
 
+    QRegion staticContents(QWidget *widget, const QRect &withinClipRect) const;
+
     void markDirtyOnScreen(const QRegion &dirtyOnScreen, QWidget *widget, const QPoint &topLevelOffset);
 
     void removeDirtyWidget(QWidget *w);
+
+    void updateLists(QWidget *widget);
 
     inline void addDirtyWidget(QWidget *widget, const QRegion &rgn)
     {
         if (widget && !widget->d_func()->inDirtyList && !widget->data->in_destructor) {
             QWidgetPrivate *widgetPrivate = widget->d_func();
-            widgetPrivate->dirty = rgn;
+#ifndef QT_NO_GRAPHICSEFFECT
+            if (widgetPrivate->graphicsEffect)
+                widgetPrivate->dirty = widgetPrivate->effectiveRectFor(rgn.boundingRect());
+            else
+#endif //QT_NO_GRAPHICSEFFECT
+                widgetPrivate->dirty = rgn;
             dirtyWidgets.append(widget);
             widgetPrivate->inDirtyList = true;
         }
@@ -106,6 +121,41 @@ private:
         for (int i = 0; i < dirtyWidgets.size(); ++i) {
             if (dirtyWidgets.at(i) == widget)
                 dirtyWidgets.remove(i);
+        }
+    }
+
+    inline void addStaticWidget(QWidget *widget)
+    {
+        if (!widget)
+            return;
+
+        Q_ASSERT(widget->testAttribute(Qt::WA_StaticContents));
+        if (!staticWidgets.contains(widget))
+            staticWidgets.append(widget);
+    }
+
+    inline void removeStaticWidget(QWidget *widget)
+    { staticWidgets.removeAll(widget); }
+
+    // Move the reparented widget and all its static children from this backing store
+    // to the new backing store if reparented into another top-level / backing store.
+    inline void moveStaticWidgets(QWidget *reparented)
+    {
+        Q_ASSERT(reparented);
+        QWidgetBackingStore *newBs = reparented->d_func()->maybeBackingStore();
+        if (newBs == this)
+            return;
+
+        int i = 0;
+        while (i < staticWidgets.size()) {
+            QWidget *w = staticWidgets.at(i);
+            if (reparented == w || reparented->isAncestorOf(w)) {
+                staticWidgets.removeAt(i);
+                if (newBs)
+                    newBs->addStaticWidget(w);
+            } else {
+                ++i;
+            }
         }
     }
 
@@ -141,8 +191,23 @@ private:
         }
     }
 
+    inline void updateStaticContentsSize()
+    {
+        for (int i = 0; i < staticWidgets.size(); ++i) {
+            QWidgetPrivate *wd = staticWidgets.at(i)->d_func();
+            if (!wd->extra)
+                wd->createExtra();
+            wd->extra->staticContentsSize = wd->data.crect.size();
+        }
+    }
+
+    inline bool hasStaticContents() const
+    { return !staticWidgets.isEmpty(); }
+
     friend class QWidgetPrivate;
     friend class QWidget;
+    friend class QETWidget;
+    friend class QWindowSurface;
 };
 
 QT_END_NAMESPACE

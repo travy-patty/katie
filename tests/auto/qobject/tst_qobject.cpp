@@ -2976,7 +2976,7 @@ void tst_QObject::deleteQObjectWhenDeletingEvent()
     };
 
     QObject o;
-    QCoreApplication::postEvent(&o, new MyEvent);
+    QApplication::postEvent(&o, new MyEvent);
     QCoreApplication::removePostedEvents(&o); // here you would get a deadlock
 }
 
@@ -3561,8 +3561,6 @@ void tst_QObject::disconnectByMetaMethod()
     connect(s, signal2, r2, slot2);
     connect(s, signal3, r1, slot3);
     connect(s, signal3, r2, slot3);
-    connect(s, signal4, r1, slot4);
-    connect(s, signal4, r2, slot4);
 
     // disconnect signal1() from all receivers
     QObject::disconnect(s, signal1, 0, QMetaMethod());

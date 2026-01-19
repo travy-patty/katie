@@ -22,10 +22,10 @@
 #ifndef QABSTRACTITEMVIEW_H
 #define QABSTRACTITEMVIEW_H
 
-#include <qabstractscrollarea.h>
-#include <qabstractitemmodel.h>
-#include <qitemselectionmodel.h>
-#include <qabstractitemdelegate.h>
+#include <QtGui/qabstractscrollarea.h>
+#include <QtCore/qabstractitemmodel.h>
+#include <QtGui/qitemselectionmodel.h>
+#include <QtGui/qabstractitemdelegate.h>
 
 
 QT_BEGIN_NAMESPACE
@@ -334,7 +334,8 @@ private:
     Q_PRIVATE_SLOT(d_func(), void _q_layoutChanged())
     Q_PRIVATE_SLOT(d_func(), void _q_headerDataChanged())
 
-    friend class QTreeViewPrivate;
+    friend class QTreeViewPrivate; // needed to compile with MSVC
+    friend class QAccessibleItemRow;
     friend class QListModeViewBase;
     friend class QListViewPrivate;
 };

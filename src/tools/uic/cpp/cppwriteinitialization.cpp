@@ -20,6 +20,7 @@
 ****************************************************************************/
 
 #include "cppwriteinitialization.h"
+#include "cppwriteiconinitialization.h"
 #include "driver.h"
 #include "ui4.h"
 #include "utils.h"
@@ -112,6 +113,11 @@ namespace {
             str << indent << varName << "->" << setter << '(' << v << ");\n";
         }
 
+    void writeSetupUIScriptVariableDeclarations(const QString &indent, QTextStream &str)  {
+        str << indent << "ScriptContext scriptContext;\n"
+            << indent << "QWidgetList childWidgets;\n";
+    }
+
     static inline bool iconHasStatePixmaps(const DomResourceIcon *i) {
         return i->hasElementNormalOff()   || i->hasElementNormalOn() ||
                i->hasElementDisabledOff() || i->hasElementDisabledOn() ||
@@ -156,6 +162,7 @@ namespace {
     inline void openIfndef(QTextStream &str, const QString &symbol) { if (!symbol.isEmpty()) str << QLatin1String("#ifndef ") << symbol << endl;  }
     inline void closeIfndef(QTextStream &str, const QString &symbol) { if (!symbol.isEmpty()) str << QLatin1String("#endif // ") << symbol << endl; }
 
+    const char *accessibilityDefineC = "QT_NO_ACCESSIBILITY";
     const char *toolTipDefineC = "QT_NO_TOOLTIP";
     const char *whatsThisDefineC = "QT_NO_WHATSTHIS";
     const char *statusTipDefineC = "QT_NO_STATUSTIP";
@@ -217,6 +224,12 @@ int FontHandle::compare(const FontHandle &rhs) const
     const int rhsAntialiasing = rhs.m_domFont->hasElementAntialiasing() ? (rhs.m_domFont->elementAntialiasing() ? 1 : 0) : -1;
     if (const int crc = compareInt(antialiasing, rhsAntialiasing))
         return crc;
+
+    const QString styleStrategy    = m_domFont->hasElementStyleStrategy()     ?     m_domFont->elementStyleStrategy() : QString();
+    const QString rhsStyleStrategy = rhs.m_domFont->hasElementStyleStrategy() ? rhs.m_domFont->elementStyleStrategy() : QString();
+
+    if (const int src = styleStrategy.compare(rhsStyleStrategy))
+        return src;
 
     return 0;
 }
@@ -427,8 +440,8 @@ static bool needsTranslation(DomString *str)
 }
 
 // ---  WriteInitialization
-WriteInitialization::WriteInitialization(Uic *uic)
-    : m_uic(uic),
+WriteInitialization::WriteInitialization(Uic *uic, bool activateScripts) :
+      m_uic(uic),
       m_driver(uic->driver()), m_output(uic->output()), m_option(uic->option()),
       m_indent(m_option.indent + m_option.indent),
       m_dindent(m_indent + m_option.indent),
@@ -438,13 +451,14 @@ WriteInitialization::WriteInitialization(Uic *uic)
       m_delayedOut(&m_delayedInitialization, QIODevice::WriteOnly),
       m_refreshOut(&m_refreshInitialization, QIODevice::WriteOnly),
       m_actionOut(&m_delayedActionInitialization, QIODevice::WriteOnly),
-      m_layoutWidget(false),
+      m_activateScripts(activateScripts), m_layoutWidget(false),
       m_firstThemeIcon(true)
 {
 }
 
 void WriteInitialization::acceptUI(DomUI *node)
 {
+    m_registeredImages.clear();
     m_actionGroupChain.push(0);
     m_widgetChain.push(0);
     m_layoutChain.push(0);
@@ -454,6 +468,9 @@ void WriteInitialization::acceptUI(DomUI *node)
 
     if (node->elementCustomWidgets())
         TreeWalker::acceptCustomWidgets(node->elementCustomWidgets());
+
+    if (node->elementImages())
+        TreeWalker::acceptImages(node->elementImages());
 
     if (m_option.generateImplemetation)
         m_output << "#include <" << m_driver->headerFileName() << ">\n\n";
@@ -473,6 +490,9 @@ void WriteInitialization::acceptUI(DomUI *node)
 
     m_output << m_option.indent << "void " << "setupUi(" << widgetClassName << " *" << varName << ")\n"
            << m_option.indent << "{\n";
+
+    if (m_activateScripts)
+        writeSetupUIScriptVariableDeclarations(m_indent, m_output);
 
     acceptWidget(node->elementWidget());
 
@@ -666,6 +686,10 @@ void WriteInitialization::acceptWidget(DomWidget *node)
         m_output << m_indent << parentWidget << "->setWidget(" << varName << ");\n";
     } else if (m_uic->customWidgetsInfo()->extends(parentClass, QLatin1String("QSplitter"))) {
         m_output << m_indent << parentWidget << "->addWidget(" << varName << ");\n";
+    } else if (m_uic->customWidgetsInfo()->extends(parentClass, QLatin1String("QMdiArea"))) {
+        m_output << m_indent << parentWidget << "->addSubWindow(" << varName << ");\n";
+    } else if (m_uic->customWidgetsInfo()->extends(parentClass, QLatin1String("QWorkspace"))) {
+        m_output << m_indent << parentWidget << "->addWindow(" << varName << ");\n";
     } else if (m_uic->customWidgetsInfo()->extends(parentClass, QLatin1String("QWizard"))) {
         addWizardPage(varName, node, parentWidget);
     } else if (m_uic->customWidgetsInfo()->extends(parentClass, QLatin1String("QToolBox"))) {
@@ -1385,6 +1409,8 @@ void WriteInitialization::writeProperties(const QString &varName,
                 defineC = whatsThisDefineC;
             else if (propertyName == QLatin1String("statusTip"))
                 defineC = statusTipDefineC;
+            else if (propertyName == QLatin1String("accessibleName") || propertyName == QLatin1String("accessibleDescription"))
+                defineC = accessibilityDefineC;
 
             QTextStream &o = autoTrOutput(p->elementString());
 
@@ -1500,8 +1526,12 @@ QString WriteInitialization::writeFontProperties(const DomFont *f)
             << (f->elementKerning() ? "true" : "false") << ");\n";
     }
     if (f->hasElementAntialiasing()) {
-        m_output << m_indent << fontName << ".setHintingPreference("
-            << (f->elementAntialiasing() ? "QFont::PreferDefaultHinting" : "QFont::PreferNoHinting") << ");\n";
+        m_output << m_indent << fontName << ".setStyleStrategy("
+            << (f->elementAntialiasing() ? "QFont::PreferDefault" : "QFont::NoAntialias") << ");\n";
+    }
+    if (f->hasElementStyleStrategy()) {
+         m_output << m_indent << fontName << ".setStyleStrategy(QFont::"
+            << f->elementStyleStrategy() << ");\n";
     }
     return  fontName;
 }
@@ -1657,7 +1687,8 @@ void WriteInitialization::writeBrush(const DomBrush *brush, const QString &brush
         style = brush->attributeBrushStyle();
 
     if (style == QLatin1String("LinearGradientPattern") ||
-            style == QLatin1String("RadialGradientPattern")) {
+            style == QLatin1String("RadialGradientPattern") ||
+            style == QLatin1String("ConicalGradientPattern")) {
         const DomGradient *gradient = brush->elementGradient();
         const QString gradientType = gradient->attributeType();
         const QString gradientName = m_driver->unique(QLatin1String("gradient"));
@@ -1674,6 +1705,11 @@ void WriteInitialization::writeBrush(const DomBrush *brush, const QString &brush
                 << ", " << gradient->attributeRadius()
                 << ", " << gradient->attributeFocalX()
                 << ", " << gradient->attributeFocalY() << ");\n";
+        } else if (gradientType == QLatin1String("ConicalGradient")) {
+            m_output << m_indent << "QConicalGradient " << gradientName
+                << '(' << gradient->attributeCentralX()
+                << ", " << gradient->attributeCentralY()
+                << ", " << gradient->attributeAngle() << ");\n";
         }
 
         m_output << m_indent << gradientName << ".setSpread(QGradient::"
@@ -1780,8 +1816,21 @@ QString WriteInitialization::pixCall(const QString &t, const QString &text) cons
         type += QLatin1String("()");
         return type;
     }
+    if (hasImage(text)) {
+        QString rc = WriteIconInitialization::iconFromDataFunction();
+        rc += QLatin1Char('(');
+        rc += text;
+        rc += QLatin1String("_ID)");
+        return rc;
+    }
 
-    type += QLatin1String("(QString::fromUtf8(");
+    QString pixFunc = m_uic->pixmapFunction();
+    if (pixFunc.isEmpty())
+        pixFunc = QLatin1String("QString::fromUtf8");
+
+    type += QLatin1Char('(');
+    type += pixFunc;
+    type += QLatin1Char('(');
     type += fixString(text, m_dindent);
     type += QLatin1String("))");
     return type;
@@ -2271,6 +2320,57 @@ void WriteInitialization::acceptConnection(DomConnection *connection)
         << "SLOT("<<connection->elementSlot()<<')'
         << ");\n";
 }
+
+bool WriteInitialization::hasImage(const QString &name) const
+{
+    return m_registeredImages.contains(name);
+}
+
+void WriteInitialization::acceptImage(DomImage *image)
+{
+    if (!image->hasAttributeName())
+        return;
+
+    m_registeredImages.insert(image->attributeName(), image);
+}
+
+void WriteInitialization::acceptWidgetScripts(const DomScripts &widgetScripts, DomWidget *node, const  DomWidgets &childWidgets)
+{
+    // Add the per-class custom scripts to the per-widget ones.
+    DomScripts scripts(widgetScripts);
+
+    if (DomScript *customWidgetScript = m_uic->customWidgetsInfo()->customWidgetScript(node->attributeClass()))
+        scripts.push_front(customWidgetScript);
+
+    if (scripts.empty())
+        return;
+
+    // concatenate script snippets
+    QString script;
+    foreach (const DomScript *domScript, scripts) {
+        const QString snippet = domScript->text();
+        if (!snippet.isEmpty()) {
+            script += snippet.trimmed();
+            script += QLatin1Char('\n');
+        }
+    }
+    if (script.isEmpty())
+        return;
+
+    // Build the list of children and insert call
+    m_output << m_indent << "childWidgets.clear();\n";
+    if (!childWidgets.empty()) {
+        m_output << m_indent <<  "childWidgets";
+        foreach (DomWidget *child, childWidgets) {
+            m_output << " << " << m_driver->findOrInsertWidget(child);
+        }
+        m_output << ";\n";
+    }
+    m_output << m_indent << "scriptContext.run(QString::fromUtf8("
+             << fixString(script, m_dindent) << "), "
+             << m_driver->findOrInsertWidget(node) << ", childWidgets);\n";
+}
+
 
 static void generateMultiDirectiveBegin(QTextStream &outputStream, const QSet<QString> &directives)
 {

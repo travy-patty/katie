@@ -22,41 +22,36 @@
 #ifndef QSVGIOHANDLER_H
 #define QSVGIOHANDLER_H
 
-#include <QImageIOHandler>
-#include <QImage>
-#include <QIODevice>
-#include <QVariant>
-#include <QSvgRenderer>
-#include <QColor>
-#include <QSize>
+#include <QtGui/qimageiohandler.h>
+
+#ifndef QT_NO_SVGRENDERER
 
 QT_BEGIN_NAMESPACE
+
+class QImage;
+class QByteArray;
+class QIODevice;
+class QVariant;
+class QSvgIOHandlerPrivate;
 
 class QSvgIOHandler : public QImageIOHandler
 {
 public:
     QSvgIOHandler();
-
-    bool canRead() const final;
-    bool read(QImage *image) final;
-
-    QVariant option(QImageIOHandler::ImageOption option) const final;
-    void setOption(QImageIOHandler::ImageOption option, const QVariant & value) final;
-    bool supportsOption(QImageIOHandler::ImageOption option) const final;
-
-    QByteArray name() const final;
-
+    ~QSvgIOHandler();
+    virtual bool canRead() const;
+    virtual QByteArray name() const;
+    virtual bool read(QImage *image);
     static bool canRead(QIODevice *device);
+    virtual QVariant option(ImageOption option) const;
+    virtual void setOption(ImageOption option, const QVariant & value);
+    virtual bool supportsOption(ImageOption option) const;
 
 private:
-    bool loadDevice() const;
-
-    mutable QSvgRenderer m_renderer;
-    mutable QSize        m_defaultSize;
-    QSize                m_scaledSize;
-    QColor               m_backColor;
+    QSvgIOHandlerPrivate *d;
 };
 
 QT_END_NAMESPACE
 
+#endif // QT_NO_SVGRENDERER
 #endif // QSVGIOHANDLER_H

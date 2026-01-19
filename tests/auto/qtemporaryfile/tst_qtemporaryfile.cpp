@@ -19,6 +19,7 @@
 **
 ****************************************************************************/
 
+
 #include <QtTest/QtTest>
 #include <qcoreapplication.h>
 #include <qstring.h>
@@ -37,8 +38,6 @@
 //TESTED_CLASS=
 //TESTED_FILES=
 
-#ifndef QT_NO_TEMPORARYFILE
-
 class tst_QTemporaryFile : public QObject
 {
     Q_OBJECT
@@ -55,12 +54,14 @@ private slots:
     void fileNameIsEmpty();
     void autoRemove();
     void write();
+    void openCloseOpenClose();
     void size();
     void resize();
     void openOnRootDrives();
     void stressTest();
     void rename();
     void renameFdLeak();
+    void reOpenThroughQFile();
     void keepOpenMode();
     void resetTemplateAfterError();
     void setTemplateAfterOpen();
@@ -187,6 +188,30 @@ void tst_QTemporaryFile::write()
     file.close();
 }
 
+void tst_QTemporaryFile::openCloseOpenClose()
+{
+    QString fileName;
+    {
+        // Create a temp file
+        QTemporaryFile file("tempXXXXXX");
+        file.setAutoRemove(true);
+        QVERIFY(file.open());
+        file.write("OLE");
+        fileName = file.fileName();
+        QVERIFY(QFile::exists(fileName));
+        file.close();
+
+        // Check that it still exists after being closed
+        QVERIFY(QFile::exists(fileName));
+        QVERIFY(!file.isOpen());
+        QVERIFY(file.open());
+        QCOMPARE(file.readAll(), QByteArray("OLE"));
+        // Check that it's still the same file after being opened again.
+        QCOMPARE(file.fileName(), fileName);
+    }
+    QVERIFY(!QFile::exists(fileName));
+}
+
 void tst_QTemporaryFile::size()
 {
     QTemporaryFile file;
@@ -299,20 +324,48 @@ void tst_QTemporaryFile::renameFdLeak()
     QVERIFY(qt_safe_close(fd) == -1 && errno == EBADF);
 }
 
+void tst_QTemporaryFile::reOpenThroughQFile()
+{
+    QByteArray data("abcdefghij");
+
+    QTemporaryFile file;
+    QVERIFY(((QFile &)file).open(QIODevice::WriteOnly));
+    QCOMPARE(file.write(data), (qint64)data.size());
+
+    file.close();
+    QVERIFY(file.open());
+    QCOMPARE(file.readAll(), data);
+}
+
 void tst_QTemporaryFile::keepOpenMode()
 {
     QByteArray data("abcdefghij");
 
     {
-        QTemporaryFile tmpfile;
-        QVERIFY(tmpfile.open());
-        QCOMPARE(tmpfile.write(data), (qint64)data.size());
-        QVERIFY(tmpfile.rename("temporary-file.txt"));
+        QTemporaryFile file;
+        QVERIFY(((QFile &)file).open(QIODevice::WriteOnly));
+        QVERIFY(QIODevice::WriteOnly == file.openMode());
 
-        QFile file("temporary-file.txt");
-        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.write(data), (qint64)data.size());
+        file.close();
+
+        QVERIFY(((QFile &)file).open(QIODevice::ReadOnly));
         QVERIFY(QIODevice::ReadOnly == file.openMode());
         QCOMPARE(file.readAll(), data);
+    }
+
+    {
+        QTemporaryFile file;
+        QVERIFY(file.open());
+        QCOMPARE(file.write(data), (qint64)data.size());
+        QVERIFY(file.rename("temporary-file.txt"));
+
+        QVERIFY(((QFile &)file).open(QIODevice::ReadOnly));
+        QVERIFY(QIODevice::ReadOnly == file.openMode());
+        QCOMPARE(file.readAll(), data);
+
+        QVERIFY(((QFile &)file).open(QIODevice::WriteOnly));
+        QVERIFY(QIODevice::WriteOnly == file.openMode());
     }
 }
 
@@ -380,7 +433,7 @@ void tst_QTemporaryFile::setTemplateAfterOpen()
     QVERIFY( temp.open() );
 
     QString const fileName = temp.fileName();
-    QString const newTemplate("funny-name-XXXXXX.tmp");
+    QString const newTemplate("funny-path/funny-name-XXXXXX.tmp");
 
     QVERIFY( !fileName.isEmpty() );
     QVERIFY( QFile::exists(fileName) );
@@ -392,6 +445,7 @@ void tst_QTemporaryFile::setTemplateAfterOpen()
     QCOMPARE( temp.fileTemplate(), newTemplate );
 
     QVERIFY( temp.open() );
+    QCOMPARE( temp.fileName(), fileName );
     QCOMPARE( temp.fileTemplate(), newTemplate );
 }
 
@@ -588,9 +642,3 @@ void tst_QTemporaryFile::fileTemplate()
 QTEST_MAIN(tst_QTemporaryFile)
 
 #include "moc_tst_qtemporaryfile.cpp"
-
-#else // QT_NO_TEMPORARYFILE
-
-QTEST_NOOP_MAIN
-
-#endif // QT_NO_TEMPORARYFILE

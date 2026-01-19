@@ -94,6 +94,13 @@
     This enum describes the different flags you can pass to modify the
     behavior of QUdpSocket::bind().
 
+    \note On Symbian OS bind flags behaviour depends on process capabilties.
+    If process has NetworkControl capability, the bind attempt with
+    ReuseAddressHint will always succeed even if the address and port is already
+    bound by another socket with any flags. If process does not have
+    NetworkControl capability, the bind attempt to address and port already
+    bound by another socket will always fail.
+
     \value ShareAddress Allow other services to bind to the same address
     and port. This is useful when multiple processes share
     the load of a single service by listening to the same address and port
@@ -136,7 +143,7 @@ QT_BEGIN_NAMESPACE
 #ifndef QT_NO_UDPSOCKET
 
 #define QT_CHECK_BOUND(function, a) do { \
-    if (Q_UNLIKELY(!isValid())) { \
+    if (!isValid()) { \
         qWarning(function" called on a QUdpSocket when not in QUdpSocket::BoundState"); \
         return (a); \
     } } while (0)
@@ -178,6 +185,7 @@ bool QUdpSocketPrivate::doEnsureInitialized(const QHostAddress &bindAddress, qui
 
     // now check if the socket engine is initialized and to the right type
     if (!socketEngine || !socketEngine->isValid()) {
+        resolveProxy(remoteAddress.toString(), bindPort);
         if (!initSocketLayer(address->protocol()))
             return false;
     }
@@ -333,7 +341,7 @@ QNetworkInterface QUdpSocket::multicastInterface() const
 void QUdpSocket::setMulticastInterface(const QNetworkInterface &iface)
 {
     Q_D(QUdpSocket);
-    if (Q_UNLIKELY(!isValid())) {
+    if (!isValid()) {
         qWarning("QUdpSocket::setMulticastInterface() called on a QUdpSocket when not in QUdpSocket::BoundState");
         return;
     }

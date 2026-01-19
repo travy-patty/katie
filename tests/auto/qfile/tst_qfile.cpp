@@ -22,18 +22,25 @@
 
 #include <QtTest/QtTest>
 #include <qplatformdefs.h>
+
+#include <QAbstractFileEngine>
+#include <QFSFileEngine>
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHostInfo>
 #include <QProcess>
-#include <QTextStream>
 
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
+
+#ifndef NO_NETWORK_TEST
+#  include "../network-settings.h"
+#endif
 
 // #define TEST_LFS
 
@@ -70,7 +77,6 @@ private slots:
     void setSize();
     void setSizeSeek();
     void seekToSamePosition();
-    void atEnd_data();
     void atEnd();
     void readLine();
     void readLine2();
@@ -133,6 +139,7 @@ private slots:
     void rename_data();
     void rename();
     void renameWithAtEndSpecialFile() const;
+    void resourceCopyRename();
     void renameMultiple();
     void appendAndRead();
     void standarderror();
@@ -141,6 +148,13 @@ private slots:
 
     void readEof_data();
     void readEof();
+
+    void map_data();
+    void map();
+    void mapResource_data();
+    void mapResource();
+    void mapOpenMode_data();
+    void mapOpenMode();
 
     void openStandardStreams();
 
@@ -151,8 +165,6 @@ private slots:
     void caseSensitivity();
 
     void autocloseHandle();
-
-    void hijack();
 
     // --- Task related tests below this line
     void task167217();
@@ -266,6 +278,8 @@ tst_QFile::tst_QFile()
     : m_srcDir(QLatin1String(SRCDIR))
     , m_stdinProcess(findStdinProcess())
 {
+    Q_INIT_RESOURCE(copy_rename);
+    Q_INIT_RESOURCE(qfile);
 }
 
 tst_QFile::~tst_QFile()
@@ -285,6 +299,10 @@ void tst_QFile::cleanup()
 {
 // TODO: Add cleanup code here.
 // This will be executed immediately after each test is run.
+
+    // for resourceCopyRename()
+    QFile::remove("file-copy-destination.txt");
+    QFile::remove("file-rename-destination.txt");
 
     // for copyAfterFail()
     QFile::remove("file-to-be-copied.txt");
@@ -350,6 +368,8 @@ void tst_QFile::cleanupTestCase()
     QFile::remove("tst_qfile_copy.cpp");
     QFile::remove("nullinline.txt");
     QFile::remove("myLink2.lnk");
+    QFile::remove("resources");
+    QFile::remove("qfile_map_testfile");
     QFile::remove("readAllBuffer.txt");
     QFile::remove("qt_file.tmp");
     QFile::remove("File.txt");
@@ -447,7 +467,7 @@ void tst_QFile::open()
     }
 
     if (filename.isEmpty())
-        QTest::ignoreMessage(QtWarningMsg, "QFile::open: No file name specified");
+        QTest::ignoreMessage(QtWarningMsg, "QFSFileEngine::open: No file name specified");
 
     if (ok) {
         QVERIFY2(f.open(QIODevice::OpenMode(mode)),
@@ -496,7 +516,6 @@ void tst_QFile::size_data()
     QTest::addColumn<qint64>("size");
 
     QTest::newRow( "exist01" ) << QString(SRCDIR "testfile.txt") << (qint64)245;
-    QTest::newRow( "link01" )  << QString(SRCDIR "testlink.txt") << (qint64)245;
 }
 
 void tst_QFile::size()
@@ -679,43 +698,17 @@ void tst_QFile::seekToSamePosition()
     }
 }
 
-void tst_QFile::atEnd_data()
-{
-    QTest::addColumn<QString>("filename");
-    QTest::addColumn<int>("lines");
-
-    QTest::newRow( "testfile.txt" ) << QString(SRCDIR "testfile.txt") << (int)6;
-    QTest::newRow( "testlink.txt" ) << QString(SRCDIR "testlink.txt") << (int)6;
-}
-
 void tst_QFile::atEnd()
 {
-    QFETCH( QString, filename );
-    QFETCH( int, lines );
+    QFile f( SRCDIR "testfile.txt" );
+    QVERIFY(f.open( QIODevice::ReadOnly ));
 
-    {
-        QFile f( filename );
-        QVERIFY(f.open( QIODevice::ReadOnly ));
+    int size = f.size();
+    f.seek( size );
 
-        int size = f.size();
-        f.seek( size );
-
-        bool end = f.atEnd();
-        f.close();
-        QCOMPARE( end, true );
-    }
-
-    {
-        QFile f( filename );
-        QVERIFY(f.open( QIODevice::ReadOnly ));
-
-        int linecount = 0;
-        while (!f.atEnd()) {
-            (void)f.readLine();
-            linecount++;
-        }
-        QCOMPARE( lines, linecount );
-    }
+    bool end = f.atEnd();
+    f.close();
+    QCOMPARE( end, true );
 }
 
 void tst_QFile::readLine()
@@ -825,19 +818,19 @@ void tst_QFile::readAllBuffer()
     QVERIFY( writer.open(QIODevice::ReadWrite | QIODevice::Unbuffered) );
     QVERIFY( reader.open(QIODevice::ReadOnly) );
 
-    QCOMPARE(writer.write(data1), qint64(data1.size()));
-    QVERIFY(writer.seek(0));
+    QCOMPARE( writer.write(data1), qint64(data1.size()) );
+    QVERIFY( writer.seek(0) );
 
     QByteArray result;
-    result = reader.read(data1.size());
-    QCOMPARE(result.size(), data1.size());
+    result = reader.read(18);
+    QCOMPARE( result.size(), 18 );
 
-    QCOMPARE(writer.write(data2), qint64(data2.size()));
-    QCOMPARE(writer.write(data2), qint64(data2.size()));
+    QCOMPARE( writer.write(data2), qint64(data2.size()) ); // new data, old version buffered in reader
+    QCOMPARE( writer.write(data2), qint64(data2.size()) ); // new data, unbuffered in reader
 
     result += reader.readAll();
 
-    QCOMPARE(result, data1 + data2);
+    QCOMPARE( result, data1 + data2 );
 
     QFile::remove(fileName);
 }
@@ -1070,6 +1063,9 @@ void tst_QFile::permissions_data()
     QTest::newRow("data0") << QCoreApplication::instance()->applicationFilePath() << uint(QFile::ExeUser) << true;
     QTest::newRow("data1") << SRCDIR "tst_qfile.cpp" << uint(QFile::ReadUser) << true;
 //    QTest::newRow("data2") << "tst_qfile.cpp" << int(QFile::WriteUser) << false;
+    QTest::newRow("resource1") << ":/tst_qfileinfo/resources/file1.ext1" << uint(QFile::ReadUser) << true;
+    QTest::newRow("resource2") << ":/tst_qfileinfo/resources/file1.ext1" << uint(QFile::WriteUser) << false;
+    QTest::newRow("resource3") << ":/tst_qfileinfo/resources/file1.ext1" << uint(QFile::ExeUser) << false;
 }
 
 void tst_QFile::permissions()
@@ -1409,21 +1405,6 @@ void tst_QFile::isSequential()
     QFile zero("/dev/null");
     QVERIFY(zero.open(QFile::ReadOnly));
     QVERIFY(zero.isSequential());
-
-    {
-        QFile not_sequential("not_sequential.txt");
-        QVERIFY(not_sequential.open(QFile::WriteOnly));
-        not_sequential.write(QByteArray(200, '@'));
-        not_sequential.close();
-        QVERIFY(QFile::link("not_sequential.txt", "not_sequential.lnk"));
-    }
-
-    QFile not_sequential("not_sequential.lnk");
-    QVERIFY(not_sequential.open(QFile::ReadOnly));
-    QVERIFY(!not_sequential.isSequential());
-
-    QFile::remove("not_sequential.txt");
-    QFile::remove("not_sequential.lnk");
 }
 
 void tst_QFile::encodeName()
@@ -1738,6 +1719,44 @@ void tst_QFile::longFileName()
     QVERIFY(QFile::exists(newName));
     QVERIFY(QFile::remove(newName));
 }
+
+class MyEngine : public QAbstractFileEngine
+{
+public:
+    MyEngine(int n) { number = n; }
+    virtual ~MyEngine() {}
+
+    void setFileName(const QString &) {}
+    bool open(QIODevice::OpenMode) { return false; }
+    bool close() { return false; }
+    bool flush() { return false; }
+    qint64 size() const { return 123 + number; }
+    qint64 at() const { return -1; }
+    bool seek(qint64) { return false; }
+    bool isSequential() const { return false; }
+    qint64 read(char *, qint64) { return -1; }
+    qint64 write(const char *, qint64) { return -1; }
+    bool remove() { return false; }
+    bool copy(const QString &) { return false; }
+    bool rename(const QString &) { return false; }
+    bool link(const QString &) { return false; }
+    bool mkdir(const QString &, bool) const { return false; }
+    bool rmdir(const QString &, bool) const { return false; }
+    bool setSize(qint64) { return false; }
+    QStringList entryList(QDir::Filters, const QStringList &) const { return QStringList(); }
+    bool caseSensitive() const { return false; }
+    bool isRelativePath() const { return false; }
+    FileFlags fileFlags(FileFlags) const { return 0; }
+    bool chmod(uint) { return false; }
+    QString fileName(FileName) const { return name; }
+    uint ownerId(FileOwner) const { return 0; }
+    QString owner(FileOwner) const { return QString(); }
+    QDateTime fileTime(FileTime) const { return QDateTime(); }
+
+private:
+    int number;
+    QString name;
+};
 
 void tst_QFile::getCharFF()
 {
@@ -2082,6 +2101,22 @@ void tst_QFile::renameWithAtEndSpecialFile() const
     QVERIFY(QFile::rename(newName, originalName));
 }
 
+void tst_QFile::resourceCopyRename()
+{
+    // Using a resource file as a *read-only* source whose move and copy should fail.
+    QFile file(":/copy-rename.qrc");
+    QVERIFY(file.exists());
+    QFile::remove("file-rename-destination.txt");
+
+    QVERIFY(!file.copy("file-copy-destination.txt"));
+    QVERIFY(!QFile::exists("file-copy-destination.txt"));
+    QVERIFY(!file.isOpen());
+
+    QVERIFY(!file.rename("file-rename-destination.txt"));
+    QVERIFY(!QFile::exists("file-rename-destination.txt"));
+    QVERIFY(!file.isOpen());
+}
+
 void tst_QFile::renameMultiple()
 {
     // create the file if it doesn't exist
@@ -2367,9 +2402,208 @@ void tst_QFile::task167217()
     file.remove();
 }
 
+#define FILESIZE 65536 * 3
+
+void tst_QFile::map_data()
+{
+    QTest::addColumn<int>("fileSize");
+    QTest::addColumn<int>("offset");
+    QTest::addColumn<int>("size");
+    QTest::addColumn<QFile::FileError>("error");
+
+    QTest::newRow("zero")         << FILESIZE << 0     << FILESIZE         << QFile::NoError;
+    QTest::newRow("small, but 0") << FILESIZE << 30    << FILESIZE - 30    << QFile::NoError;
+    QTest::newRow("a page")       << FILESIZE << 4096  << FILESIZE - 4096  << QFile::NoError;
+    QTest::newRow("+page")        << FILESIZE << 5000  << FILESIZE - 5000  << QFile::NoError;
+    QTest::newRow("++page")       << FILESIZE << 65576 << FILESIZE - 65576 << QFile::NoError;
+    QTest::newRow("bad size")     << FILESIZE << 0     << -1               << QFile::ResourceError;
+    QTest::newRow("bad offset")   << FILESIZE << -1    << 1                << QFile::UnspecifiedError;
+    QTest::newRow("zerozero")     << FILESIZE << 0     << 0                << QFile::UnspecifiedError;
+}
+
+void tst_QFile::map()
+{
+    QFETCH(int, fileSize);
+    QFETCH(int, offset);
+    QFETCH(int, size);
+    QFETCH(QFile::FileError, error);
+
+    QString fileName = QDir::currentPath() + '/' + "qfile_map_testfile";
+
+    if (QFile::exists(fileName)) {
+        QVERIFY(QFile::setPermissions(fileName,
+            QFile::WriteOwner | QFile::ReadOwner | QFile::WriteUser | QFile::ReadUser));
+        QFile::remove(fileName);
+    }
+    QFile file(fileName);
+
+    // invalid, not open
+    uchar *memory = file.map(0, size);
+    QVERIFY(!memory);
+    QCOMPARE(file.error(), QFile::PermissionsError);
+    QVERIFY(!file.unmap(memory));
+    QCOMPARE(file.error(), QFile::PermissionsError);
+
+    // make a file
+    QVERIFY(file.open(QFile::ReadWrite));
+    QVERIFY(file.resize(fileSize));
+    QVERIFY(file.flush());
+    file.close();
+    QVERIFY(file.open(QFile::ReadWrite));
+    memory = file.map(offset, size);
+    if (error != QFile::NoError) {
+
+	QVERIFY(file.error() != QFile::NoError);
+        return;
+    }
+
+    QCOMPARE(file.error(), error);
+    QVERIFY(memory);
+    memory[0] = 'Q';
+    QVERIFY(file.unmap(memory));
+    QCOMPARE(file.error(), QFile::NoError);
+
+    // Verify changes were saved
+    memory = file.map(offset, size);
+    QCOMPARE(file.error(), QFile::NoError);
+    QVERIFY(memory);
+    QVERIFY(memory[0] == 'Q');
+    QVERIFY(file.unmap(memory));
+    QCOMPARE(file.error(), QFile::NoError);
+
+    // exotic test to make sure that multiple maps work
+
+    // note: windows ce does not reference count mutliple maps
+    // it's essentially just the same reference but it 
+    // cause a resource lock on the file which prevents it 
+    // from being removed    uchar *memory1 = file.map(0, file.size());
+    uchar *memory1 = file.map(0, file.size());
+    QCOMPARE(file.error(), QFile::NoError);
+    uchar *memory2 = file.map(0, file.size());
+    QCOMPARE(file.error(), QFile::NoError);
+    QVERIFY(memory1);
+    QVERIFY(memory2);
+    QVERIFY(file.unmap(memory1));
+    QCOMPARE(file.error(), QFile::NoError);
+    QVERIFY(file.unmap(memory2));
+    QCOMPARE(file.error(), QFile::NoError);
+    memory1 = file.map(0, file.size());
+    QCOMPARE(file.error(), QFile::NoError);
+    QVERIFY(memory1);
+    QVERIFY(file.unmap(memory1));
+    QCOMPARE(file.error(), QFile::NoError);
+
+    file.close();
+
+    if (!currentuserisroot)
+        // root always has permissions
+    {
+        // Change permissions on a file, just to confirm it would fail
+        QFile::Permissions originalPermissions = file.permissions();
+        QVERIFY(file.setPermissions(QFile::ReadOther));
+        QVERIFY(!file.open(QFile::ReadWrite));
+        memory = file.map(offset, size);
+        QCOMPARE(file.error(), QFile::PermissionsError);
+        QVERIFY(!memory);
+        QVERIFY(file.setPermissions(originalPermissions));
+    }
+    QVERIFY(file.remove());
+}
+
+void tst_QFile::mapResource_data()
+{
+    QTest::addColumn<int>("offset");
+    QTest::addColumn<int>("size");
+    QTest::addColumn<QFile::FileError>("error");
+    QTest::addColumn<QString>("fileName");
+
+    QString validFile = ":/tst_qfileinfo/resources/file1.ext1";
+    QString invalidFile = ":/tst_qfileinfo/resources/filefoo.ext1";
+
+    for (int i = 0; i < 2; ++i) {
+        QString file = (i == 0) ? validFile : invalidFile;
+        QTest::newRow("0, 0") << 0 << 0 << QFile::UnspecifiedError << file;
+        QTest::newRow("0, BIG") << 0 << 4096 << QFile::UnspecifiedError << file;
+        QTest::newRow("-1, 0") << -1 << 0 << QFile::UnspecifiedError << file;
+        QTest::newRow("0, -1") << 0 << -1 << QFile::UnspecifiedError << file;
+    }
+
+    QTest::newRow("0, 1") << 0 << 1 << QFile::NoError << validFile;
+}
+
+void tst_QFile::mapResource()
+{
+    QFETCH(QString, fileName);
+    QFETCH(int, offset);
+    QFETCH(int, size);
+    QFETCH(QFile::FileError, error);
+
+    QFile file(fileName);
+    uchar *memory = file.map(offset, size);
+    QCOMPARE(file.error(), error);
+    QVERIFY((error == QFile::NoError) ? (memory != 0) : (memory == 0));
+    if (error == QFile::NoError)
+        QCOMPARE(QString(memory[0]), QString::number(offset + 1));
+    QVERIFY(file.unmap(memory));
+}
+
+void tst_QFile::mapOpenMode_data()
+{
+    QTest::addColumn<int>("openMode");
+
+    QTest::newRow("ReadOnly") << int(QIODevice::ReadOnly);
+    //QTest::newRow("WriteOnly") << int(QIODevice::WriteOnly); // this doesn't make sense
+    QTest::newRow("ReadWrite") << int(QIODevice::ReadWrite);
+    QTest::newRow("ReadOnly,Unbuffered") << int(QIODevice::ReadOnly | QIODevice::Unbuffered);
+    QTest::newRow("ReadWrite,Unbuffered") << int(QIODevice::ReadWrite | QIODevice::Unbuffered);
+}
+
+void tst_QFile::mapOpenMode()
+{
+    QFETCH(int, openMode);
+    static const qint64 fileSize = 4096;
+
+    QByteArray pattern(fileSize, 'A');
+
+    QString fileName = QDir::currentPath() + '/' + "qfile_map_testfile";
+    if (QFile::exists(fileName)) {
+        QVERIFY(QFile::setPermissions(fileName,
+            QFile::WriteOwner | QFile::ReadOwner | QFile::WriteUser | QFile::ReadUser));
+	QFile::remove(fileName);
+    }
+    QFile file(fileName);
+
+    // make a file
+    QVERIFY(file.open(QFile::ReadWrite));
+    QVERIFY(file.write(pattern));
+    QVERIFY(file.flush());
+    file.close();
+
+    // open according to our mode
+    QVERIFY(file.open(QIODevice::OpenMode(openMode)));
+
+    uchar *memory = file.map(0, fileSize);
+    QVERIFY(memory);
+    QVERIFY(memcmp(memory, pattern, fileSize) == 0);
+
+    if (openMode & QIODevice::WriteOnly) {
+        // try to write to the file
+        *memory = 'a';
+        file.unmap(memory);
+        file.close();
+        file.open(QIODevice::OpenMode(openMode));
+        file.seek(0);
+        char c;
+        QVERIFY(file.getChar(&c));
+        QCOMPARE(c, 'a');
+    }
+
+    file.close();
+}
+
 void tst_QFile::openDirectory()
 {
-    QFile f1(SRCDIR);
+    QFile f1(SRCDIR "resources");
     // it's a directory, it must not exist
     QVERIFY(!f1.exists());
 
@@ -2593,28 +2827,8 @@ void tst_QFile::autocloseHandle()
     }
 }
 
-void tst_QFile::hijack()
-{
-    QFile hijackme("hijackme.txt");
-
-    QVERIFY(hijackme.open(QFile::ReadWrite));
-    QVERIFY(hijackme.write("not yet\n"));
-    QVERIFY(hijackme.flush());
-    QVERIFY(QFile::rename("hijackme.txt", "hijacked.txt"));
-    QVERIFY(hijackme.write("now"));
-
-    QVERIFY(hijackme.seek(0));
-    QCOMPARE(hijackme.readAll(), QByteArray("not yet\nnow"));
-
-    hijackme.close();
-    hijackme.setFileName("hijacked.txt");
-    QVERIFY(hijackme.open(QFile::ReadOnly));
-    QCOMPARE(hijackme.readAll(), QByteArray("not yet\nnow"));
-
-    QFile::remove("hijackme.txt");
-    QFile::remove("hijacked.txt");
-}
-
 QTEST_MAIN(tst_QFile)
 
+#include "qrc_copy-rename.cpp"
+#include "qrc_qfile.cpp"
 #include "moc_tst_qfile.cpp"
