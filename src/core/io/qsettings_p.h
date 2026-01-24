@@ -51,8 +51,13 @@ public:
 
     void read();
     void write();
+    void notify();
 
     QString toGroupKey(const QString &key) const;
+    // INI parser functions
+    static QString variantToString(const QVariant &v);
+    static QVariant stringToVariant(const QString &s);
+    static QStringList splitArgs(const QString &s, int idx);
 
     QSettings::Format format;
     QSettings::SettingsStatus status;

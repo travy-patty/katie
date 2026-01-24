@@ -365,6 +365,7 @@ void QWellArray::keyPressEvent(QKeyEvent* e)
 static bool initrgb = false;
 static QRgb stdrgb[6*8];
 static QRgb cusrgb[2*8];
+static bool customSet = false;
 
 
 static void initRGB()
@@ -412,6 +413,7 @@ void QColorDialog::setCustomColor(int index, QRgb color)
     if (index >= customCount())
         return;
     initRGB();
+    customSet = true;
     cusrgb[index] = color;
 }
 
@@ -1325,7 +1327,7 @@ void QColorDialogPrivate::init(const QColor &initial)
     const int lumSpace = topLay->spacing() / 2;
 
     if (!smallDisplay) {
-        leftLay = new QVBoxLayout();
+        leftLay = new QVBoxLayout;
         topLay->addLayout(leftLay);
     }
 
@@ -1811,5 +1813,6 @@ QT_END_NAMESPACE
     \fn QRgb QColorDialog::getRgba(QRgb rgba, bool *ok, QWidget *parent, const char *name)
     \compat
 */
+
 
 

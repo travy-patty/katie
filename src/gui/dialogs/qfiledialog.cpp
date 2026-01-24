@@ -33,6 +33,7 @@
 #include "qmenu.h"
 #include "qmessagebox.h"
 #include "qinputdialog.h"
+#include "qsettings.h"
 #include "qdebug.h"
 #include "qapplication.h"
 #include "qstylepainter.h"
@@ -3054,5 +3055,6 @@ QT_END_NAMESPACE
 #include "moc_qfiledialog.h"
 
 #endif // QT_NO_FILEDIALOG
+
 
 

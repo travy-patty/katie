@@ -22,6 +22,7 @@
 #include "qdebug.h"
 #include "qplatformdefs.h"
 #include "qsettings.h"
+#include "qjsondocument.h"
 #include "qstandardpaths.h"
 #include "qcoreapplication.h"
 #include "qcore_unix_p.h"
@@ -154,17 +155,18 @@ static bool ini_settings_write(QIODevice &device, const QSettings::SettingsMap &
 // ************************************************************************
 // QSettingsPrivate
 
-static inline void createLeadingDir(const QString &filepath)
+static inline QString createLeadingDir(const QString &filename)
 {
-    QDir().mkpath(filepath);
+    QFileInfo info(filename);
+    QDir().mkpath(info.absolutePath());
+    return filename;
 }
 
 static QString getSettingsPath(const QString &filename, const QLatin1String &extension)
 {
     QFileInfo info(filename);
     if (info.isAbsolute()) {
-        createLeadingDir(info.absolutePath());
-        return filename;
+        return createLeadingDir(filename);
     }
 
     QString nameandext = filename;
@@ -176,13 +178,11 @@ static QString getSettingsPath(const QString &filename, const QLatin1String &ext
     foreach (const QString &location, locations) {
         QStatInfo locationinfo(location);
         if (locationinfo.isWritable()) {
-            createLeadingDir(location);
-            return location + QDir::separator() + nameandext;
+            return createLeadingDir(location + QDir::separator() + nameandext);
         }
     }
 
-    createLeadingDir(locations.first());
-    return locations.first() + QDir::separator() + nameandext;
+    return createLeadingDir(locations.first() + QDir::separator() + nameandext);
 }
 
 static void setupSettingsFormat(QSettingsPrivate* settings, const QString &filename)
@@ -765,93 +765,6 @@ void QSettings::setValue(const QString &key, const QVariant &value)
 }
 
 /*!
-    Returns the value for setting \a key. If the setting doesn't
-    exist, returns \a defaultValue.
-
-    If no default value is specified, a default QString is returned.
-
-    \sa setString(), contains(), remove()
-*/
-QString QSettings::string(const QString &key, const QString &defaultValue) const
-{
-    Q_D(const QSettings);
-    return d->map.value(d->toGroupKey(key), defaultValue);
-}
-
-/*!
-    Sets the value of setting \a key to \a value. If the \a key already
-    exists, the previous value is overwritten.
-
-    \sa stringList(), remove(), contains()
-*/
-void QSettings::setStringList(const QString &key, const QStringList &value)
-{
-    setString(key, value.join(s_stringlistdelim));
-}
-
-/*!
-    Returns the value for setting \a key. If the setting doesn't
-    exist, returns \a defaultValue.
-
-    If no default value is specified, a default QStringList is returned.
-
-    \sa setString(), contains(), remove()
-*/
-QStringList QSettings::stringList(const QString &key, const QStringList &defaultValue) const
-{
-    return string(key, defaultValue.join(s_stringlistdelim)).split(s_stringlistdelim, QString::SkipEmptyParts);
-}
-
-/*!
-    Sets the value of setting \a key to \a value. If the \a key already
-    exists, the previous value is overwritten.
-
-    \sa integer(), remove(), contains()
-*/
-void QSettings::setInteger(const QString &key, const qlonglong value)
-{
-    setString(key, QString::number(value));
-}
-
-/*!
-    Returns the value for setting \a key. If the setting doesn't
-    exist, returns \a defaultValue.
-
-    If no default value is specified, a default qlonglong is returned.
-
-    \sa setInteger(), contains(), remove()
-*/
-qlonglong QSettings::integer(const QString &key, const qlonglong defaultValue) const
-{
-    return string(key, QString::number(defaultValue)).toLongLong();
-}
-
-/*!
-    Sets the value of setting \a key to \a value. If the \a key already
-    exists, the previous value is overwritten.
-
-    \sa boolean(), remove(), contains()
-*/
-void QSettings::setBoolean(const QString &key, const bool value)
-{
-    setString(key, value ? QString::fromLatin1("true") : QString::fromLatin1("false"));
-}
-
-/*!
-    Returns the value for setting \a key. If the setting doesn't
-    exist, returns \a defaultValue.
-
-    If no default value is specified, a default bool is returned.
-
-    \sa setBoolean(), contains(), remove()
-*/
-bool QSettings::boolean(const QString &key, const bool defaultValue) const
-{
-    const QString value = string(key, defaultValue ? QString::fromLatin1("true") : QString::fromLatin1("false"));
-    return (value != QLatin1String("0") && value != QLatin1String("false"));
-}
-
-/*!
     Removes the setting \a key.
 
     \sa setValue(), value(), contains()
@@ -904,3 +817,4 @@ QVariant QSettings::value(const QString &key, const QVariant &defaultValue) cons
 QT_END_NAMESPACE
 
 #endif // QT_NO_SETTINGS
+
