@@ -279,6 +279,8 @@ QFileDialog::QFileDialog(QWidget *parent,
 QFileDialog::~QFileDialog()
 {
     Q_D(QFileDialog);
+    QSettings settings(QString::fromLatin1("Katie"), QSettings::NativeFormat);
+    settings.setValue(QLatin1String("Qt/filedialog"), saveState());
     d->deleteNativeDialog_sys();
 }
 
@@ -1901,8 +1903,10 @@ void QFileDialogPrivate::init(const QString &directory, const QString &nameFilte
     retranslateStrings();
     q->setFileMode(fileMode);
 
+    QSettings settings(QString::fromLatin1("Katie"), QSettings::NativeFormat);
     if (!directory.isEmpty())
         setLastVisitedDirectory(workingDirectory(directory));
+    q->restoreState(settings.value(QLatin1String("Qt/filedialog")).toByteArray());
 
     // Default case
     if (!nameFilter.isEmpty())
